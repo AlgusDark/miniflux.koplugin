@@ -24,8 +24,9 @@ local EntryUtils = {}
 ---@param api MinifluxAPI API client instance
 ---@param download_dir string Download directory path
 ---@param navigation_context? NavigationContext Navigation context for prev/next
+---@param browser? BaseBrowser Optional browser instance to close before opening entry
 ---@return nil
-function EntryUtils.showEntry(entry, api, download_dir, navigation_context)
+function EntryUtils.showEntry(entry, api, download_dir, navigation_context, browser)
     if not download_dir then
         UIManager:show(InfoMessage:new{
             text = _("Download directory not configured"),
@@ -36,7 +37,7 @@ function EntryUtils.showEntry(entry, api, download_dir, navigation_context)
     
     local Trapper = require("ui/trapper")
     Trapper:wrap(function()
-        EntryUtils.downloadEntry(entry, api, download_dir, navigation_context)
+        EntryUtils.downloadEntry(entry, api, download_dir, navigation_context, browser)
     end)
 end
 
@@ -45,8 +46,9 @@ end
 ---@param api MinifluxAPI API client instance
 ---@param download_dir string Download directory path
 ---@param navigation_context? NavigationContext Navigation context for prev/next
+---@param browser? BaseBrowser Optional browser instance to close before opening entry
 ---@return nil
-function EntryUtils.downloadEntry(entry, api, download_dir, navigation_context)
+function EntryUtils.downloadEntry(entry, api, download_dir, navigation_context, browser)
     local UI = require("ui/trapper")
     local MinifluxSettingsManager = require("settings/settings_manager")
     local MinifluxSettings = MinifluxSettingsManager
@@ -310,6 +312,14 @@ function EntryUtils.downloadEntry(entry, api, download_dir, navigation_context)
     -- Final status message with summary
     local summary_message = EntryUtils.createDownloadSummary(include_images, images)
     UI:info(summary_message)
+    
+    -- Close browser if provided before opening the entry
+    if browser and browser.closeAll then
+        -- Schedule browser close after UI operations complete
+        UIManager:scheduleIn(0.1, function()
+            browser:closeAll()
+        end)
+    end
     
     -- Open the file
     EntryUtils.openEntryFile(html_file)

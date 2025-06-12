@@ -18,7 +18,8 @@ local T = require("ffi/util").template
 -- Import our modules
 local MinifluxAPI = require("api/api_client")
 local MinifluxSettingsManager = require("settings/settings_manager")
-local MinifluxUI = require("miniflux_ui")
+local SettingsDialogs = require("settings/ui/settings_dialogs")
+local BrowserLauncher = require("browser/ui/browser_launcher")
 
 ---@class Miniflux : WidgetContainer
 ---@field name string Plugin name identifier
@@ -26,7 +27,8 @@ local MinifluxUI = require("miniflux_ui")
 ---@field download_dir string Full path to download directory
 ---@field settings SettingsManager Settings manager instance
 ---@field api MinifluxAPI API client instance
----@field miniflux_ui MinifluxUI UI manager instance
+---@field settings_dialogs SettingsDialogs Settings UI dialogs instance
+---@field browser_launcher BrowserLauncher Browser launcher instance
 local Miniflux = WidgetContainer:extend({
     name = "miniflux",
     download_dir_name = "miniflux",
@@ -58,10 +60,13 @@ function Miniflux:init()
     self.settings = MinifluxSettingsManager
     self.settings:init()  -- Initialize the settings manager
     self.api = MinifluxAPI:new()
-    self.miniflux_ui = MinifluxUI:new()
-
-    -- Initialize UI with settings, API, and download_dir
-    self.miniflux_ui:init(self.settings, self.api, self.download_dir)
+    
+    -- Initialize UI modules
+    self.settings_dialogs = SettingsDialogs:new()
+    self.settings_dialogs:init(self.settings, self.api)
+    
+    self.browser_launcher = BrowserLauncher:new()
+    self.browser_launcher:init(self.settings, self.api, self.download_dir)
 
     -- Initialize API with current settings if available
     if self.settings:isConfigured() then
@@ -92,7 +97,7 @@ function Miniflux:addToMainMenu(menu_items)
             {
                 text = _("Read entries"),
                 callback = function()
-                    self.miniflux_ui:showMainScreen()
+                    self.browser_launcher:showMainScreen()
                 end,
             },
             {
@@ -103,7 +108,7 @@ function Miniflux:addToMainMenu(menu_items)
                         text = _("Server address"),
                         keep_menu_open = true,
                         callback = function()
-                            self.miniflux_ui:showServerSettings()
+                            self.settings_dialogs:showServerSettings()
                         end,
                     },
                     {
@@ -112,7 +117,7 @@ function Miniflux:addToMainMenu(menu_items)
                         end,
                         keep_menu_open = true,
                         callback = function()
-                            self.miniflux_ui:showLimitSettings()
+                            self.settings_dialogs:showLimitSettings()
                         end,
                     },
                     {
@@ -130,7 +135,7 @@ function Miniflux:addToMainMenu(menu_items)
                         end,
                         keep_menu_open = true,
                         sub_item_table_func = function()
-                            return self.miniflux_ui:getOrderSubMenu()
+                            return self.settings_dialogs:getOrderSubMenu()
                         end,
                     },
                     {
@@ -141,7 +146,7 @@ function Miniflux:addToMainMenu(menu_items)
                         end,
                         keep_menu_open = true,
                         sub_item_table_func = function()
-                            return self.miniflux_ui:getDirectionSubMenu()
+                            return self.settings_dialogs:getDirectionSubMenu()
                         end,
                     },
                     {
@@ -165,7 +170,7 @@ function Miniflux:addToMainMenu(menu_items)
                         text = _("Test connection"),
                         keep_menu_open = true,
                         callback = function()
-                            self.miniflux_ui:testConnection()
+                            self.settings_dialogs:testConnection()
                         end,
                     },
                 },
@@ -177,7 +182,7 @@ end
 ---Handle the read entries dispatcher event
 ---@return nil
 function Miniflux:onReadMinifluxEntries()
-    self.miniflux_ui:showMainScreen()
+    self.browser_launcher:showMainScreen()
 end
 
 return Miniflux

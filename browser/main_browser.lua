@@ -133,7 +133,7 @@ function MainBrowser:onMenuSelect(item)
         local entry_data = item.entry_data
         local nav_context = item.navigation_context
         if entry_data and self.api then
-            EntryUtils.showEntry(entry_data, self.api, self.download_dir, nav_context)
+            EntryUtils.showEntry(entry_data, self.api, self.download_dir, nav_context, self)
         end
     end
 end

@@ -163,14 +163,16 @@ This plugin uses the [Miniflux REST API](https://miniflux.app/docs/api.html) wit
 The plugin is organized into separate modules for maintainability:
 
 - **main.lua**: Main plugin interface and menu integration
-- **api.lua**: Miniflux API client handling HTTP requests
-- **settings/**: Modular settings management system
-- **miniflux_ui.lua**: User interface components and dialogs
-- **browser/main_browser.lua**: Single browser implementation following OPDS pattern
-- **browser/lib/base_browser.lua**: Base browser class with navigation logic
-- **browser/lib/browser_utils.lua**: Utility functions for browser operations
-- **lib/debug.lua**: Debug logging functionality
 - **_meta.lua**: Plugin metadata
+- **api/**: Modular API client system
+- **settings/**: Modular settings management system with UI dialogs
+- **browser/**: Modular browser system with screens, features, and utilities
+- **typedefs/**: EmmyLua type definitions for KOReader integration
+
+### Clean Root Directory
+Only essential files remain at the plugin root:
+- **main.lua**: Plugin entry point and coordination
+- **_meta.lua**: Plugin metadata and identification
 
 ## Browser Navigation
 

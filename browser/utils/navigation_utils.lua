@@ -158,7 +158,7 @@ function NavigationUtils.downloadAndShowEntry(entry)
     local api = MinifluxAPI:new()
     api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())
     
-    EntryUtils.downloadEntry(entry, api, download_dir, nil)
+    EntryUtils.downloadEntry(entry, api, download_dir, nil, nil)
 end
 
 ---Mark an entry as read
