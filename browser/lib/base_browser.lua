@@ -144,7 +144,6 @@ function BaseBrowser:toggleReadEntriesVisibility()
         return
     end
     
-    local was_hidden = settings:getHideReadEntries()
     local now_hidden = settings:toggleHideReadEntries()
     
     -- Show confirmation message
@@ -157,7 +156,7 @@ function BaseBrowser:toggleReadEntriesVisibility()
     -- Refresh current view safely - this is just local filtering, no API calls needed
     if self.refreshCurrentView then
         -- Use pcall to safely call refresh and catch any errors
-        local success, err = pcall(function()
+        local success = pcall(function()
             self:refreshCurrentView()
         end)
         

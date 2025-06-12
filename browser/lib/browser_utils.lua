@@ -4,16 +4,13 @@ Browser utilities for Miniflux browsers
 @module koplugin.miniflux.browser.browser_utils
 --]]--
 
-local DocumentRegistry = require("document/documentregistry")
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 local http = require("socket.http")
 local lfs = require("libs/libkoreader-lfs")
 local ltn12 = require("ltn12")
-local socket = require("socket")
 local socket_url = require("socket.url")
 local socketutil = require("socketutil")
-local util = require("util")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
@@ -299,7 +296,7 @@ function BrowserUtils.downloadEntry(entry, api, download_dir, navigation_context
     end
     
     -- Remove iframe tags since they won't work in offline HTML files
-    local iframe_removal_success = pcall(function()
+    pcall(function()
         -- Remove iframe tags (both self-closing and with content)
         content = content:gsub("<%s*iframe[^>]*>.-<%s*/%s*iframe%s*>", "")  -- iframe with content
         content = content:gsub("<%s*iframe[^>]*/%s*>", "")  -- self-closing iframe
@@ -456,9 +453,9 @@ function BrowserUtils.downloadImage(url, entry_dir, filename)
     local timeout, maxtime = 10, 30
     socketutil:set_timeout(timeout, maxtime)
     
-    local result, status_code, response_headers
+    local result, status_code
     local network_success = pcall(function()
-        result, status_code, response_headers = http.request{
+        result, status_code = http.request{
             url = url,
             sink = ltn12.sink.table(response_body),
         }
@@ -517,7 +514,6 @@ function BrowserUtils.openEntryFile(html_file)
         ReaderUI:showReader(html_file)
         
         -- Add event listener after a short delay to ensure ReaderUI is ready
-        local UIManager = require("ui/uimanager")
         UIManager:scheduleIn(0.5, function()
             BrowserUtils.addMinifluxEventListeners()
         end)
@@ -559,7 +555,6 @@ function BrowserUtils.addMinifluxEventListeners()
                 if new_page_no >= total_pages then
                     -- Check if this was triggered by a forward navigation attempt
                     -- We'll show the dialog after a brief delay to ensure UI is stable
-                    local UIManager = require("ui/uimanager")
                     UIManager:scheduleIn(0.1, function()
                         BrowserUtils.showEndOfEntryDialog()
                     end)
@@ -576,8 +571,6 @@ function BrowserUtils.showEndOfEntryDialog()
     end
     
     local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
-    local UIManager = require("ui/uimanager")
-    local InfoMessage = require("ui/widget/infomessage")
     local _ = require("gettext")
     
     local dialog = ButtonDialogTitle:new{
@@ -637,8 +630,6 @@ function BrowserUtils.showEndOfEntryDialog()
     UIManager:show(dialog)
 end
 
-
-
 function BrowserUtils.deleteLocalEntry(entry_info)
     local entry_id = entry_info.entry_id
     
@@ -661,16 +652,11 @@ function BrowserUtils.deleteLocalEntry(entry_info)
     end
     
     -- Delete the directory
-    local lfs = require("libs/libkoreader-lfs")
     local FFIUtil = require("ffi/util")
     
     local success = pcall(function()
         FFIUtil.purgeDir(entry_dir)
     end)
-    
-    local InfoMessage = require("ui/widget/infomessage")
-    local UIManager = require("ui/uimanager")
-    local _ = require("gettext")
     
     if success then
         UIManager:show(InfoMessage:new{
@@ -694,10 +680,6 @@ function BrowserUtils.markEntryAsRead(entry_info)
     if not entry_id then
         return
     end
-    
-    local InfoMessage = require("ui/widget/infomessage")
-    local UIManager = require("ui/uimanager")
-    local _ = require("gettext")
     
     -- Show loading message
     local loading_info = InfoMessage:new{
@@ -790,8 +772,6 @@ function BrowserUtils.tableToString(tbl, indent)
     return table.concat(result)
 end
 
-
-
 ---Sort menu items by unread count
 ---@param items table[] Array of menu items to sort
 ---@param data_field string Field name containing the data object
@@ -849,8 +829,6 @@ function BrowserUtils.getApiOptions(settings)
     return options
 end
 
-
-
 function BrowserUtils.navigateToPreviousEntry(entry_info)
     -- Get current entry ID
     local current_entry_id = entry_info.entry_id
@@ -863,8 +841,6 @@ function BrowserUtils.navigateToPreviousEntry(entry_info)
     local MinifluxSettingsManager = require("settings/settings_manager")
     local MinifluxSettings = MinifluxSettingsManager
     MinifluxSettings:init()  -- Create and initialize instance
-    local InfoMessage = require("ui/widget/infomessage")
-    local UIManager = require("ui/uimanager")
     local _ = require("gettext")
     
     local api = MinifluxAPI:new()
@@ -929,8 +905,6 @@ function BrowserUtils.navigateToNextEntry(entry_info)
     local MinifluxSettingsManager = require("settings/settings_manager")
     local MinifluxSettings = MinifluxSettingsManager
     MinifluxSettings:init()  -- Create and initialize instance
-    local InfoMessage = require("ui/widget/infomessage")
-    local UIManager = require("ui/uimanager")
     local _ = require("gettext")
     
     local api = MinifluxAPI:new()
@@ -984,8 +958,6 @@ function BrowserUtils.navigateToNextEntry(entry_info)
 end
 
 function BrowserUtils.fetchAndShowEntry(entry_id)
-    local InfoMessage = require("ui/widget/infomessage")
-    local UIManager = require("ui/uimanager")
     local _ = require("gettext")
     
     -- Show loading message

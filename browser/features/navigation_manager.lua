@@ -106,7 +106,7 @@ function NavigationManager:updateBackButtonState()
     -- Force page info update to show/hide return arrow, but safely
     if self.browser.updatePageInfo then
         -- Use pcall to safely update page info in case Menu widget is in transition
-        local success, err = pcall(function()
+        pcall(function()
             self.browser:updatePageInfo()
         end)
     end
