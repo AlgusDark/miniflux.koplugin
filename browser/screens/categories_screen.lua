@@ -7,7 +7,8 @@ It manages category data presentation and user interactions.
 @module miniflux.browser.screens.categories_screen
 --]]--
 
-local BrowserUtils = require("browser/lib/browser_utils")
+local BrowserUtils = require("browser/utils/browser_utils")
+local SortingUtils = require("browser/utils/sorting_utils")
 local _ = require("gettext")
 
 ---@class CategoryMenuItem
@@ -63,7 +64,7 @@ function CategoriesScreen:show(paths_updated, page_info)
     local menu_items = self:buildCategoryMenuItems(result)
     
     -- Sort by unread count
-    BrowserUtils.sortItemsByUnreadCount(menu_items, "category_data", "category_data")
+    SortingUtils.sortByUnreadCount(menu_items)
     
     -- Create navigation data
     local navigation_data = self.browser.page_state_manager:createNavigationData(

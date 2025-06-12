@@ -32,15 +32,10 @@ function QueryBuilder.buildParams(options)
     end
 
     if options.status then
-        if type(options.status) == "table" then
-            -- Handle multiple status values
-            local status_array = options.status ---@type EntryStatus[]
-            for _, status in ipairs(status_array) do
-                table.insert(params, "status=" .. status)
-            end
-        else
-            -- Handle single status value (backward compatibility)
-            table.insert(params, "status=" .. options.status)
+        -- Handle status array
+        local status_array = options.status ---@type EntryStatus[]
+        for _, status in ipairs(status_array) do
+            table.insert(params, "status=" .. status)
         end
     end
 
@@ -86,13 +81,9 @@ function QueryBuilder.buildNavigationQuery(entry_id, direction, options)
     -- Add other filter options if provided
     if options then
         if options.status then
-            if type(options.status) == "table" then
-                local status_array = options.status ---@type EntryStatus[]
-                for _, status in ipairs(status_array) do
-                    table.insert(params, "status=" .. status)
-                end
-            else
-                table.insert(params, "status=" .. options.status)
+            local status_array = options.status ---@type EntryStatus[]
+            for _, status in ipairs(status_array) do
+                table.insert(params, "status=" .. status)
             end
         end
 

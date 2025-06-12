@@ -7,7 +7,7 @@ It manages the initial screen presentation and navigation to other screens.
 @module miniflux.browser.screens.main_screen
 --]]--
 
-local BrowserUtils = require("browser/lib/browser_utils")
+local BrowserUtils = require("browser/utils/browser_utils")
 local _ = require("gettext")
 
 ---@class MainMenuItem

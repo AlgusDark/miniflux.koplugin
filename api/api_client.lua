@@ -2,8 +2,7 @@
 Miniflux API Client
 
 This is the main API coordinator that provides a unified interface to all
-Miniflux API operations. It acts as a facade that composes specialized API modules
-and maintains backward compatibility with the existing API interface.
+Miniflux API operations. It acts as a facade that composes specialized API modules.
 
 @module koplugin.miniflux.api.api_client
 --]]--
@@ -38,7 +37,7 @@ end
 ---@param api_token string The API authentication token
 ---@return MinifluxAPI self for method chaining
 function MinifluxAPI:init(server_address, api_token)
-    -- Store configuration for backward compatibility
+    -- Store configuration
     self.server_address = server_address
     self.api_token = api_token
     self.base_url = server_address .. "/v1"
@@ -67,11 +66,11 @@ function MinifluxAPI:init(server_address, api_token)
 end
 
 -- =============================================================================
--- BACKWARD COMPATIBILITY LAYER
--- These methods maintain the exact same interface as the original api.lua
+-- HTTP CLIENT LAYER
+-- These methods expose HTTP client functionality through the facade
 -- =============================================================================
 
----Make an HTTP request to the API (backward compatibility)
+---Make an HTTP request to the API
 ---@param method HttpMethod HTTP method to use
 ---@param endpoint string API endpoint path
 ---@param body? table Request body to encode as JSON
@@ -80,7 +79,7 @@ function MinifluxAPI:makeRequest(method, endpoint, body)
     return self.client:makeRequest(method, endpoint, body)
 end
 
----Test connection to the Miniflux server (backward compatibility)
+---Test connection to the Miniflux server
 ---@return boolean success, string message
 function MinifluxAPI:testConnection()
     return self.client:testConnection()

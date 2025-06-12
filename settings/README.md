@@ -37,7 +37,7 @@ The `BaseSettings` class accepts a `LuaSettings` instance and logger through its
 The `SettingsManager` acts as a facade that:
 - Provides a unified interface to all settings modules
 - Handles initialization and coordination
-- Maintains backward compatibility with the old API
+- Provides clean access to all settings functionality
 
 ### 4. **Inheritance**
 All settings modules inherit from `BaseSettings` which provides:
@@ -212,4 +212,4 @@ end
 return ThemeSettings
 ```
 
-This modular architecture makes the settings system much more maintainable and follows modern software engineering principles while maintaining full backward compatibility. 
+This modular architecture makes the settings system much more maintainable and follows modern software engineering principles with a clean, consistent interface. 

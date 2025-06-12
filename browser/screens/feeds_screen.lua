@@ -7,7 +7,8 @@ It manages feed data presentation and user interactions.
 @module miniflux.browser.screens.feeds_screen
 --]]--
 
-local BrowserUtils = require("browser/lib/browser_utils")
+local BrowserUtils = require("browser/utils/browser_utils")
+local SortingUtils = require("browser/utils/sorting_utils")
 local _ = require("gettext")
 
 ---@class FeedMenuItem
@@ -136,30 +137,7 @@ function FeedsScreen:show(paths_updated, page_info)
     -- Sort feeds by unread count (descending) like in Miniflux web interface
     -- This respects the "Categories sorting: Unread count" setting from the server
     -- Note: Entries within feeds are sorted by server settings (order/direction)
-    table.sort(menu_items, function(a, b)
-        local a_unread = a.unread_count or 0
-        local b_unread = b.unread_count or 0
-        local a_title = a.text or ""
-        local b_title = b.text or ""
-        
-        -- First priority: feeds with unread entries come before feeds without
-        if a_unread > 0 and b_unread == 0 then
-            return true
-        elseif a_unread == 0 and b_unread > 0 then
-            return false
-        elseif a_unread > 0 and b_unread > 0 then
-            -- Both have unread entries: sort by unread count descending
-            if a_unread ~= b_unread then
-                return a_unread > b_unread
-            else
-                -- Same unread count: sort alphabetically
-                return a_title:lower() < b_title:lower()
-            end
-        else
-            -- Both have no unread entries: sort alphabetically
-            return a_title:lower() < b_title:lower()
-        end
-    end)
+    SortingUtils.sortByUnreadCount(menu_items)
     
     -- Create navigation data to save our current state
     local navigation_data = self.browser.page_state_manager:createNavigationData(

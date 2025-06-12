@@ -7,7 +7,6 @@ This directory contains the refactored modular API client architecture for the M
 ```
 api/
 ├── README.md                    # This file - architecture documentation
-├── types.lua                    # Type definitions and aliases
 ├── base_client.lua              # Base HTTP client and connection handling
 ├── entries_api.lua              # Entry operations (CRUD, navigation)
 ├── feeds_api.lua                # Feed operations and management
@@ -38,7 +37,7 @@ The specialized API modules receive the BaseClient instance through dependency i
 The `ApiClient` acts as a facade that:
 - Provides a unified interface to all API operations
 - Handles initialization and coordination between modules
-- Maintains backward compatibility with the existing API
+- Provides clean access to all API functionality
 - Simplifies client usage
 
 ### 4. **Composition over Inheritance**
@@ -49,11 +48,11 @@ Instead of large inheritance hierarchies, the system uses composition:
 
 ## Module Responsibilities
 
-### `types.lua` - Type Definitions
-- Centralized type aliases (`HttpMethod`, `EntryStatus`, etc.)
-- Data structure definitions (`MinifluxEntry`, `MinifluxFeed`, etc.)
-- API option types (`ApiOptions`, `EntriesResponse`, etc.)
-- Consistent typing across all modules
+### Type Definitions
+- Type annotations are co-located with their implementations
+- Data structure definitions (`MinifluxEntry`, `MinifluxFeed`, etc.) in respective modules
+- API option types (`ApiOptions`, `EntriesResponse`, etc.) defined where used
+- Consistent typing through EmmyLua annotations
 
 ### `base_client.lua` - HTTP Foundation
 - HTTP/HTTPS request handling with timeouts
@@ -86,7 +85,7 @@ Instead of large inheritance hierarchies, the system uses composition:
 ### `api_client.lua` - Main Coordinator
 - **Initialization**: Set up all API modules with dependencies
 - **Delegation**: Route method calls to appropriate modules
-- **Backward Compatibility**: Maintain existing API interface
+- **Unified Interface**: Provide clean access to all API functionality
 - **Configuration**: Centralized server and token management
 
 ### `utils/query_builder.lua` - Query Construction
@@ -139,13 +138,13 @@ Instead of large inheritance hierarchies, the system uses composition:
 
 ## Usage Examples
 
-### Basic Usage (Backward Compatible)
+### Basic Usage
 ```lua
 local MinifluxAPI = require("api/api_client")
 local api = MinifluxAPI:new()
 api:init(server_address, api_token)
 
--- All existing methods work unchanged
+-- Simple and clean API
 local success, entries = api:getEntries({limit = 50})
 ```
 
@@ -196,20 +195,16 @@ local success, result = entries:getEntries()
 - **ServerError**: Miniflux server errors
 - **DataError**: Invalid response format, missing data
 
-## Migration Guide
+## Usage Guide
 
-### From Original api.lua
-The refactored API maintains full backward compatibility:
-
+### Standard Usage
 ```lua
--- Old way (still works)
-local MinifluxAPI = require("api")
-
--- New way (recommended)
 local MinifluxAPI = require("api/api_client")
+local api = MinifluxAPI:new()
+api:init(server_address, api_token)
 ```
 
-All existing method signatures and behavior are preserved.
+The API provides a clean, consistent interface across all operations.
 
 ### Adding New Functionality
 To add new API endpoints:
@@ -217,7 +212,7 @@ To add new API endpoints:
 1. **Identify Domain**: Determine which module (entries, feeds, categories)
 2. **Add Method**: Implement in the appropriate specialized module
 3. **Update Facade**: Add delegation method in ApiClient if needed
-4. **Add Types**: Update types.lua if new data structures are needed
+4. **Add Types**: Add type annotations directly in the relevant module files
 5. **Document**: Update this README with new functionality
 
 ## Code Quality Metrics

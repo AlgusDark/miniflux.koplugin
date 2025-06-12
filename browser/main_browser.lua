@@ -13,7 +13,8 @@ local PageStateManager = require("browser/features/page_state_manager")
 local MainScreen = require("browser/screens/main_screen")
 local FeedsScreen = require("browser/screens/feeds_screen")
 local CategoriesScreen = require("browser/screens/categories_screen")
-local BrowserUtils = require("browser/lib/browser_utils")
+local BrowserUtils = require("browser/utils/browser_utils")
+local EntryUtils = require("browser/utils/entry_utils")
 local _ = require("gettext")
 
 ---@class BrowserMenuItem
@@ -132,7 +133,7 @@ function MainBrowser:onMenuSelect(item)
         local entry_data = item.entry_data
         local nav_context = item.navigation_context
         if entry_data and self.api then
-            BrowserUtils.showEntry(entry_data, self.api, self.download_dir, nav_context)
+            EntryUtils.showEntry(entry_data, self.api, self.download_dir, nav_context)
         end
     end
 end
