@@ -6,8 +6,16 @@ Miniflux debug logging module
 
 local lfs = require("libs/libkoreader-lfs")
 
+---@alias LogLevel "DEBUG"|"INFO"|"WARN"|"ERROR"
+
+---@class MinifluxDebug
+---@field settings SettingsManager Settings manager instance
+---@field debug_file string Path to the debug log file
 local MinifluxDebug = {}
 
+---Create a new debug instance
+---@param o? table Optional initialization table
+---@return MinifluxDebug
 function MinifluxDebug:new(o)
     o = o or {}
     setmetatable(o, self)
@@ -16,6 +24,10 @@ function MinifluxDebug:new(o)
     return o
 end
 
+---Initialize the debug logging system
+---@param settings SettingsManager Settings manager instance
+---@param plugin_path? string Plugin path (currently unused)
+---@return nil
 function MinifluxDebug:init(settings, plugin_path)
     self.settings = settings
     
@@ -32,6 +44,8 @@ function MinifluxDebug:init(settings, plugin_path)
     end
 end
 
+---Clear the debug log file
+---@return nil
 function MinifluxDebug:clearLog()
     local file = io.open(self.debug_file, "w")
     if file then
@@ -39,6 +53,10 @@ function MinifluxDebug:clearLog()
     end
 end
 
+---Write a log entry to the debug file
+---@param level LogLevel The log level
+---@param message string The log message
+---@return nil
 function MinifluxDebug:log(level, message)
     if not self.settings or not self.settings:getDebugLogging() then
         return
@@ -54,22 +72,36 @@ function MinifluxDebug:log(level, message)
     end
 end
 
+---Log an info level message
+---@param message string The log message
+---@return nil
 function MinifluxDebug:info(message)
     self:log("INFO", message)
 end
 
+---Log a warning level message
+---@param message string The log message
+---@return nil
 function MinifluxDebug:warn(message)
     self:log("WARN", message)
 end
 
+---Log an error level message
+---@param message string The log message
+---@return nil
 function MinifluxDebug:error(message)
     self:log("ERROR", message)
 end
 
+---Log a debug level message
+---@param message string The log message
+---@return nil
 function MinifluxDebug:debug(message)
     self:log("DEBUG", message)
 end
 
+---Get the contents of the debug log
+---@return string The debug log content
 function MinifluxDebug:getLogContent()
     local file = io.open(self.debug_file, "r")
     if not file then

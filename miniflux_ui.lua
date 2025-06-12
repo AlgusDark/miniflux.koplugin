@@ -15,8 +15,26 @@ local Font = require("ui/font")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
+---@class MenuSubItem
+---@field text string|function Menu item text or text function
+---@field text_func? function Function to generate dynamic text
+---@field keep_menu_open? boolean Whether to keep menu open after selection
+---@field callback? function Function to call when item is selected
+---@field sub_item_table? table[] Sub-items for this menu item
+---@field sub_item_table_func? function Function to generate sub-items
+
+---@class MinifluxUI
+---@field settings SettingsManager Settings manager instance
+---@field api MinifluxAPI API client instance
+---@field debug MinifluxDebug Debug logging instance
+---@field download_dir string Download directory path
+---@field settings_dialog MultiInputDialog|nil Current settings dialog
+---@field miniflux_browser any Current browser instance
 local MinifluxUI = {}
 
+---Create a new UI instance
+---@param o? table Optional initialization table
+---@return MinifluxUI
 function MinifluxUI:new(o)
     o = o or {}
     setmetatable(o, self)
@@ -24,6 +42,12 @@ function MinifluxUI:new(o)
     return o
 end
 
+---Initialize the UI with required dependencies
+---@param settings SettingsManager Settings manager instance
+---@param api MinifluxAPI API client instance
+---@param debug MinifluxDebug Debug logging instance
+---@param download_dir string Download directory path
+---@return MinifluxUI self for method chaining
 function MinifluxUI:init(settings, api, debug, download_dir)
     self.settings = settings
     self.api = api
@@ -32,6 +56,8 @@ function MinifluxUI:init(settings, api, debug, download_dir)
     return self
 end
 
+---Show server settings dialog
+---@return nil
 function MinifluxUI:showServerSettings()
     local server_address = self.settings:getServerAddress()
     local api_token = self.settings:getApiToken()
@@ -87,6 +113,8 @@ function MinifluxUI:showServerSettings()
     UIManager:show(self.settings_dialog)
 end
 
+---Show entries limit settings dialog
+---@return nil
 function MinifluxUI:showLimitSettings()
     local current_limit = tostring(self.settings:getLimit())
     
@@ -129,6 +157,8 @@ function MinifluxUI:showLimitSettings()
     UIManager:show(limit_dialog)
 end
 
+---Test connection to Miniflux server
+---@return nil
 function MinifluxUI:testConnection()
     if not self.settings:isConfigured() then
         UIManager:show(InfoMessage:new{
@@ -158,6 +188,8 @@ function MinifluxUI:testConnection()
     })
 end
 
+---Show the main Miniflux browser screen
+---@return nil
 function MinifluxUI:showMainScreen()
     if self.debug then self.debug:info("showMainScreen called") end
     
@@ -312,6 +344,8 @@ function MinifluxUI:showMainScreen()
     end)
 end
 
+---Show debug log viewer
+---@return nil
 function MinifluxUI:showDebugLog()
     if not self.debug then
         UIManager:show(InfoMessage:new{
@@ -342,6 +376,8 @@ function MinifluxUI:showDebugLog()
     UIManager:show(text_viewer)
 end
 
+---Get sort order submenu items
+---@return MenuSubItem[] Sort order menu items
 function MinifluxUI:getOrderSubMenu()
     local current_order = self.settings:getOrder()
     
@@ -424,6 +460,8 @@ function MinifluxUI:getOrderSubMenu()
     }
 end
 
+---Get sort direction submenu items
+---@return MenuSubItem[] Sort direction menu items
 function MinifluxUI:getDirectionSubMenu()
     local current_direction = self.settings:getDirection()
     

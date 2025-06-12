@@ -10,8 +10,19 @@ It manages category data presentation and user interactions.
 local BrowserUtils = require("browser/lib/browser_utils")
 local _ = require("gettext")
 
+---@class CategoryMenuItem
+---@field text string Menu item display text
+---@field mandatory string Unread count display
+---@field action_type string Action type identifier
+---@field category_data MinifluxCategory Category data
+
+---@class CategoriesScreen
+---@field browser BaseBrowser Reference to the browser instance
+---@field cached_categories? MinifluxCategory[] Cached categories data
 local CategoriesScreen = {}
 
+---Create a new categories screen instance
+---@return CategoriesScreen
 function CategoriesScreen:new()
     local obj = {}
     setmetatable(obj, self)

@@ -10,8 +10,18 @@ It manages the initial screen presentation and navigation to other screens.
 local BrowserUtils = require("browser/lib/browser_utils")
 local _ = require("gettext")
 
+---@class MainMenuItem
+---@field text string Menu item text
+---@field mandatory string Menu item count or status
+---@field action_type string Action type identifier
+
+---@class MainScreen
+---@field browser BaseBrowser Reference to the browser instance
+---@field cached_unread_count? number Cached unread count
 local MainScreen = {}
 
+---Create a new main screen instance
+---@return MainScreen
 function MainScreen:new()
     local obj = {}
     setmetatable(obj, self)
@@ -19,11 +29,15 @@ function MainScreen:new()
     return obj
 end
 
+---Initialize the main screen
+---@param browser BaseBrowser Browser instance to manage
+---@return nil
 function MainScreen:init(browser)
     self.browser = browser
 end
 
--- Generate main menu items table
+---Generate main menu items table
+---@return MainMenuItem[] Array of main menu items
 function MainScreen:genItemTable()
     -- Use the counts passed during initialization
     local unread_count = self.browser.unread_count or 0
@@ -49,7 +63,8 @@ function MainScreen:genItemTable()
     }
 end
 
--- Show main content screen
+---Show main content screen
+---@return nil
 function MainScreen:show()
     if self.browser.debug then
         self.browser:debugLog("MainScreen:show called")
@@ -65,7 +80,9 @@ function MainScreen:show()
     self.browser:updateBrowser(_("Miniflux"), main_items, subtitle, {paths_updated = true})
 end
 
--- Show unread entries screen
+---Show unread entries screen
+---@param is_refresh? boolean Whether this is a refresh operation
+---@return nil
 function MainScreen:showUnreadEntries(is_refresh)
     if self.browser.debug then
         self.browser:debugLog("MainScreen:showUnreadEntries called, is_refresh=" .. tostring(is_refresh))
@@ -139,7 +156,8 @@ function MainScreen:showUnreadEntries(is_refresh)
     self.browser:showEntriesList(entries, _("Unread Entries"), true, navigation_data)
 end
 
--- Show unread entries screen (refresh version - no navigation context)
+---Show unread entries screen (refresh version - no navigation context)
+---@return nil
 function MainScreen:showUnreadEntriesRefresh()
     if self.browser.debug then
         self.browser:debugLog("MainScreen:showUnreadEntriesRefresh called")
@@ -149,7 +167,8 @@ function MainScreen:showUnreadEntriesRefresh()
     self:showUnreadEntries(true)
 end
 
--- Cache management methods
+---Get cached unread count
+---@return number|nil Cached unread count or nil if not cached
 function MainScreen:getCachedUnreadCount()
     if self.browser.debug then
         self.browser.debug:info("MainScreen:getCachedUnreadCount called")
@@ -159,6 +178,9 @@ function MainScreen:getCachedUnreadCount()
     return self.cached_unread_count
 end
 
+---Cache unread count
+---@param count number Unread count to cache
+---@return nil
 function MainScreen:cacheUnreadCount(count)
     if self.browser.debug then
         self.browser.debug:info("MainScreen:cacheUnreadCount called with count: " .. tostring(count))
@@ -168,6 +190,8 @@ function MainScreen:cacheUnreadCount(count)
     self.cached_unread_count = count
 end
 
+---Invalidate cache
+---@return nil
 function MainScreen:invalidateCache()
     if self.browser.debug then
         self.browser.debug:info("MainScreen:invalidateCache called")

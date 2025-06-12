@@ -10,6 +10,38 @@ local InfoMessage = require("ui/widget/infomessage")
 local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
 local _ = require("gettext")
 
+---@class NavigationData
+---@field paths_updated? boolean Whether navigation paths were updated
+---@field current_type? string Current context type
+---@field current_data? table Current context data
+---@field page_info? table Page restoration information
+---@field restore_page_info? table Page information for restoration
+---@field is_settings_refresh? boolean Whether this is a settings refresh
+---@field current_title? string Current title for navigation
+
+---@class CurrentContext
+---@field type string Context type (main, feeds, categories, feed_entries, category_entries, unread_entries)
+---@field data? table Context-specific data
+
+---@class BaseBrowser : Menu
+---@field title_shrink_font_to_fit boolean Whether to shrink title font to fit
+---@field is_popout boolean Whether this is a popout window
+---@field covers_fullscreen boolean Whether browser covers full screen
+---@field is_borderless boolean Whether browser is borderless
+---@field title_bar_fm_style boolean Whether to use file manager style title bar
+---@field title_bar_left_icon string Icon for left side of title bar
+---@field perpage number Number of items per page
+---@field title string Browser title
+---@field subtitle string Browser subtitle
+---@field item_table table[] Menu items
+---@field settings SettingsManager Settings manager instance
+---@field api MinifluxAPI API client instance  
+---@field debug MinifluxDebug Debug logging instance
+---@field download_dir string Download directory path
+---@field config_dialog ButtonDialogTitle|nil Current config dialog
+---@field current_context CurrentContext Current browser context
+---@field onLeftButtonTap function Callback for left button tap
+---@field onReturn function|nil Callback for back navigation
 local BaseBrowser = Menu:extend{
     title_shrink_font_to_fit = true,
     is_popout = false,
@@ -20,6 +52,8 @@ local BaseBrowser = Menu:extend{
     perpage = 20,
 }
 
+---Initialize the base browser
+---@return nil
 function BaseBrowser:init()
     -- Set up common properties
     self.title = self.title or _("Miniflux")
@@ -37,6 +71,8 @@ function BaseBrowser:init()
     Menu.init(self)
 end
 
+---Show configuration dialog
+---@return nil
 function BaseBrowser:showConfigDialog()
     -- Get settings module - will be available through parent browser
     local settings = self.settings
@@ -101,6 +137,8 @@ function BaseBrowser:showConfigDialog()
     UIManager:show(self.config_dialog)
 end
 
+---Toggle read entries visibility
+---@return nil
 function BaseBrowser:toggleReadEntriesVisibility()
     -- Get settings module
     local settings = self.settings
@@ -151,7 +189,8 @@ function BaseBrowser:toggleReadEntriesVisibility()
     end
 end
 
--- Check if we're currently viewing entries (not main menu, feeds list, or categories list)
+---Check if we're currently viewing entries (not main menu, feeds list, or categories list)
+---@return boolean True if in entry view
 function BaseBrowser:isInEntryView()
     if not self.title then
         return false
@@ -169,7 +208,8 @@ function BaseBrowser:isInEntryView()
     return not main_titles[self.title]
 end
 
--- Check if hiding read entries would result in no entries
+---Check if hiding read entries would result in no entries
+---@return boolean True if hiding would result in no entries
 function BaseBrowser:willHideResultInNoEntries()
     -- Look at current items to see if they're all read entries
     if not self.item_table or #self.item_table == 0 then
@@ -191,7 +231,10 @@ function BaseBrowser:willHideResultInNoEntries()
     return unread_count == 0
 end
 
--- Method to notify about settings changes - can be overridden by subclasses
+---Method to notify about settings changes - can be overridden by subclasses
+---@param setting_name string Name of the setting that changed
+---@param new_value any New value of the setting
+---@return nil
 function BaseBrowser:onSettingsChanged(setting_name, new_value)
     if self.debug then
         self.debug:info("Settings changed:", setting_name, "=", tostring(new_value))
@@ -206,13 +249,16 @@ function BaseBrowser:onSettingsChanged(setting_name, new_value)
     end
 end
 
--- Method to invalidate entry-related caches - can be overridden by subclasses  
+---Method to invalidate entry-related caches - can be overridden by subclasses
+---@return nil
 function BaseBrowser:invalidateEntryCaches()
     if self.debug then
         self.debug:info("BaseBrowser:invalidateEntryCaches called - should be implemented by subclass")
     end
 end
 
+---Refresh current view - should be overridden by subclasses
+---@return nil
 function BaseBrowser:refreshCurrentView()
     -- This method should be overridden by subclasses to refresh their specific content
     -- For now, we'll just debug log
@@ -221,6 +267,8 @@ function BaseBrowser:refreshCurrentView()
     end
 end
 
+---Close all browsers (single instance pattern)
+---@return nil
 function BaseBrowser:closeAll()
     -- Close this browser (single instance pattern like OPDS)
     if self.close_callback then
@@ -230,6 +278,12 @@ function BaseBrowser:closeAll()
     end
 end
 
+---Update browser with new content
+---@param title string New browser title
+---@param items table[] New menu items
+---@param subtitle? string New browser subtitle
+---@param navigation_data? NavigationData Navigation context data
+---@return nil
 function BaseBrowser:updateBrowser(title, items, subtitle, navigation_data)
     -- Update the current browser with new content (like OPDS updateCatalog)
     
@@ -294,31 +348,50 @@ function BaseBrowser:updateBrowser(title, items, subtitle, navigation_data)
     self:debugLog("=== updateBrowser end ===")
 end
 
+---Show main content - to be implemented by subclasses
+---@return nil
 function BaseBrowser:showMainContent()
     -- To be implemented by subclasses
     self:debugLog("showMainContent called - should be implemented by subclass")
 end
 
+---Show feeds content - to be implemented by subclasses
+---@return nil
 function BaseBrowser:showFeedsContent()
     -- To be implemented by subclasses  
     self:debugLog("showFeedsContent called - should be implemented by subclass")
 end
 
+---Show categories content - to be implemented by subclasses
+---@return nil
 function BaseBrowser:showCategoriesContent()
     -- To be implemented by subclasses
     self:debugLog("showCategoriesContent called - should be implemented by subclass")
 end
 
+---Show entries for a specific feed - to be implemented by subclasses
+---@param feed_id number Feed ID
+---@param feed_title string Feed title
+---@param paths_updated? boolean Whether navigation paths were updated
+---@return nil
 function BaseBrowser:showFeedEntries(feed_id, feed_title, paths_updated)
     -- To be implemented by subclasses
     self:debugLog("showFeedEntries called - should be implemented by subclass")
 end
 
+---Show entries for a specific category - to be implemented by subclasses
+---@param category_id number Category ID
+---@param category_title string Category title
+---@param paths_updated? boolean Whether navigation paths were updated
+---@return nil
 function BaseBrowser:showCategoryEntries(category_id, category_title, paths_updated)
     -- To be implemented by subclasses
     self:debugLog("showCategoryEntries called - should be implemented by subclass")
 end
 
+---Show loading message
+---@param text? string Loading message text
+---@return InfoMessage Loading message widget
 function BaseBrowser:showLoadingMessage(text)
     local loading_info = InfoMessage:new{
         text = text or _("Loading..."),
@@ -328,12 +401,19 @@ function BaseBrowser:showLoadingMessage(text)
     return loading_info
 end
 
+---Close loading message
+---@param loading_info InfoMessage Loading message widget to close
+---@return nil
 function BaseBrowser:closeLoadingMessage(loading_info)
     if loading_info then
         UIManager:close(loading_info)
     end
 end
 
+---Show error message
+---@param message string Error message text
+---@param timeout? number Message timeout in seconds
+---@return nil
 function BaseBrowser:showErrorMessage(message, timeout)
     UIManager:show(InfoMessage:new{
         text = message,
@@ -341,6 +421,10 @@ function BaseBrowser:showErrorMessage(message, timeout)
     })
 end
 
+---Show info message
+---@param message string Info message text
+---@param timeout? number Message timeout in seconds
+---@return nil
 function BaseBrowser:showInfoMessage(message, timeout)
     UIManager:show(InfoMessage:new{
         text = message,
@@ -348,12 +432,20 @@ function BaseBrowser:showInfoMessage(message, timeout)
     })
 end
 
+---Log debug message with browser context
+---@param message string Debug message
+---@return nil
 function BaseBrowser:debugLog(message)
     if self.debug then
         self.debug:info("[" .. (self.browser_type or "Browser") .. "] " .. message)
     end
 end
 
+---Handle API errors with user feedback
+---@param success boolean API call success status
+---@param result any API result or error message
+---@param error_prefix? string Prefix for error messages
+---@return boolean True if successful, false if error was handled
 function BaseBrowser:handleApiError(success, result, error_prefix)
     if not success then
         self:showErrorMessage((error_prefix or _("API Error")) .. ": " .. tostring(result))
@@ -362,6 +454,10 @@ function BaseBrowser:handleApiError(success, result, error_prefix)
     return true
 end
 
+---Validate data and show message if invalid
+---@param data any Data to validate
+---@param data_name? string Name of data for error message
+---@return boolean True if data is valid
 function BaseBrowser:validateData(data, data_name)
     if not data or (type(data) == "table" and #data == 0) then
         self:showInfoMessage(_("No ") .. (data_name or "data") .. _(" found"))

@@ -2,7 +2,8 @@
 Miniflux API client module
 
 @module koplugin.miniflux.api
---]]--
+--]]
+--
 
 local http = require("socket.http")
 local https = require("ssl.https")
@@ -13,8 +14,63 @@ local socketutil = require("socketutil")
 local logger = require("logger")
 local _ = require("gettext")
 
+---@alias HttpMethod "GET"|"POST"|"PUT"|"DELETE"
+---@alias EntryStatus "read"|"unread"|"removed"
+---@alias SortOrder "id"|"status"|"published_at"|"category_title"|"category_id"
+---@alias SortDirection "asc"|"desc"
+
+---@class MinifluxEntry
+---@field id number Entry ID
+---@field title string Entry title
+---@field url string Entry URL
+---@field content string Entry content
+---@field summary string Entry summary
+---@field status EntryStatus Entry read status
+---@field starred boolean Whether entry is bookmarked
+---@field published_at string Publication timestamp
+---@field created_at string Creation timestamp
+---@field feed MinifluxFeed Associated feed information
+
+---@class MinifluxFeed
+---@field id number Feed ID
+---@field title string Feed title
+---@field site_url string Feed website URL
+---@field feed_url string Feed RSS URL
+---@field category MinifluxCategory Feed category
+
+---@class MinifluxCategory
+---@field id number Category ID
+---@field title string Category title
+---@field total_unread number Number of unread entries in category
+
+---@class MinifluxUser
+---@field id number User ID
+---@field username string Username
+---@field is_admin boolean Whether user is admin
+
+---@class ApiOptions
+---@field limit? number Maximum number of entries to fetch
+---@field order? SortOrder Sort order field
+---@field direction? SortDirection Sort direction
+---@field status? EntryStatus[]|EntryStatus Entry status filter
+
+---@class EntriesResponse
+---@field entries MinifluxEntry[] Array of entries
+---@field total number Total number of entries matching criteria
+
+---@class FeedCounters
+---@field reads table<string, number> Read counts by feed ID
+---@field unreads table<string, number> Unread counts by feed ID
+
+---@class MinifluxAPI
+---@field server_address string Server base URL
+---@field api_token string API authentication token
+---@field base_url string Complete API base URL
 local MinifluxAPI = {}
 
+---Create a new API instance
+---@param o? table Optional initialization table
+---@return MinifluxAPI
 function MinifluxAPI:new(o)
     o = o or {}
     setmetatable(o, self)
@@ -22,70 +78,79 @@ function MinifluxAPI:new(o)
     return o
 end
 
+---Initialize the API client with server details
+---@param server_address string The Miniflux server address
+---@param api_token string The API authentication token
+---@return MinifluxAPI self for method chaining
 function MinifluxAPI:init(server_address, api_token)
     self.server_address = server_address
     self.api_token = api_token
     self.base_url = server_address .. "/v1"
-    
+
     -- Remove trailing slash if present
     if self.server_address:sub(-1) == "/" then
         self.server_address = self.server_address:sub(1, -2)
         self.base_url = self.server_address .. "/v1"
     end
-    
+
     return self
 end
 
+---Make an HTTP request to the API
+---@param method HttpMethod HTTP method to use
+---@param endpoint string API endpoint path
+---@param body? table Request body to encode as JSON
+---@return boolean success, any result_or_error
 function MinifluxAPI:makeRequest(method, endpoint, body)
     if not self.server_address or not self.api_token then
         return false, _("Server address and API token must be configured")
     end
-    
+
     local url = self.base_url .. endpoint
     local headers = {
         ["X-Auth-Token"] = self.api_token,
         ["Content-Type"] = "application/json",
-        ["User-Agent"] = "KOReader-Miniflux/1.0"
+        ["User-Agent"] = "KOReader-Miniflux/1.0",
     }
-    
+
     local request_body = ""
     if body then
         request_body = json.encode(body)
         headers["Content-Length"] = tostring(#request_body)
     end
-    
+
     local response_body = {}
     local request_func = http.request
-    
+
     -- Use HTTPS if URL starts with https
     if url:match("^https://") then
         request_func = https.request
     end
-    
+
     -- Set timeouts to prevent hanging requests
-    local timeout, maxtime = 15, 30  -- 15 second connection timeout, 30 second max time
+    local timeout, maxtime = 15, 30 -- 15 second connection timeout, 30 second max time
     socketutil:set_timeout(timeout, maxtime)
-    
+
     local result, status_code, response_headers
     local network_success = pcall(function()
-        result, status_code, response_headers = request_func{
+        result, status_code, response_headers = request_func({
             url = url,
             method = method,
             headers = headers,
             source = ltn12.source.string(request_body),
-            sink = socketutil.table_sink(response_body),  -- Use socketutil sink for timeout support
-            protocol = "tlsv1_2"
-        }
+            sink = socketutil.table_sink(response_body), -- Use socketutil sink for timeout support
+            protocol = "tlsv1_2",
+        })
     end)
-    
+
     -- Reset timeout after request
     socketutil:reset_timeout()
-    
+
     if not network_success then
         logger.warn("Miniflux API network error")
         return false, _("Network error occurred")
     end
-    
+
     if not result then
         logger.warn("Miniflux API request failed:", status_code)
         if status_code == socketutil.TIMEOUT_CODE then
@@ -96,9 +161,9 @@ function MinifluxAPI:makeRequest(method, endpoint, body)
             return false, _("Network request failed: ") .. tostring(status_code)
         end
     end
-    
+
     local response_text = table.concat(response_body)
-    
+
     -- Handle different status codes
     if status_code == 200 or status_code == 201 or status_code == 204 then
         if response_text and response_text ~= "" then
@@ -132,10 +197,12 @@ function MinifluxAPI:makeRequest(method, endpoint, body)
     end
 end
 
+---Test connection to the Miniflux server
+---@return boolean success, string message
 function MinifluxAPI:testConnection()
     logger.info("Testing Miniflux connection to:", self.server_address)
     local success, result = self:makeRequest("GET", "/me")
-    
+
     if success then
         logger.info("Connection test successful. User:", result.username)
         return true, _("Connection successful! Logged in as: ") .. result.username
@@ -145,23 +212,26 @@ function MinifluxAPI:testConnection()
     end
 end
 
+---Get entries from the server
+---@param options? ApiOptions Query options for filtering and sorting
+---@return boolean success, EntriesResponse|string result_or_error
 function MinifluxAPI:getEntries(options)
     options = options or {}
-    
+
     local params = {}
-    
+
     if options.limit then
         table.insert(params, "limit=" .. tostring(options.limit))
     end
-    
+
     if options.order then
         table.insert(params, "order=" .. options.order)
     end
-    
+
     if options.direction then
         table.insert(params, "direction=" .. options.direction)
     end
-    
+
     if options.status then
         if type(options.status) == "table" then
             -- Handle multiple status values
@@ -173,62 +243,77 @@ function MinifluxAPI:getEntries(options)
             table.insert(params, "status=" .. options.status)
         end
     end
-    
+
     local query_string = ""
     if #params > 0 then
         query_string = "?" .. table.concat(params, "&")
     end
-    
+
     local endpoint = "/entries" .. query_string
     logger.info("Fetching entries from:", endpoint)
-    
+
     return self:makeRequest("GET", endpoint)
 end
 
+---Mark an entry as read
+---@param entry_id number The entry ID to mark as read
+---@return boolean success, any result_or_error
 function MinifluxAPI:markEntryAsRead(entry_id)
     local body = {
-        entry_ids = {entry_id},
-        status = "read"
+        entry_ids = { entry_id },
+        status = "read",
     }
-    
+
     return self:makeRequest("PUT", "/entries", body)
 end
 
+---Mark an entry as unread
+---@param entry_id number The entry ID to mark as unread
+---@return boolean success, any result_or_error
 function MinifluxAPI:markEntryAsUnread(entry_id)
     local body = {
-        entry_ids = {entry_id},
-        status = "unread"
+        entry_ids = { entry_id },
+        status = "unread",
     }
-    
+
     return self:makeRequest("PUT", "/entries", body)
 end
 
+---Toggle bookmark status of an entry
+---@param entry_id number The entry ID to toggle bookmark
+---@return boolean success, any result_or_error
 function MinifluxAPI:toggleBookmark(entry_id)
     return self:makeRequest("PUT", "/entries/" .. tostring(entry_id) .. "/bookmark")
 end
 
+---Get all feeds
+---@return boolean success, MinifluxFeed[]|string result_or_error
 function MinifluxAPI:getFeeds()
     logger.info("Fetching feeds")
     return self:makeRequest("GET", "/feeds")
 end
 
+---Get entries for a specific feed
+---@param feed_id number The feed ID
+---@param options? ApiOptions Query options for filtering and sorting
+---@return boolean success, EntriesResponse|string result_or_error
 function MinifluxAPI:getFeedEntries(feed_id, options)
     options = options or {}
-    
+
     local params = {}
-    
+
     if options.limit then
         table.insert(params, "limit=" .. tostring(options.limit))
     end
-    
+
     if options.order then
         table.insert(params, "order=" .. options.order)
     end
-    
+
     if options.direction then
         table.insert(params, "direction=" .. options.direction)
     end
-    
+
     if options.status then
         if type(options.status) == "table" then
             -- Handle multiple status values
@@ -240,14 +325,14 @@ function MinifluxAPI:getFeedEntries(feed_id, options)
             table.insert(params, "status=" .. options.status)
         end
     end
-    
+
     local query_string = ""
     if #params > 0 then
         query_string = "?" .. table.concat(params, "&")
     end
-    
+
     local endpoint = "/feeds/" .. tostring(feed_id) .. "/entries" .. query_string
-    
+
     -- COMPREHENSIVE DEBUGGING
     logger.info("=== MINIFLUX API CALL DEBUG ===")
     logger.info("Feed ID:", feed_id)
@@ -265,16 +350,16 @@ function MinifluxAPI:getFeedEntries(feed_id, options)
         logger.info("  " .. i .. ": " .. param)
     end
     logger.info("================================")
-    
+
     local success, result = self:makeRequest("GET", endpoint)
-    
+
     -- DEBUG THE RESPONSE
     if success and result then
         logger.info("=== MINIFLUX API RESPONSE DEBUG ===")
         logger.info("Success: true")
         if result.entries then
             logger.info("Total entries returned:", #result.entries)
-            
+
             -- Count read vs unread
             local unread_count = 0
             local read_count = 0
@@ -285,21 +370,31 @@ function MinifluxAPI:getFeedEntries(feed_id, options)
                     read_count = read_count + 1
                 end
             end
-            
+
             logger.info("Unread entries:", unread_count)
             logger.info("Read entries:", read_count)
             logger.info("Total count field:", tostring(result.total))
-            
+
             -- Show first few entries for debugging
             logger.info("First 3 entries (for debugging):")
             for i = 1, math.min(3, #result.entries) do
                 local entry = result.entries[i]
-                logger.info("  " .. i .. ": " .. tostring(entry.title) .. " [status: " .. tostring(entry.status) .. ", id: " .. tostring(entry.id) .. "]")
+                logger.info(
+                    "  "
+                        .. i
+                        .. ": "
+                        .. tostring(entry.title)
+                        .. " [status: "
+                        .. tostring(entry.status)
+                        .. ", id: "
+                        .. tostring(entry.id)
+                        .. "]"
+                )
             end
         else
             logger.info("No entries field in response")
         end
-        
+
         -- Show other response fields
         logger.info("Other response fields:")
         for k, v in pairs(result) do
@@ -314,15 +409,20 @@ function MinifluxAPI:getFeedEntries(feed_id, options)
         logger.warn("Error:", tostring(result))
         logger.warn("=====================================")
     end
-    
+
     return success, result
 end
 
+---Get feed counters (read/unread counts)
+---@return boolean success, FeedCounters|string result_or_error
 function MinifluxAPI:getFeedCounters()
     logger.info("Fetching feed counters")
     return self:makeRequest("GET", "/feeds/counters")
 end
 
+---Get all categories
+---@param include_counts? boolean Whether to include entry counts
+---@return boolean success, MinifluxCategory[]|string result_or_error
 function MinifluxAPI:getCategories(include_counts)
     local endpoint = "/categories"
     if include_counts then
@@ -332,23 +432,27 @@ function MinifluxAPI:getCategories(include_counts)
     return self:makeRequest("GET", endpoint)
 end
 
+---Get entries for a specific category
+---@param category_id number The category ID
+---@param options? ApiOptions Query options for filtering and sorting
+---@return boolean success, EntriesResponse|string result_or_error
 function MinifluxAPI:getCategoryEntries(category_id, options)
     options = options or {}
-    
+
     local params = {}
-    
+
     if options.limit then
         table.insert(params, "limit=" .. tostring(options.limit))
     end
-    
+
     if options.order then
         table.insert(params, "order=" .. options.order)
     end
-    
+
     if options.direction then
         table.insert(params, "direction=" .. options.direction)
     end
-    
+
     if options.status then
         if type(options.status) == "table" then
             -- Handle multiple status values
@@ -360,36 +464,43 @@ function MinifluxAPI:getCategoryEntries(category_id, options)
             table.insert(params, "status=" .. options.status)
         end
     end
-    
+
     local query_string = ""
     if #params > 0 then
         query_string = "?" .. table.concat(params, "&")
     end
-    
+
     local endpoint = "/categories/" .. tostring(category_id) .. "/entries" .. query_string
     logger.info("Fetching entries for category", category_id, "from:", endpoint)
-    
+
     return self:makeRequest("GET", endpoint)
 end
 
+---Get a single entry by ID
+---@param entry_id number The entry ID
+---@return boolean success, MinifluxEntry|string result_or_error
 function MinifluxAPI:getEntry(entry_id)
     local endpoint = "/entries/" .. tostring(entry_id)
     logger.info("Fetching single entry:", endpoint)
-    
+
     return self:makeRequest("GET", endpoint)
 end
 
+---Get the entry before a given entry ID
+---@param entry_id number The reference entry ID
+---@param options? ApiOptions Query options for filtering and sorting
+---@return boolean success, EntriesResponse|string result_or_error
 function MinifluxAPI:getPreviousEntry(entry_id, options)
     options = options or {}
-    
+
     local params = {}
-    
+
     -- Add before_entry_id to get entries before this one
     table.insert(params, "before_entry_id=" .. tostring(entry_id))
-    
+
     -- We only want 1 entry (the immediate previous)
     table.insert(params, "limit=1")
-    
+
     -- Add other filter options if provided
     if options.status then
         if type(options.status) == "table" then
@@ -400,37 +511,41 @@ function MinifluxAPI:getPreviousEntry(entry_id, options)
             table.insert(params, "status=" .. options.status)
         end
     end
-    
+
     if options.order then
         table.insert(params, "order=" .. options.order)
     end
-    
+
     if options.direction then
         table.insert(params, "direction=" .. options.direction)
     end
-    
+
     local query_string = ""
     if #params > 0 then
         query_string = "?" .. table.concat(params, "&")
     end
-    
+
     local endpoint = "/entries" .. query_string
     logger.info("Fetching previous entry:", endpoint)
-    
+
     return self:makeRequest("GET", endpoint)
 end
 
+---Get the entry after a given entry ID
+---@param entry_id number The reference entry ID
+---@param options? ApiOptions Query options for filtering and sorting
+---@return boolean success, EntriesResponse|string result_or_error
 function MinifluxAPI:getNextEntry(entry_id, options)
     options = options or {}
-    
+
     local params = {}
-    
+
     -- Add after_entry_id to get entries after this one
     table.insert(params, "after_entry_id=" .. tostring(entry_id))
-    
+
     -- We only want 1 entry (the immediate next)
     table.insert(params, "limit=1")
-    
+
     -- Add other filter options if provided
     if options.status then
         if type(options.status) == "table" then
@@ -441,24 +556,25 @@ function MinifluxAPI:getNextEntry(entry_id, options)
             table.insert(params, "status=" .. options.status)
         end
     end
-    
+
     if options.order then
         table.insert(params, "order=" .. options.order)
     end
-    
+
     if options.direction then
         table.insert(params, "direction=" .. options.direction)
     end
-    
+
     local query_string = ""
     if #params > 0 then
         query_string = "?" .. table.concat(params, "&")
     end
-    
+
     local endpoint = "/entries" .. query_string
     logger.info("Fetching next entry:", endpoint)
-    
+
     return self:makeRequest("GET", endpoint)
 end
 
-return MinifluxAPI 
+return MinifluxAPI
+

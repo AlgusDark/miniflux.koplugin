@@ -6,8 +6,16 @@ This module handles page management and navigation with safe page restoration.
 @module miniflux.browser.features.page_state_manager
 --]]--
 
+---@class PageInfo
+---@field page number Current page number
+---@field perpage number Items per page
+
+---@class PageStateManager
+---@field browser BaseBrowser Reference to the browser instance
 local PageStateManager = {}
 
+---Create a new page state manager instance
+---@return PageStateManager
 function PageStateManager:new()
     local obj = {}
     setmetatable(obj, self)
@@ -15,11 +23,15 @@ function PageStateManager:new()
     return obj
 end
 
+---Initialize the page state manager
+---@param browser BaseBrowser Browser instance to manage page state for
+---@return nil
 function PageStateManager:init(browser)
     self.browser = browser
 end
 
--- Get current page info for navigation
+---Get current page info for navigation
+---@return PageInfo|nil Page information or nil if browser not available
 function PageStateManager:getCurrentPageInfo()
     if not self.browser then
         return nil
@@ -42,7 +54,9 @@ function PageStateManager:getCurrentPageInfo()
     return page_info
 end
 
--- Restore page info safely (only for back navigation)
+---Restore page info safely (only for back navigation)
+---@param page_info PageInfo|nil Page information to restore
+---@return nil
 function PageStateManager:restorePageInfo(page_info)
     if self.browser.debug then
         if page_info then
@@ -56,7 +70,13 @@ function PageStateManager:restorePageInfo(page_info)
     -- This method is kept for compatibility but actual restoration happens there
 end
 
--- Create navigation data structure
+---Create navigation data structure
+---@param paths_updated? boolean Whether navigation paths were updated
+---@param current_type? string Current context type
+---@param current_data? table Current context data
+---@param page_info? PageInfo Page information for restoration
+---@param is_settings_refresh? boolean Whether this is a settings refresh
+---@return NavigationData Navigation data structure
 function PageStateManager:createNavigationData(paths_updated, current_type, current_data, page_info, is_settings_refresh)
     local navigation_data = {
         paths_updated = paths_updated or false,

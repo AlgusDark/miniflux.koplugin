@@ -164,7 +164,7 @@ The plugin is organized into separate modules for maintainability:
 
 - **main.lua**: Main plugin interface and menu integration
 - **api.lua**: Miniflux API client handling HTTP requests
-- **settings.lua**: Persistent settings management
+- **settings/**: Modular settings management system
 - **miniflux_ui.lua**: User interface components and dialogs
 - **browser/main_browser.lua**: Single browser implementation following OPDS pattern
 - **browser/lib/base_browser.lua**: Base browser class with navigation logic

@@ -16,8 +16,30 @@ local CategoriesScreen = require("browser/screens/categories_screen")
 local BrowserUtils = require("browser/lib/browser_utils")
 local _ = require("gettext")
 
+---@class BrowserMenuItem
+---@field text string Menu item display text
+---@field mandatory? string Optional mandatory text (right side)
+---@field action_type string Action type for menu selection
+---@field entry_data? MinifluxEntry Entry data for entry items
+---@field feed_data? MinifluxFeed Feed data for feed items
+---@field category_data? MinifluxCategory Category data for category items
+---@field navigation_context? table Navigation context for entries
+
+---@class MainBrowser : BaseBrowser
+---@field browser_type string Browser type identifier
+---@field navigation_manager NavigationManager Navigation state manager
+---@field page_state_manager PageStateManager Page state manager
+---@field main_screen MainScreen Main screen handler
+---@field feeds_screen FeedsScreen Feeds screen handler
+---@field categories_screen CategoriesScreen Categories screen handler
+---@field unread_count number Unread entries count
+---@field feeds_count number Total feeds count
+---@field categories_count number Total categories count
+---@field close_callback function Callback for browser close
 local MainBrowser = BaseBrowser:extend{}
 
+---Initialize the main browser
+---@return nil
 function MainBrowser:init()
     -- Ensure we have the required properties from constructor
     self.settings = self.settings or {}
@@ -89,7 +111,9 @@ function MainBrowser:init()
     }
 end
 
--- Handle menu selection by delegating to appropriate screens
+---Handle menu selection by delegating to appropriate screens
+---@param item BrowserMenuItem Menu item that was selected
+---@return nil
 function MainBrowser:onMenuSelect(item)
     if not item or not item.action_type then
         if self.debug then
@@ -200,12 +224,18 @@ function MainBrowser:onMenuSelect(item)
     end
 end
 
--- Back navigation handler
+---Back navigation handler
+---@return boolean True if navigation was handled
 function MainBrowser:goBack()
     return self.navigation_manager:goBack()
 end
 
--- Override updateBrowser to integrate with navigation features
+---Override updateBrowser to integrate with navigation features
+---@param title string New browser title
+---@param items table[] New menu items
+---@param subtitle? string New browser subtitle
+---@param nav_data? NavigationData Navigation context data
+---@return nil
 function MainBrowser:updateBrowser(title, items, subtitle, nav_data)
     if self.debug then
         self:debugLog("=== MainBrowser:updateBrowser called ===")

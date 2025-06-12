@@ -7,8 +7,19 @@ It maintains the navigation stack and provides methods for navigation operations
 @module miniflux.browser.features.navigation_manager
 --]]--
 
+---@class NavigationPath
+---@field title string Title of the navigation path
+---@field type string Type of content (main, feeds, categories)
+---@field page_info? table Page information for restoration
+---@field nav_data? table Additional navigation context data
+
+---@class NavigationManager
+---@field browser BaseBrowser Reference to the browser instance
+---@field navigation_paths NavigationPath[] Stack of navigation paths
 local NavigationManager = {}
 
+---Create a new navigation manager instance
+---@return NavigationManager
 function NavigationManager:new()
     local obj = {}
     setmetatable(obj, self)
@@ -16,6 +27,9 @@ function NavigationManager:new()
     return obj
 end
 
+---Initialize the navigation manager
+---@param browser BaseBrowser Browser instance to manage navigation for
+---@return nil
 function NavigationManager:init(browser)
     self.browser = browser
     self.navigation_paths = {}
@@ -29,7 +43,9 @@ function NavigationManager:init(browser)
     self:updateBackButtonState()
 end
 
--- Debug method to check navigation paths state
+---Debug method to check navigation paths state
+---@param context? string Debug context description
+---@return nil
 function NavigationManager:debugNavigationPaths(context)
     if not self.browser.debug then 
         return 
@@ -54,7 +70,12 @@ function NavigationManager:debugNavigationPaths(context)
     self.browser:debugLog("=== End Navigation Paths Debug ===")
 end
 
--- Update browser navigation state
+---Update browser navigation state
+---@param title string Browser title
+---@param items table[] Menu items
+---@param subtitle string Browser subtitle
+---@param nav_data NavigationData Navigation context data
+---@return nil
 function NavigationManager:updateBrowser(title, items, subtitle, nav_data)
     if self.browser.debug then
         self:debugNavigationPaths("before updateBrowser")
@@ -97,7 +118,8 @@ function NavigationManager:updateBrowser(title, items, subtitle, nav_data)
     self:updateBackButtonState()
 end
 
--- Update back button state based on navigation paths
+---Update back button state based on navigation paths
+---@return nil
 function NavigationManager:updateBackButtonState()
     -- Only enable back navigation if we have navigation paths
     if self.navigation_paths and #self.navigation_paths > 0 then
@@ -144,7 +166,8 @@ function NavigationManager:updateBackButtonState()
     end
 end
 
--- Handle back navigation
+---Handle back navigation
+---@return boolean True if navigation was handled, false otherwise
 function NavigationManager:goBack()
     if self.browser.debug then
         self.browser:debugLog("=== NavigationManager:goBack called ===")
@@ -211,12 +234,14 @@ function NavigationManager:goBack()
     return true
 end
 
--- Check if we can go back
+---Check if we can go back
+---@return boolean True if back navigation is possible
 function NavigationManager:canGoBack()
     return self.navigation_paths and #self.navigation_paths > 0
 end
 
--- Clear all navigation paths
+---Clear all navigation paths
+---@return nil
 function NavigationManager:clear()
     self.navigation_paths = {}
     -- Also clear Menu widget's paths property

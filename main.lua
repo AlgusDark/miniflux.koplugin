@@ -2,10 +2,10 @@
 This plugin provides integration with Miniflux RSS reader.
 
 @module koplugin.miniflux
---]]--
+--]]
+--
 
 local Dispatcher = require("dispatcher")
-local Event = require("ui/event")
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
@@ -17,16 +17,26 @@ local T = require("ffi/util").template
 
 -- Import our modules
 local MinifluxAPI = require("api")
-local MinifluxSettings = require("settings")
+local MinifluxSettingsManager = require("settings/settings_manager")
 local MinifluxUI = require("miniflux_ui")
 local MinifluxDebug = require("lib/debug")
 
-local Miniflux = WidgetContainer:extend{
+---@class Miniflux : WidgetContainer
+---@field name string Plugin name identifier
+---@field download_dir_name string Directory name for downloads
+---@field download_dir string Full path to download directory
+---@field settings SettingsManager Settings manager instance
+---@field api MinifluxAPI API client instance
+---@field miniflux_ui MinifluxUI UI manager instance
+---@field debug MinifluxDebug Debug logging instance
+local Miniflux = WidgetContainer:extend({
     name = "miniflux",
     download_dir_name = "miniflux",
     download_dir = nil,
-}
+})
 
+---Register dispatcher actions for the plugin
+---@return nil
 function Miniflux:onDispatcherRegisterActions()
     Dispatcher:registerAction("miniflux_read_entries", {
         category = "none",
@@ -36,42 +46,45 @@ function Miniflux:onDispatcherRegisterActions()
     })
 end
 
+---Initialize the plugin
+---@return nil
 function Miniflux:init()
     self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)
-    
+
     -- Initialize download directory
     self:initializeDownloadDirectory()
-    
+
     -- Initialize modules
-    self.settings = MinifluxSettings
+    self.settings = MinifluxSettingsManager
+    self.settings:init()  -- Initialize the settings manager
     self.api = MinifluxAPI:new()
     self.miniflux_ui = MinifluxUI:new()
     self.debug = MinifluxDebug:new()
-    
+
     -- Initialize debug logging
     self.debug:init(self.settings, self.path)
-    
+
     -- Initialize UI with settings, API, debug, and download_dir
     self.miniflux_ui:init(self.settings, self.api, self.debug, self.download_dir)
-    
+
     -- Initialize API with current settings if available
     if self.settings:isConfigured() then
         self.api:init(self.settings:getServerAddress(), self.settings:getApiToken())
     end
-    
+
     if self.debug then
         self.debug:info("Miniflux plugin initialized successfully")
         self.debug:info("Download directory: " .. self.download_dir)
     end
 end
 
+---Initialize the download directory for entries
+---@return nil
 function Miniflux:initializeDownloadDirectory()
     -- Set up download directory similar to newsdownloader
-    self.download_dir = ("%s/%s/"):format(
-        DataStorage:getFullDataDir(),
-        self.download_dir_name)
-    
+    self.download_dir = ("%s/%s/"):format(DataStorage:getFullDataDir(), self.download_dir_name)
+
     -- Create the directory if it doesn't exist
     if not lfs.attributes(self.download_dir, "mode") then
         logger.dbg("Miniflux: Creating download directory:", self.download_dir)
@@ -79,6 +92,9 @@ function Miniflux:initializeDownloadDirectory()
     end
 end
 
+---Add Miniflux items to the main menu
+---@param menu_items table The main menu items table
+---@return nil
 function Miniflux:addToMainMenu(menu_items)
     menu_items.miniflux = {
         text = _("Miniflux"),
@@ -116,7 +132,7 @@ function Miniflux:addToMainMenu(menu_items)
                                 status = _("Status"),
                                 published_at = _("Published date"),
                                 category_title = _("Category title"),
-                                category_id = _("Category ID")
+                                category_id = _("Category ID"),
                             }
                             local current_order = self.settings:getOrder()
                             local order_name = order_names[current_order] or _("Published date")
@@ -129,7 +145,8 @@ function Miniflux:addToMainMenu(menu_items)
                     },
                     {
                         text_func = function()
-                            local direction_name = self.settings:getDirection() == "asc" and _("Ascending") or _("Descending")
+                            local direction_name = self.settings:getDirection() == "asc" and _("Ascending")
+                                or _("Descending")
                             return T(_("Sort direction - %1"), direction_name)
                         end,
                         keep_menu_open = true,
@@ -139,16 +156,18 @@ function Miniflux:addToMainMenu(menu_items)
                     },
                     {
                         text_func = function()
-                            return self.settings:getIncludeImages() and _("Include images - ON") or _("Include images - OFF")
+                            return self.settings:getIncludeImages() and _("Include images - ON")
+                                or _("Include images - OFF")
                         end,
                         keep_menu_open = true,
                         callback = function(touchmenu_instance)
                             local new_value = self.settings:toggleIncludeImages()
-                            local message = new_value and _("Images will be downloaded with entries") or _("Images will be skipped when downloading entries")
-                            UIManager:show(InfoMessage:new{
+                            local message = new_value and _("Images will be downloaded with entries")
+                                or _("Images will be skipped when downloading entries")
+                            UIManager:show(InfoMessage:new({
                                 text = message,
                                 timeout = 2,
-                            })
+                            }))
                             touchmenu_instance:updateItems()
                         end,
                     },
@@ -165,7 +184,8 @@ function Miniflux:addToMainMenu(menu_items)
                         sub_item_table = {
                             {
                                 text_func = function()
-                                    return self.settings:getDebugLogging() and _("Debug logging - ON") or _("Debug logging - OFF")
+                                    return self.settings:getDebugLogging() and _("Debug logging - ON")
+                                        or _("Debug logging - OFF")
                                 end,
                                 keep_menu_open = true,
                                 sub_item_table_func = function()
@@ -184,10 +204,10 @@ function Miniflux:addToMainMenu(menu_items)
                                 keep_menu_open = true,
                                 callback = function()
                                     self.debug:clearLog()
-                                    UIManager:show(InfoMessage:new{
+                                    UIManager:show(InfoMessage:new({
                                         text = _("Debug log cleared"),
                                         timeout = 2,
-                                    })
+                                    }))
                                 end,
                             },
                         },
@@ -198,13 +218,17 @@ function Miniflux:addToMainMenu(menu_items)
     }
 end
 
+---Handle the read entries dispatcher event
+---@return nil
 function Miniflux:onReadMinifluxEntries()
     self.miniflux_ui:showMainScreen()
 end
 
+---Get debug settings submenu
+---@return table Debug submenu items
 function Miniflux:getDebugSubMenu()
     local current_debug = self.settings:getDebugLogging()
-    
+
     return {
         {
             text = _("Enable") .. (current_debug and " ✓" or ""),
@@ -212,33 +236,37 @@ function Miniflux:getDebugSubMenu()
             callback = function(touchmenu_instance)
                 self.settings:setDebugLogging(true)
                 self.settings:save()
-                if self.debug then self.debug:info("Debug logging enabled via menu") end
-                UIManager:show(InfoMessage:new{
+                if self.debug then
+                    self.debug:info("Debug logging enabled via menu")
+                end
+                UIManager:show(InfoMessage:new({
                     text = _("Debug logging enabled"),
                     timeout = 2,
                     dismiss_callback = function()
                         touchmenu_instance:backToUpperMenu()
                     end,
-                })
+                }))
             end,
         },
         {
             text = _("Disable") .. (not current_debug and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                if self.debug then self.debug:info("Debug logging disabled via menu") end
+                if self.debug then
+                    self.debug:info("Debug logging disabled via menu")
+                end
                 self.settings:setDebugLogging(false)
                 self.settings:save()
-                UIManager:show(InfoMessage:new{
+                UIManager:show(InfoMessage:new({
                     text = _("Debug logging disabled"),
                     timeout = 2,
                     dismiss_callback = function()
                         touchmenu_instance:backToUpperMenu()
                     end,
-                })
+                }))
             end,
         },
     }
 end
 
-return Miniflux 
+return Miniflux

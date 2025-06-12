@@ -18,8 +18,43 @@ local logger = require("logger")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
+---@class ImageInfo
+---@field src string Original image URL
+---@field original_tag string Original HTML img tag
+---@field filename string Local filename for downloaded image
+---@field width? number Image width
+---@field height? number Image height
+---@field downloaded boolean Whether image was successfully downloaded
+
+---@class NavigationContext
+---@field entries MinifluxEntry[] Array of entries in current view
+---@field current_index number Index of current entry
+---@field total_entries number Total number of entries
+
+---@class EntryMetadata
+---@field title string Entry title
+---@field id number Entry ID
+---@field url? string Entry URL
+---@field published_at? string Publication timestamp
+---@field feed_title? string Feed title
+---@field status EntryStatus Entry read status
+---@field starred boolean Whether entry is bookmarked
+---@field download_time number Timestamp when downloaded
+---@field include_images boolean Whether images were included
+---@field images_found number Number of images found
+---@field images_downloaded number Number of images successfully downloaded
+---@field previous_entry_id? number ID of previous entry for navigation
+---@field next_entry_id? number ID of next entry for navigation
+
 local BrowserUtils = {}
 
+---Show an entry by downloading and opening it
+---@param entry MinifluxEntry Entry to display
+---@param api MinifluxAPI API client instance
+---@param debug MinifluxDebug Debug logging instance
+---@param download_dir string Download directory path
+---@param navigation_context? NavigationContext Navigation context for prev/next
+---@return nil
 function BrowserUtils.showEntry(entry, api, debug, download_dir, navigation_context)
     if not download_dir then
         UIManager:show(InfoMessage:new{
@@ -35,9 +70,18 @@ function BrowserUtils.showEntry(entry, api, debug, download_dir, navigation_cont
     end)
 end
 
+---Download and process an entry with images
+---@param entry MinifluxEntry Entry to download
+---@param api MinifluxAPI API client instance
+---@param debug MinifluxDebug Debug logging instance
+---@param download_dir string Download directory path
+---@param navigation_context? NavigationContext Navigation context for prev/next
+---@return nil
 function BrowserUtils.downloadEntry(entry, api, debug, download_dir, navigation_context)
     local UI = require("ui/trapper")
-    local MinifluxSettings = require("settings")
+    local MinifluxSettingsManager = require("settings/settings_manager")
+    local MinifluxSettings = MinifluxSettingsManager
+    MinifluxSettings:init()  -- Create and initialize instance
     local time = require("ui/time")
     
     local entry_title = entry.title or _("Untitled Entry")
@@ -469,6 +513,12 @@ function BrowserUtils.downloadEntry(entry, api, debug, download_dir, navigation_
     UI:clear()
 end
 
+---Download a single image from URL
+---@param url string Image URL to download
+---@param entry_dir string Directory to save image in
+---@param filename string Filename to save image as
+---@param debug MinifluxDebug Debug logging instance
+---@return boolean True if download successful
 function BrowserUtils.downloadImage(url, entry_dir, filename, debug)
     local filepath = entry_dir .. filename
     local response_body = {}
@@ -534,6 +584,10 @@ function BrowserUtils.downloadImage(url, entry_dir, filename, debug)
     end
 end
 
+---Open an entry HTML file in KOReader
+---@param html_file string Path to HTML file to open
+---@param debug MinifluxDebug Debug logging instance
+---@return nil
 function BrowserUtils.openEntryFile(html_file, debug)
     if debug then
         debug:info("Opening entry file with DocumentView: " .. html_file)
@@ -800,7 +854,9 @@ function BrowserUtils.markEntryAsRead(entry_info)
     -- Get API instance (we'll need to figure out how to access this)
     -- For now, we'll create a new instance with stored settings
     local MinifluxAPI = require("api")
-    local MinifluxSettings = require("settings")
+    local MinifluxSettingsManager = require("settings/settings_manager")
+    local MinifluxSettings = MinifluxSettingsManager
+    MinifluxSettings:init()  -- Create and initialize instance
     
     local api = MinifluxAPI:new()
     api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())
@@ -863,6 +919,10 @@ function BrowserUtils.openMinifluxFolder(entry_info)
     end
 end
 
+---Convert table to string representation for serialization
+---@param tbl table Table to convert
+---@param indent? number Current indentation level
+---@return string String representation of table
 function BrowserUtils.tableToString(tbl, indent)
     indent = indent or 0
     local result = {}
@@ -886,6 +946,11 @@ function BrowserUtils.tableToString(tbl, indent)
     return table.concat(result)
 end
 
+---Toggle read/unread status of an entry
+---@param entry MinifluxEntry Entry to toggle status for
+---@param api MinifluxAPI API client instance
+---@param debug MinifluxDebug Debug logging instance
+---@return nil
 function BrowserUtils.toggleEntryStatus(entry, api, debug)
     local success, result
     
@@ -908,6 +973,11 @@ function BrowserUtils.toggleEntryStatus(entry, api, debug)
     end
 end
 
+---Toggle bookmark status of an entry
+---@param entry MinifluxEntry Entry to toggle bookmark for
+---@param api MinifluxAPI API client instance
+---@param debug MinifluxDebug Debug logging instance
+---@return nil
 function BrowserUtils.toggleBookmark(entry, api, debug)
     local success, result = api:toggleBookmark(entry.id)
     
@@ -930,6 +1000,11 @@ function BrowserUtils.createEntryCallback(entry, api, debug)
     end
 end
 
+---Sort menu items by unread count
+---@param items table[] Array of menu items to sort
+---@param data_field string Field name containing the data object
+---@param title_field string Field name containing the title (unused but kept for compatibility)
+---@return nil
 function BrowserUtils.sortItemsByUnreadCount(items, data_field, title_field)
     table.sort(items, function(a, b)
         local a_data = a[data_field] or {}
@@ -959,6 +1034,9 @@ function BrowserUtils.sortItemsByUnreadCount(items, data_field, title_field)
     end)
 end
 
+---Get API options based on current settings
+---@param settings SettingsManager Settings manager instance
+---@return ApiOptions Options for API calls
 function BrowserUtils.getApiOptions(settings)
     local options = {
         limit = settings:getLimit(),
@@ -997,6 +1075,9 @@ function BrowserUtils.getApiOptions(settings)
     return options
 end
 
+---Format a date string for display
+---@param date_str? string ISO date string to format
+---@return string Formatted date string
 function BrowserUtils.formatDate(date_str)
     if not date_str then
         return _("Unknown date")
@@ -1027,7 +1108,9 @@ function BrowserUtils.navigateToPreviousEntry(entry_info)
     
     -- Get API instance with stored settings
     local MinifluxAPI = require("api")
-    local MinifluxSettings = require("settings")
+    local MinifluxSettingsManager = require("settings/settings_manager")
+    local MinifluxSettings = MinifluxSettingsManager
+    MinifluxSettings:init()  -- Create and initialize instance
     local InfoMessage = require("ui/widget/infomessage")
     local UIManager = require("ui/uimanager")
     local _ = require("gettext")
@@ -1110,7 +1193,9 @@ function BrowserUtils.navigateToNextEntry(entry_info)
     
     -- Get API instance with stored settings
     local MinifluxAPI = require("api")
-    local MinifluxSettings = require("settings")
+    local MinifluxSettingsManager = require("settings/settings_manager")
+    local MinifluxSettings = MinifluxSettingsManager
+    MinifluxSettings:init()  -- Create and initialize instance
     local InfoMessage = require("ui/widget/infomessage")
     local UIManager = require("ui/uimanager")
     local _ = require("gettext")
@@ -1187,7 +1272,9 @@ function BrowserUtils.fetchAndShowEntry(entry_id, debug)
     
     -- Get API instance with stored settings
     local MinifluxAPI = require("api")
-    local MinifluxSettings = require("settings")
+    local MinifluxSettingsManager = require("settings/settings_manager")
+    local MinifluxSettings = MinifluxSettingsManager
+    MinifluxSettings:init()  -- Create and initialize instance
     
     local api = MinifluxAPI:new()
     api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())

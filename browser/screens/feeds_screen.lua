@@ -10,8 +10,23 @@ It manages feed data presentation and user interactions.
 local BrowserUtils = require("browser/lib/browser_utils")
 local _ = require("gettext")
 
+---@class FeedMenuItem
+---@field text string Menu item display text
+---@field mandatory string Count display (unread/total format)
+---@field feed_data MinifluxFeed Feed data
+---@field action_type string Action type identifier
+---@field unread_count number Unread count for sorting
+
+---@class FeedsScreen
+---@field browser BaseBrowser Reference to the browser instance
+---@field cached_feeds? MinifluxFeed[] Cached feeds data
+---@field cached_counters? FeedCounters Cached feed counters
+---@field cached_entry_counts? table<string, number> Cached accurate entry counts per feed
+---@field restore_page_info? table Page restoration info
 local FeedsScreen = {}
 
+---Create a new feeds screen instance
+---@return FeedsScreen
 function FeedsScreen:new()
     local obj = {}
     setmetatable(obj, self)
@@ -19,11 +34,17 @@ function FeedsScreen:new()
     return obj
 end
 
+---Initialize the feeds screen
+---@param browser BaseBrowser Browser instance to manage
+---@return nil
 function FeedsScreen:init(browser)
     self.browser = browser
 end
 
--- Show feeds list screen
+---Show feeds list screen
+---@param paths_updated? boolean Whether navigation paths were updated
+---@param page_info? table Page information for restoration
+---@return nil
 function FeedsScreen:show(paths_updated, page_info)
     if self.browser.debug then
         self.browser:debugLog("FeedsScreen:show called")
