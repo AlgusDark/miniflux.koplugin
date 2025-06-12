@@ -708,7 +708,7 @@ function BrowserUtils.markEntryAsRead(entry_info)
     
     -- Get API instance (we'll need to figure out how to access this)
     -- For now, we'll create a new instance with stored settings
-    local MinifluxAPI = require("api")
+    local MinifluxAPI = require("api/api_client")
     local MinifluxSettingsManager = require("settings/settings_manager")
     local MinifluxSettings = MinifluxSettingsManager
     MinifluxSettings:init()  -- Create and initialize instance
@@ -859,7 +859,7 @@ function BrowserUtils.navigateToPreviousEntry(entry_info)
     end
     
     -- Get API instance with stored settings
-    local MinifluxAPI = require("api")
+    local MinifluxAPI = require("api/api_client")
     local MinifluxSettingsManager = require("settings/settings_manager")
     local MinifluxSettings = MinifluxSettingsManager
     MinifluxSettings:init()  -- Create and initialize instance
@@ -925,7 +925,7 @@ function BrowserUtils.navigateToNextEntry(entry_info)
     end
     
     -- Get API instance with stored settings
-    local MinifluxAPI = require("api")
+    local MinifluxAPI = require("api/api_client")
     local MinifluxSettingsManager = require("settings/settings_manager")
     local MinifluxSettings = MinifluxSettingsManager
     MinifluxSettings:init()  -- Create and initialize instance
@@ -996,7 +996,7 @@ function BrowserUtils.fetchAndShowEntry(entry_id)
     UIManager:forceRePaint()
     
     -- Get API instance with stored settings
-    local MinifluxAPI = require("api")
+    local MinifluxAPI = require("api/api_client")
     local MinifluxSettingsManager = require("settings/settings_manager")
     local MinifluxSettings = MinifluxSettingsManager
     MinifluxSettings:init()  -- Create and initialize instance

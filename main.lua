@@ -16,7 +16,7 @@ local _ = require("gettext")
 local T = require("ffi/util").template
 
 -- Import our modules
-local MinifluxAPI = require("api")
+local MinifluxAPI = require("api/api_client")
 local MinifluxSettingsManager = require("settings/settings_manager")
 local MinifluxUI = require("miniflux_ui")
 
