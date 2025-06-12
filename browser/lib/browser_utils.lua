@@ -757,17 +757,7 @@ function BrowserUtils.showEndOfEntryDialog()
     UIManager:show(dialog)
 end
 
-function BrowserUtils.showTodoMessage(feature_name)
-    local InfoMessage = require("ui/widget/infomessage")
-    local UIManager = require("ui/uimanager")
-    local _ = require("gettext")
-    local T = require("ffi/util").template
-    
-    UIManager:show(InfoMessage:new{
-        text = T(_("TODO: %1 coming soon"), feature_name),
-        timeout = 3,
-    })
-end
+
 
 function BrowserUtils.deleteLocalEntry(entry_info)
     local debug = entry_info.debug
@@ -946,59 +936,7 @@ function BrowserUtils.tableToString(tbl, indent)
     return table.concat(result)
 end
 
----Toggle read/unread status of an entry
----@param entry MinifluxEntry Entry to toggle status for
----@param api MinifluxAPI API client instance
----@param debug MinifluxDebug Debug logging instance
----@return nil
-function BrowserUtils.toggleEntryStatus(entry, api, debug)
-    local success, result
-    
-    if entry.status == "read" then
-        success, result = api:markEntryAsUnread(entry.id)
-    else
-        success, result = api:markEntryAsRead(entry.id)
-    end
-    
-    if success then
-        local status_text = entry.status == "read" and _("marked as unread") or _("marked as read")
-        UIManager:show(InfoMessage:new{
-            text = T(_("Entry %1"), status_text),
-        })
-    else
-        UIManager:show(InfoMessage:new{
-            text = _("Failed to update entry: ") .. result,
-            timeout = 3,
-        })
-    end
-end
 
----Toggle bookmark status of an entry
----@param entry MinifluxEntry Entry to toggle bookmark for
----@param api MinifluxAPI API client instance
----@param debug MinifluxDebug Debug logging instance
----@return nil
-function BrowserUtils.toggleBookmark(entry, api, debug)
-    local success, result = api:toggleBookmark(entry.id)
-    
-    if success then
-        local bookmark_text = entry.starred and _("bookmark removed") or _("bookmark added")
-        UIManager:show(InfoMessage:new{
-            text = T(_("Entry %1"), bookmark_text),
-        })
-    else
-        UIManager:show(InfoMessage:new{
-            text = _("Failed to toggle bookmark: ") .. result,
-            timeout = 3,
-        })
-    end
-end
-
-function BrowserUtils.createEntryCallback(entry, api, debug)
-    return function()
-        BrowserUtils.showEntry(entry, api, debug)
-    end
-end
 
 ---Sort menu items by unread count
 ---@param items table[] Array of menu items to sort
@@ -1075,18 +1013,7 @@ function BrowserUtils.getApiOptions(settings)
     return options
 end
 
----Format a date string for display
----@param date_str? string ISO date string to format
----@return string Formatted date string
-function BrowserUtils.formatDate(date_str)
-    if not date_str then
-        return _("Unknown date")
-    end
-    
-    -- Simple date formatting - just return the date as-is for now
-    -- Could be enhanced later to parse and format the ISO date string
-    return date_str
-end
+
 
 function BrowserUtils.navigateToPreviousEntry(entry_info)
     local debug = entry_info.debug

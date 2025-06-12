@@ -169,7 +169,6 @@ The plugin is organized into separate modules for maintainability:
 - **browser/main_browser.lua**: Single browser implementation following OPDS pattern
 - **browser/lib/base_browser.lua**: Base browser class with navigation logic
 - **browser/lib/browser_utils.lua**: Utility functions for browser operations
-- **lib/utils.lua**: General utility functions for data processing
 - **lib/debug.lua**: Debug logging functionality
 - **_meta.lua**: Plugin metadata
 
