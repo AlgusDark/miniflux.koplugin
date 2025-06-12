@@ -36,10 +36,10 @@ local _ = require("gettext")
 ---@field item_table table[] Menu items
 ---@field settings SettingsManager Settings manager instance
 ---@field api MinifluxAPI API client instance  
----@field debug MinifluxDebug Debug logging instance
 ---@field download_dir string Download directory path
 ---@field config_dialog ButtonDialogTitle|nil Current config dialog
 ---@field current_context CurrentContext Current browser context
+---@field page_state_manager any Page state manager instance
 ---@field onLeftButtonTap function Callback for left button tap
 ---@field onReturn function|nil Callback for back navigation
 local BaseBrowser = Menu:extend{
@@ -62,9 +62,6 @@ function BaseBrowser:init()
     
     -- Set up settings button callback to show config dialog
     self.onLeftButtonTap = function()
-        if self.debug then 
-            self.debug:info("Settings button tapped - showing config dialog") 
-        end
         self:showConfigDialog()
     end
     
@@ -77,18 +74,12 @@ function BaseBrowser:showConfigDialog()
     -- Get settings module - will be available through parent browser
     local settings = self.settings
     if not settings then
-        if self.debug then
-            self.debug:info("Settings not available in showConfigDialog")
-        end
         self:showErrorMessage(_("Settings not available"))
         return
     end
     
     -- Check if settings has the required methods
     if not settings.getHideReadEntries or not settings.toggleHideReadEntries then
-        if self.debug then
-            self.debug:info("Settings object missing required methods")
-        end
         self:showErrorMessage(_("Settings configuration error"))
         return
     end
@@ -143,18 +134,12 @@ function BaseBrowser:toggleReadEntriesVisibility()
     -- Get settings module
     local settings = self.settings
     if not settings then
-        if self.debug then
-            self.debug:info("Settings not available in toggleReadEntriesVisibility")
-        end
         self:showErrorMessage(_("Settings not available"))
         return
     end
     
     -- Check if settings has the required methods
     if not settings.getHideReadEntries or not settings.toggleHideReadEntries then
-        if self.debug then
-            self.debug:info("Settings object missing required methods")
-        end
         self:showErrorMessage(_("Settings configuration error"))
         return
     end
@@ -177,14 +162,7 @@ function BaseBrowser:toggleReadEntriesVisibility()
         end)
         
         if not success then
-            if self.debug then
-                self.debug:info("Error during refresh:", tostring(err))
-            end
             self:showErrorMessage(_("Error refreshing view"))
-        end
-    else
-        if self.debug then
-            self.debug:info("refreshCurrentView method not available")
         end
     end
 end
@@ -224,10 +202,6 @@ function BaseBrowser:willHideResultInNoEntries()
         end
     end
     
-    if self.debug then
-        self.debug:info("Current view has " .. unread_count .. " unread entries out of " .. #self.item_table .. " total entries")
-    end
-    
     return unread_count == 0
 end
 
@@ -236,10 +210,6 @@ end
 ---@param new_value any New value of the setting
 ---@return nil
 function BaseBrowser:onSettingsChanged(setting_name, new_value)
-    if self.debug then
-        self.debug:info("Settings changed:", setting_name, "=", tostring(new_value))
-    end
-    
     -- Default implementation - subclasses can override for specific behavior
     if setting_name == "hide_read_entries" then
         -- Invalidate any cached data that depends on read/unread status
@@ -252,19 +222,13 @@ end
 ---Method to invalidate entry-related caches - can be overridden by subclasses
 ---@return nil
 function BaseBrowser:invalidateEntryCaches()
-    if self.debug then
-        self.debug:info("BaseBrowser:invalidateEntryCaches called - should be implemented by subclass")
-    end
+    -- Should be implemented by subclasses
 end
 
 ---Refresh current view - should be overridden by subclasses
 ---@return nil
 function BaseBrowser:refreshCurrentView()
     -- This method should be overridden by subclasses to refresh their specific content
-    -- For now, we'll just debug log
-    if self.debug then
-        self.debug:info("refreshCurrentView called - should be implemented by subclass")
-    end
 end
 
 ---Close all browsers (single instance pattern)
@@ -287,26 +251,18 @@ end
 function BaseBrowser:updateBrowser(title, items, subtitle, navigation_data)
     -- Update the current browser with new content (like OPDS updateCatalog)
     
-    self:debugLog("=== updateBrowser called ===")
-    self:debugLog("Current title: " .. tostring(self.title))
-    self:debugLog("New title: " .. tostring(title))
-    self:debugLog("Items count: " .. #items)
-    
     -- Determine if this is forward navigation or back navigation
     local is_back_navigation = navigation_data and navigation_data.paths_updated == true
     local is_settings_refresh = navigation_data and navigation_data.is_settings_refresh == true
     local select_number = nil
     
     if is_settings_refresh then
-        self:debugLog("Settings refresh detected - resetting to page 1 but maintaining navigation")
         -- For settings refresh, reset to page 1 but maintain navigation paths
         self.page = 1
         self.selected = {1}  -- Reset selection to first item
         self.itemnumber = 1  -- Reset item number
         select_number = 1
     elseif is_back_navigation then
-        self:debugLog("Back navigation detected - preserving current page state")
-        
         -- Check if we need to restore page info from navigation_data
         if navigation_data and navigation_data.restore_page_info then
             local target_page = navigation_data.restore_page_info.page
@@ -315,21 +271,13 @@ function BaseBrowser:updateBrowser(title, items, subtitle, navigation_data)
                 local perpage = self.perpage or 14 -- Default perpage if not set
                 select_number = (target_page - 1) * perpage + 1
                 
-                self:debugLog("Restoring to page " .. target_page .. " by selecting item " .. select_number)
-                
                 -- Ensure select_number is within bounds
                 if select_number > #items then
                     select_number = #items > 0 and #items or 1
-                    self:debugLog("Adjusted select_number to " .. select_number .. " (out of bounds)")
                 end
-            else
-                self:debugLog("Invalid page info for restoration")
             end
-        else
-            self:debugLog("No page restoration info provided")
         end
     else
-        self:debugLog("Forward navigation detected - resetting to page 1")
         -- For forward navigation, reset Menu state to start fresh
         self.page = 1
         self.selected = {1}  -- Reset selection to first item
@@ -343,30 +291,24 @@ function BaseBrowser:updateBrowser(title, items, subtitle, navigation_data)
     
     -- Update the browser content with title and subtitle
     self:switchItemTable(title, items, select_number, nil, subtitle)
-    
-    self:debugLog("Browser updated with title: " .. title .. ", subtitle: " .. (subtitle or ""), ", items: " .. #items)
-    self:debugLog("=== updateBrowser end ===")
 end
 
 ---Show main content - to be implemented by subclasses
 ---@return nil
 function BaseBrowser:showMainContent()
     -- To be implemented by subclasses
-    self:debugLog("showMainContent called - should be implemented by subclass")
 end
 
 ---Show feeds content - to be implemented by subclasses
 ---@return nil
 function BaseBrowser:showFeedsContent()
     -- To be implemented by subclasses  
-    self:debugLog("showFeedsContent called - should be implemented by subclass")
 end
 
 ---Show categories content - to be implemented by subclasses
 ---@return nil
 function BaseBrowser:showCategoriesContent()
     -- To be implemented by subclasses
-    self:debugLog("showCategoriesContent called - should be implemented by subclass")
 end
 
 ---Show entries for a specific feed - to be implemented by subclasses
@@ -376,7 +318,6 @@ end
 ---@return nil
 function BaseBrowser:showFeedEntries(feed_id, feed_title, paths_updated)
     -- To be implemented by subclasses
-    self:debugLog("showFeedEntries called - should be implemented by subclass")
 end
 
 ---Show entries for a specific category - to be implemented by subclasses
@@ -386,7 +327,6 @@ end
 ---@return nil
 function BaseBrowser:showCategoryEntries(category_id, category_title, paths_updated)
     -- To be implemented by subclasses
-    self:debugLog("showCategoryEntries called - should be implemented by subclass")
 end
 
 ---Show loading message
@@ -430,15 +370,6 @@ function BaseBrowser:showInfoMessage(message, timeout)
         text = message,
         timeout = timeout or 3,
     })
-end
-
----Log debug message with browser context
----@param message string Debug message
----@return nil
-function BaseBrowser:debugLog(message)
-    if self.debug then
-        self.debug:info("[" .. (self.browser_type or "Browser") .. "] " .. message)
-    end
 end
 
 ---Handle API errors with user feedback

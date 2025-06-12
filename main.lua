@@ -19,7 +19,6 @@ local T = require("ffi/util").template
 local MinifluxAPI = require("api")
 local MinifluxSettingsManager = require("settings/settings_manager")
 local MinifluxUI = require("miniflux_ui")
-local MinifluxDebug = require("lib/debug")
 
 ---@class Miniflux : WidgetContainer
 ---@field name string Plugin name identifier
@@ -28,11 +27,11 @@ local MinifluxDebug = require("lib/debug")
 ---@field settings SettingsManager Settings manager instance
 ---@field api MinifluxAPI API client instance
 ---@field miniflux_ui MinifluxUI UI manager instance
----@field debug MinifluxDebug Debug logging instance
 local Miniflux = WidgetContainer:extend({
     name = "miniflux",
     download_dir_name = "miniflux",
     download_dir = nil,
+    is_doc_only = false,
 })
 
 ---Register dispatcher actions for the plugin
@@ -60,22 +59,13 @@ function Miniflux:init()
     self.settings:init()  -- Initialize the settings manager
     self.api = MinifluxAPI:new()
     self.miniflux_ui = MinifluxUI:new()
-    self.debug = MinifluxDebug:new()
 
-    -- Initialize debug logging
-    self.debug:init(self.settings, self.path)
-
-    -- Initialize UI with settings, API, debug, and download_dir
-    self.miniflux_ui:init(self.settings, self.api, self.debug, self.download_dir)
+    -- Initialize UI with settings, API, and download_dir
+    self.miniflux_ui:init(self.settings, self.api, self.download_dir)
 
     -- Initialize API with current settings if available
     if self.settings:isConfigured() then
         self.api:init(self.settings:getServerAddress(), self.settings:getApiToken())
-    end
-
-    if self.debug then
-        self.debug:info("Miniflux plugin initialized successfully")
-        self.debug:info("Download directory: " .. self.download_dir)
     end
 end
 
@@ -178,40 +168,6 @@ function Miniflux:addToMainMenu(menu_items)
                             self.miniflux_ui:testConnection()
                         end,
                     },
-                    {
-                        text = _("Debug"),
-                        separator = true,
-                        sub_item_table = {
-                            {
-                                text_func = function()
-                                    return self.settings:getDebugLogging() and _("Debug logging - ON")
-                                        or _("Debug logging - OFF")
-                                end,
-                                keep_menu_open = true,
-                                sub_item_table_func = function()
-                                    return self:getDebugSubMenu()
-                                end,
-                            },
-                            {
-                                text = _("View debug log"),
-                                keep_menu_open = true,
-                                callback = function()
-                                    self.miniflux_ui:showDebugLog()
-                                end,
-                            },
-                            {
-                                text = _("Clear debug log"),
-                                keep_menu_open = true,
-                                callback = function()
-                                    self.debug:clearLog()
-                                    UIManager:show(InfoMessage:new({
-                                        text = _("Debug log cleared"),
-                                        timeout = 2,
-                                    }))
-                                end,
-                            },
-                        },
-                    },
                 },
             },
         },
@@ -222,51 +178,6 @@ end
 ---@return nil
 function Miniflux:onReadMinifluxEntries()
     self.miniflux_ui:showMainScreen()
-end
-
----Get debug settings submenu
----@return table Debug submenu items
-function Miniflux:getDebugSubMenu()
-    local current_debug = self.settings:getDebugLogging()
-
-    return {
-        {
-            text = _("Enable") .. (current_debug and " ✓" or ""),
-            keep_menu_open = true,
-            callback = function(touchmenu_instance)
-                self.settings:setDebugLogging(true)
-                self.settings:save()
-                if self.debug then
-                    self.debug:info("Debug logging enabled via menu")
-                end
-                UIManager:show(InfoMessage:new({
-                    text = _("Debug logging enabled"),
-                    timeout = 2,
-                    dismiss_callback = function()
-                        touchmenu_instance:backToUpperMenu()
-                    end,
-                }))
-            end,
-        },
-        {
-            text = _("Disable") .. (not current_debug and " ✓" or ""),
-            keep_menu_open = true,
-            callback = function(touchmenu_instance)
-                if self.debug then
-                    self.debug:info("Debug logging disabled via menu")
-                end
-                self.settings:setDebugLogging(false)
-                self.settings:save()
-                UIManager:show(InfoMessage:new({
-                    text = _("Debug logging disabled"),
-                    timeout = 2,
-                    dismiss_callback = function()
-                        touchmenu_instance:backToUpperMenu()
-                    end,
-                }))
-            end,
-        },
-    }
 end
 
 return Miniflux

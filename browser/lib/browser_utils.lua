@@ -14,7 +14,6 @@ local socket = require("socket")
 local socket_url = require("socket.url")
 local socketutil = require("socketutil")
 local util = require("util")
-local logger = require("logger")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
@@ -51,11 +50,10 @@ local BrowserUtils = {}
 ---Show an entry by downloading and opening it
 ---@param entry MinifluxEntry Entry to display
 ---@param api MinifluxAPI API client instance
----@param debug MinifluxDebug Debug logging instance
 ---@param download_dir string Download directory path
 ---@param navigation_context? NavigationContext Navigation context for prev/next
 ---@return nil
-function BrowserUtils.showEntry(entry, api, debug, download_dir, navigation_context)
+function BrowserUtils.showEntry(entry, api, download_dir, navigation_context)
     if not download_dir then
         UIManager:show(InfoMessage:new{
             text = _("Download directory not configured"),
@@ -66,18 +64,17 @@ function BrowserUtils.showEntry(entry, api, debug, download_dir, navigation_cont
     
     local Trapper = require("ui/trapper")
     Trapper:wrap(function()
-        BrowserUtils.downloadEntry(entry, api, debug, download_dir, navigation_context)
+        BrowserUtils.downloadEntry(entry, api, download_dir, navigation_context)
     end)
 end
 
 ---Download and process an entry with images
 ---@param entry MinifluxEntry Entry to download
 ---@param api MinifluxAPI API client instance
----@param debug MinifluxDebug Debug logging instance
 ---@param download_dir string Download directory path
 ---@param navigation_context? NavigationContext Navigation context for prev/next
 ---@return nil
-function BrowserUtils.downloadEntry(entry, api, debug, download_dir, navigation_context)
+function BrowserUtils.downloadEntry(entry, api, download_dir, navigation_context)
     local UI = require("ui/trapper")
     local MinifluxSettingsManager = require("settings/settings_manager")
     local MinifluxSettings = MinifluxSettingsManager
@@ -91,9 +88,6 @@ function BrowserUtils.downloadEntry(entry, api, debug, download_dir, navigation_
     local entry_dir = download_dir .. entry_id .. "/"
     if not lfs.attributes(entry_dir, "mode") then
         lfs.mkdir(entry_dir)
-        if debug then
-            debug:info("Created entry directory: " .. entry_dir)
-        end
     end
     
     local html_file = entry_dir .. "entry.html"
@@ -101,10 +95,7 @@ function BrowserUtils.downloadEntry(entry, api, debug, download_dir, navigation_
     
     -- Check if already downloaded
     if lfs.attributes(html_file, "mode") == "file" then
-        if debug then
-            debug:info("Entry already downloaded, opening: " .. html_file)
-        end
-        BrowserUtils.openEntryFile(html_file, debug)
+        BrowserUtils.openEntryFile(html_file)
         return
     end
     
@@ -132,13 +123,11 @@ function BrowserUtils.downloadEntry(entry, api, debug, download_dir, navigation_
     local collectImg = function(img_tag)
         local src = img_tag:match([[src="([^"]*)"]])
         if src == nil or src == "" then
-            if debug then debug:info("Found img tag with no src: " .. img_tag:sub(1, 50)) end
             return img_tag -- Keep original tag for now
         end
         
         -- Skip data URLs
         if src:sub(1,5) == "data:" then
-            if debug then debug:info("Skipping data URL image") end
             return img_tag -- Keep original tag for now
         end
         
@@ -186,8 +175,6 @@ function BrowserUtils.downloadEntry(entry, api, debug, download_dir, navigation_
             
             table.insert(images, cur_image)
             seen_images[src] = cur_image
-            
-            if debug then debug:info("Found image " .. image_count .. ": " .. src) end
         end
         
         return img_tag -- Keep original tag for now
@@ -199,14 +186,7 @@ function BrowserUtils.downloadEntry(entry, api, debug, download_dir, navigation_
     end)
     
     if not scan_success then
-        if debug then
-            debug:warn("Error scanning for images in HTML")
-        end
         images = {} -- Clear images if scanning failed
-    end
-    
-    if debug then
-        debug:info("Found " .. #images .. " unique images in content")
     end
     
     -- Show what we found and what we'll do
@@ -232,29 +212,14 @@ function BrowserUtils.downloadEntry(entry, api, debug, download_dir, navigation_
                 time_prev = time.now()
                 go_on = UI:info(T(_("Downloading entry…\n\nDownloading image %1 / %2…"), i, #images), i >= 2)
                 if not go_on then
-                    if debug then debug:info("Image download cancelled by user") end
                     break
                 end
             else
                 UI:info(T(_("Downloading entry…\n\nDownloading image %1 / %2…"), i, #images), i >= 2, true)
             end
             
-            if debug then debug:info("Downloading image " .. i .. "/" .. #images .. ": " .. img.src) end
-            
-            local success = BrowserUtils.downloadImage(img.src, entry_dir, img.filename, debug)
+            local success = BrowserUtils.downloadImage(img.src, entry_dir, img.filename)
             img.downloaded = success
-            
-            if not success then
-                if debug then debug:warn("Failed to download image " .. i .. ": " .. img.src) end
-                -- Continue with other images instead of stopping completely
-            else
-                if debug then debug:info("Successfully downloaded image " .. i .. ": " .. img.filename) end
-            end
-        end
-        
-        if debug then
-            local download_time_ms = time.to_ms(time.since(before_images_time))
-            debug:info("Image download time: " .. download_time_ms .. "ms")
         end
     end
     
@@ -328,9 +293,6 @@ function BrowserUtils.downloadEntry(entry, api, debug, download_dir, navigation_
     end)
     
     if not process_success then
-        if debug then
-            debug:warn("Error processing images in final HTML")
-        end
         processed_content = content -- Use original content if processing failed
     else
         content = processed_content
@@ -343,16 +305,6 @@ function BrowserUtils.downloadEntry(entry, api, debug, download_dir, navigation_
         content = content:gsub("<%s*iframe[^>]*/%s*>", "")  -- self-closing iframe
         content = content:gsub("<%s*iframe[^>]*>", "")  -- opening iframe tag without closing
     end)
-    
-    if not iframe_removal_success then
-        if debug then
-            debug:warn("Error removing iframes from HTML, continuing anyway")
-        end
-    else
-        if debug then
-            debug:info("Removed iframe tags from HTML content")
-        end
-    end
     
     UI:info(_("Downloading entry…\n\nCreating HTML file…"))
     
@@ -407,9 +359,6 @@ function BrowserUtils.downloadEntry(entry, api, debug, download_dir, navigation_
     if file then
         file:write(html_content)
         file:close()
-        if debug then
-            debug:info("Saved HTML file: " .. html_file)
-        end
     else
         UI:info(_("Failed to save HTML file"))
         return
@@ -439,9 +388,6 @@ function BrowserUtils.downloadEntry(entry, api, debug, download_dir, navigation_
             local prev_entry = entries[current_index - 1]
             if prev_entry and prev_entry.id then
                 previous_entry_id = prev_entry.id
-                if debug then
-                    debug:info("Found previous entry ID: " .. tostring(previous_entry_id))
-                end
             end
         end
         
@@ -450,20 +396,7 @@ function BrowserUtils.downloadEntry(entry, api, debug, download_dir, navigation_
             local next_entry = entries[current_index + 1]
             if next_entry and next_entry.id then
                 next_entry_id = next_entry.id
-                if debug then
-                    debug:info("Found next entry ID: " .. tostring(next_entry_id))
-                end
             end
-        end
-        
-        if debug then
-            debug:info("Navigation context: current=" .. current_index .. "/" .. #entries .. 
-                      ", prev=" .. tostring(previous_entry_id) .. 
-                      ", next=" .. tostring(next_entry_id))
-        end
-    else
-        if debug then
-            debug:info("No navigation context available for previous/next calculation")
         end
     end
     
@@ -489,9 +422,6 @@ function BrowserUtils.downloadEntry(entry, api, debug, download_dir, navigation_
     if file then
         file:write(metadata_content)
         file:close()
-        if debug then
-            debug:info("Saved metadata file: " .. metadata_file)
-        end
     end
     
     -- Final status message with summary
@@ -507,7 +437,7 @@ function BrowserUtils.downloadEntry(entry, api, debug, download_dir, navigation_
     UI:info(summary_message)
     
     -- Open the file
-    BrowserUtils.openEntryFile(html_file, debug)
+    BrowserUtils.openEntryFile(html_file)
     
     -- Clear the "Download complete" message since the entry is now open
     UI:clear()
@@ -517,13 +447,10 @@ end
 ---@param url string Image URL to download
 ---@param entry_dir string Directory to save image in
 ---@param filename string Filename to save image as
----@param debug MinifluxDebug Debug logging instance
 ---@return boolean True if download successful
-function BrowserUtils.downloadImage(url, entry_dir, filename, debug)
+function BrowserUtils.downloadImage(url, entry_dir, filename)
     local filepath = entry_dir .. filename
     local response_body = {}
-    
-    if debug then debug:info("Downloading image from: " .. url .. " to: " .. filename) end
     
     -- Add robust timeout handling using socketutil (from newsdownloader)
     local timeout, maxtime = 10, 30
@@ -540,16 +467,10 @@ function BrowserUtils.downloadImage(url, entry_dir, filename, debug)
     socketutil:reset_timeout()
     
     if not network_success then
-        if debug then
-            debug:warn("HTTP request failed for image: " .. url .. " - network error")
-        end
         return false
     end
     
     if not result then
-        if debug then
-            debug:warn("HTTP request failed for image: " .. url .. " - result is nil, status: " .. tostring(status_code))
-        end
         return false
     end
     
@@ -560,52 +481,28 @@ function BrowserUtils.downloadImage(url, entry_dir, filename, debug)
             if file then
                 file:write(content)
                 file:close()
-                if debug then
-                    debug:info("Downloaded image: " .. filename .. " (" .. #content .. " bytes)")
-                end
                 return true
             else
-                if debug then
-                    debug:warn("Failed to open file for writing: " .. filepath)
-                end
                 return false
             end
         else
-            if debug then
-                debug:warn("Empty response content for image: " .. url)
-            end
             return false
         end
     else
-        if debug then
-            debug:warn("HTTP error for image: " .. url .. " (status: " .. tostring(status_code) .. ")")
-        end
         return false
     end
 end
 
 ---Open an entry HTML file in KOReader
 ---@param html_file string Path to HTML file to open
----@param debug MinifluxDebug Debug logging instance
 ---@return nil
-function BrowserUtils.openEntryFile(html_file, debug)
-    if debug then
-        debug:info("Opening entry file with DocumentView: " .. html_file)
-    end
-    
+function BrowserUtils.openEntryFile(html_file)
     -- Check if this is a miniflux entry by looking at the path
     local is_miniflux_entry = html_file:match("/miniflux/") ~= nil
     
     if is_miniflux_entry then
-        if debug then
-            debug:info("Detected Miniflux entry, will add custom event listeners")
-        end
-        
         -- Extract entry ID from path for later use
         local entry_id = html_file:match("/miniflux/(%d+)/")
-        if debug and entry_id then
-            debug:info("Extracted entry ID: " .. entry_id)
-        end
         
         -- Use KOReader's document opening mechanism
         local ReaderUI = require("apps/reader/readerui")
@@ -614,7 +511,6 @@ function BrowserUtils.openEntryFile(html_file, debug)
         BrowserUtils._current_miniflux_entry = {
             file_path = html_file,
             entry_id = entry_id,
-            debug = debug
         }
         
         -- Open the file
@@ -623,7 +519,7 @@ function BrowserUtils.openEntryFile(html_file, debug)
         -- Add event listener after a short delay to ensure ReaderUI is ready
         local UIManager = require("ui/uimanager")
         UIManager:scheduleIn(0.5, function()
-            BrowserUtils.addMinifluxEventListeners(debug)
+            BrowserUtils.addMinifluxEventListeners()
         end)
     else
         -- Regular file opening for non-Miniflux entries
@@ -632,19 +528,12 @@ function BrowserUtils.openEntryFile(html_file, debug)
     end
 end
 
-function BrowserUtils.addMinifluxEventListeners(debug)
-    if debug then
-        debug:info("Adding Miniflux event listeners")
-    end
-    
+function BrowserUtils.addMinifluxEventListeners()
     -- Get the current ReaderUI instance
     local ReaderUI = require("apps/reader/readerui")
     local reader_instance = ReaderUI.instance
     
     if not reader_instance then
-        if debug then
-            debug:warn("No ReaderUI instance found, cannot add event listeners")
-        end
         return
     end
     
@@ -677,10 +566,6 @@ function BrowserUtils.addMinifluxEventListeners(debug)
                 end
             end
         end
-        
-        if debug then
-            debug:info("Successfully added Miniflux event listeners")
-        end
     end
 end
 
@@ -688,11 +573,6 @@ function BrowserUtils.showEndOfEntryDialog()
     local current_entry = BrowserUtils._current_miniflux_entry
     if not current_entry then
         return
-    end
-    
-    local debug = current_entry.debug
-    if debug then
-        debug:info("Showing end of entry dialog for entry ID: " .. tostring(current_entry.entry_id))
     end
     
     local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
@@ -760,26 +640,19 @@ end
 
 
 function BrowserUtils.deleteLocalEntry(entry_info)
-    local debug = entry_info.debug
     local entry_id = entry_info.entry_id
     
     if not entry_id then
-        if debug then debug:warn("No entry ID available for deletion") end
         return
     end
     
     -- Extract miniflux directory from file path
     local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
     if not miniflux_dir then
-        if debug then debug:warn("Could not determine miniflux directory") end
         return
     end
     
     local entry_dir = miniflux_dir .. "/miniflux/" .. entry_id .. "/"
-    
-    if debug then
-        debug:info("Deleting local entry directory: " .. entry_dir)
-    end
     
     -- Close the current document first
     local ReaderUI = require("apps/reader/readerui")
@@ -800,13 +673,11 @@ function BrowserUtils.deleteLocalEntry(entry_info)
     local _ = require("gettext")
     
     if success then
-        if debug then debug:info("Successfully deleted entry directory") end
         UIManager:show(InfoMessage:new{
             text = _("Local entry deleted successfully"),
             timeout = 2,
         })
     else
-        if debug then debug:warn("Failed to delete entry directory") end
         UIManager:show(InfoMessage:new{
             text = _("Failed to delete local entry"),
             timeout = 3,
@@ -818,16 +689,10 @@ function BrowserUtils.deleteLocalEntry(entry_info)
 end
 
 function BrowserUtils.markEntryAsRead(entry_info)
-    local debug = entry_info.debug
     local entry_id = entry_info.entry_id
     
     if not entry_id then
-        if debug then debug:warn("No entry ID available for marking as read") end
         return
-    end
-    
-    if debug then
-        debug:info("Marking entry as read: " .. entry_id)
     end
     
     local InfoMessage = require("ui/widget/infomessage")
@@ -857,8 +722,6 @@ function BrowserUtils.markEntryAsRead(entry_info)
     UIManager:close(loading_info)
     
     if success then
-        if debug then debug:info("Successfully marked entry as read") end
-        
         UIManager:show(InfoMessage:new{
             text = _("Entry marked as read"),
             timeout = 2,
@@ -869,8 +732,6 @@ function BrowserUtils.markEntryAsRead(entry_info)
             BrowserUtils.deleteLocalEntry(entry_info)
         end)
     else
-        if debug then debug:warn("Failed to mark entry as read:", tostring(result)) end
-        
         UIManager:show(InfoMessage:new{
             text = _("Failed to mark entry as read: ") .. tostring(result),
             timeout = 5,
@@ -879,20 +740,13 @@ function BrowserUtils.markEntryAsRead(entry_info)
 end
 
 function BrowserUtils.openMinifluxFolder(entry_info)
-    local debug = entry_info.debug
-    
     -- Extract miniflux directory from file path
     local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
     if not miniflux_dir then
-        if debug then debug:warn("Could not determine miniflux directory") end
         return
     end
     
     local full_miniflux_dir = miniflux_dir .. "/miniflux/"
-    
-    if debug then
-        debug:info("Opening miniflux folder: " .. full_miniflux_dir)
-    end
     
     -- Close the current document first
     local ReaderUI = require("apps/reader/readerui")
@@ -992,45 +846,16 @@ function BrowserUtils.getApiOptions(settings)
         options.status = {"unread", "read"}
     end
     
-    -- DEBUGGING: Log what options we're generating
-    local logger = require("logger")
-    logger.info("=== BrowserUtils.getApiOptions DEBUG ===")
-    logger.info("Settings values:")
-    logger.info("  getHideReadEntries():", tostring(hide_read_entries))
-    logger.info("  getLimit():", tostring(settings:getLimit()))
-    logger.info("  getOrder():", tostring(settings:getOrder()))
-    logger.info("  getDirection():", tostring(settings:getDirection()))
-    logger.info("Generated options (server-side filtering):")
-    for k, v in pairs(options) do
-        if k == "status" and type(v) == "table" then
-            logger.info("  " .. k .. " = {" .. table.concat(v, ", ") .. "}")
-        else
-            logger.info("  " .. k .. " = " .. tostring(v))
-        end
-    end
-    logger.info("==========================================")
-    
     return options
 end
 
 
 
 function BrowserUtils.navigateToPreviousEntry(entry_info)
-    local debug = entry_info.debug
-    
-    if debug then
-        debug:info("Attempting to navigate to previous entry")
-    end
-    
     -- Get current entry ID
     local current_entry_id = entry_info.entry_id
     if not current_entry_id then
-        if debug then debug:warn("No current entry ID available") end
         return
-    end
-    
-    if debug then
-        debug:info("Finding previous entry before ID: " .. tostring(current_entry_id))
     end
     
     -- Get API instance with stored settings
@@ -1065,10 +890,6 @@ function BrowserUtils.navigateToPreviousEntry(entry_info)
         local prev_entry = result.entries[1]
         local prev_entry_id = tostring(prev_entry.id)
         
-        if debug then
-            debug:info("Found previous entry: " .. tostring(prev_entry_id) .. " - " .. tostring(prev_entry.title))
-        end
-        
         -- Check if previous entry is already downloaded locally
         local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
         if miniflux_dir then
@@ -1076,23 +897,19 @@ function BrowserUtils.navigateToPreviousEntry(entry_info)
             local prev_html_file = prev_entry_dir .. "entry.html"
             
             if lfs.attributes(prev_html_file, "mode") == "file" then
-                if debug then debug:info("Previous entry exists locally, opening: " .. prev_html_file) end
-                BrowserUtils.openEntryFile(prev_html_file, debug)
+                BrowserUtils.openEntryFile(prev_html_file)
                 return
             end
         end
         
         -- Entry not downloaded locally, download and show it
-        if debug then debug:info("Previous entry not found locally, downloading from API") end
-        
         -- Create download directory
         local DataStorage = require("datastorage")
         local download_dir = ("%s/%s/"):format(DataStorage:getFullDataDir(), "miniflux")
         
         -- Download and show the entry
-        BrowserUtils.downloadEntry(prev_entry, api, debug, download_dir, nil)
+        BrowserUtils.downloadEntry(prev_entry, api, download_dir, nil)
     else
-        if debug then debug:info("No previous entry found") end
         UIManager:show(InfoMessage:new{
             text = _("No previous entry available"),
             timeout = 3,
@@ -1101,21 +918,10 @@ function BrowserUtils.navigateToPreviousEntry(entry_info)
 end
 
 function BrowserUtils.navigateToNextEntry(entry_info)
-    local debug = entry_info.debug
-    
-    if debug then
-        debug:info("Attempting to navigate to next entry")
-    end
-    
     -- Get current entry ID
     local current_entry_id = entry_info.entry_id
     if not current_entry_id then
-        if debug then debug:warn("No current entry ID available") end
         return
-    end
-    
-    if debug then
-        debug:info("Finding next entry after ID: " .. tostring(current_entry_id))
     end
     
     -- Get API instance with stored settings
@@ -1150,10 +956,6 @@ function BrowserUtils.navigateToNextEntry(entry_info)
         local next_entry = result.entries[1]
         local next_entry_id = tostring(next_entry.id)
         
-        if debug then
-            debug:info("Found next entry: " .. tostring(next_entry_id) .. " - " .. tostring(next_entry.title))
-        end
-        
         -- Check if next entry is already downloaded locally
         local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
         if miniflux_dir then
@@ -1161,23 +963,19 @@ function BrowserUtils.navigateToNextEntry(entry_info)
             local next_html_file = next_entry_dir .. "entry.html"
             
             if lfs.attributes(next_html_file, "mode") == "file" then
-                if debug then debug:info("Next entry exists locally, opening: " .. next_html_file) end
-                BrowserUtils.openEntryFile(next_html_file, debug)
+                BrowserUtils.openEntryFile(next_html_file)
                 return
             end
         end
         
         -- Entry not downloaded locally, download and show it
-        if debug then debug:info("Next entry not found locally, downloading from API") end
-        
         -- Create download directory
         local DataStorage = require("datastorage")
         local download_dir = ("%s/%s/"):format(DataStorage:getFullDataDir(), "miniflux")
         
         -- Download and show the entry
-        BrowserUtils.downloadEntry(next_entry, api, debug, download_dir, nil)
+        BrowserUtils.downloadEntry(next_entry, api, download_dir, nil)
     else
-        if debug then debug:info("No next entry found") end
         UIManager:show(InfoMessage:new{
             text = _("No next entry available"),
             timeout = 3,
@@ -1185,7 +983,7 @@ function BrowserUtils.navigateToNextEntry(entry_info)
     end
 end
 
-function BrowserUtils.fetchAndShowEntry(entry_id, debug)
+function BrowserUtils.fetchAndShowEntry(entry_id)
     local InfoMessage = require("ui/widget/infomessage")
     local UIManager = require("ui/uimanager")
     local _ = require("gettext")
@@ -1212,21 +1010,13 @@ function BrowserUtils.fetchAndShowEntry(entry_id, debug)
     UIManager:close(loading_info)
     
     if success and result then
-        if debug then
-            debug:info("Successfully fetched entry " .. tostring(entry_id) .. " from API")
-        end
-        
         -- Create download directory
         local DataStorage = require("datastorage")
         local download_dir = ("%s/%s/"):format(DataStorage:getFullDataDir(), "miniflux")
         
         -- Download and show the entry without navigation context (will be handled by dynamic API calls)
-        BrowserUtils.downloadEntry(result, api, debug, download_dir, nil)
+        BrowserUtils.downloadEntry(result, api, download_dir, nil)
     else
-        if debug then
-            debug:warn("Failed to fetch entry " .. tostring(entry_id) .. ": " .. tostring(result))
-        end
-        
         UIManager:show(InfoMessage:new{
             text = _("Failed to fetch entry: ") .. tostring(result),
             timeout = 5,

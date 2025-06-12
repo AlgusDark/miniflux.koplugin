@@ -26,7 +26,6 @@ local T = require("ffi/util").template
 ---@class MinifluxUI
 ---@field settings SettingsManager Settings manager instance
 ---@field api MinifluxAPI API client instance
----@field debug MinifluxDebug Debug logging instance
 ---@field download_dir string Download directory path
 ---@field settings_dialog MultiInputDialog|nil Current settings dialog
 ---@field miniflux_browser any Current browser instance
@@ -45,13 +44,11 @@ end
 ---Initialize the UI with required dependencies
 ---@param settings SettingsManager Settings manager instance
 ---@param api MinifluxAPI API client instance
----@param debug MinifluxDebug Debug logging instance
 ---@param download_dir string Download directory path
 ---@return MinifluxUI self for method chaining
-function MinifluxUI:init(settings, api, debug, download_dir)
+function MinifluxUI:init(settings, api, download_dir)
     self.settings = settings
     self.api = api
-    self.debug = debug
     self.download_dir = download_dir
     return self
 end
@@ -191,8 +188,6 @@ end
 ---Show the main Miniflux browser screen
 ---@return nil
 function MinifluxUI:showMainScreen()
-    if self.debug then self.debug:info("showMainScreen called") end
-    
     if not self.settings:isConfigured() then
         UIManager:show(InfoMessage:new{
             text = _("Please configure server settings first"),
@@ -253,7 +248,6 @@ function MinifluxUI:showMainScreen()
     end
     
     local unread_count = (result and result.total) and result.total or 0
-    if self.debug then self.debug:info("Fetched unread count: " .. unread_count) end
     
     -- Update loading message for next operation
     UIManager:close(loading_info)
@@ -272,12 +266,6 @@ function MinifluxUI:showMainScreen()
     local feeds_count = 0
     if feeds_call_success and feeds_success and feeds_result then
         feeds_count = #feeds_result
-        if self.debug then self.debug:info("Fetched " .. feeds_count .. " feeds") end
-    else
-        if self.debug then 
-            local error_msg = not feeds_call_success and "Network error" or tostring(feeds_result)
-            self.debug:warn("Failed to fetch feeds: " .. error_msg) 
-        end
     end
     
     -- Update loading message for next operation
@@ -297,12 +285,6 @@ function MinifluxUI:showMainScreen()
     local categories_count = 0
     if categories_call_success and categories_success and categories_result then
         categories_count = #categories_result
-        if self.debug then self.debug:info("Fetched " .. categories_count .. " categories") end
-    else
-        if self.debug then 
-            local error_msg = not categories_call_success and "Network error" or tostring(categories_result)
-            self.debug:warn("Failed to fetch categories: " .. error_msg) 
-        end
     end
     
     -- Close loading message and prepare for browser creation
@@ -318,62 +300,26 @@ function MinifluxUI:showMainScreen()
                 title = _("Miniflux"),
                 settings = self.settings,
                 api = self.api,
-                debug = self.debug,
                 download_dir = self.download_dir,
                 unread_count = unread_count,
                 feeds_count = feeds_count,
                 categories_count = categories_count,
                 close_callback = function()
-                    if self.debug then self.debug:info("MinifluxBrowser close_callback called") end
                     UIManager:close(self.miniflux_browser)
                     self.miniflux_browser = nil
                 end,
             }
             
-            if self.debug then self.debug:info("MinifluxBrowser created and about to show") end
             UIManager:show(self.miniflux_browser)
         end)
         
         if not browser_success then
-            if self.debug then self.debug:error("Failed to create or show MinifluxBrowser") end
             UIManager:show(InfoMessage:new{
                 text = _("Failed to create browser interface"),
                 timeout = 5,
             })
         end
     end)
-end
-
----Show debug log viewer
----@return nil
-function MinifluxUI:showDebugLog()
-    if not self.debug then
-        UIManager:show(InfoMessage:new{
-            text = _("Debug system not initialized"),
-            timeout = 3,
-        })
-        return
-    end
-    
-    local content = self.debug:getLogContent()
-    local TextViewer = require("ui/widget/textviewer")
-    local text_viewer = TextViewer:new{
-        title = _("Miniflux Debug Log"),
-        text = content,
-        text_face = Font:getFace("smallinfofont"),
-        justified = false,
-        buttons_table = {
-            {
-                {
-                    text = _("Close"),
-                    callback = function()
-                        UIManager:close(text_viewer)
-                    end,
-                },
-            },
-        },
-    }
-    UIManager:show(text_viewer)
 end
 
 ---Get sort order submenu items

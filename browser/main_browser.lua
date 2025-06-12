@@ -44,15 +44,7 @@ function MainBrowser:init()
     -- Ensure we have the required properties from constructor
     self.settings = self.settings or {}
     self.api = self.api or {}
-    self.debug = self.debug
     self.download_dir = self.download_dir
-    
-    if self.debug then
-        self.debug:info("MainBrowser:init() called with counts: unread=" .. tostring(self.unread_count) .. ", feeds=" .. tostring(self.feeds_count) .. ", categories=" .. tostring(self.categories_count))
-        if self.download_dir then
-            self.debug:info("MainBrowser:init() download_dir: " .. self.download_dir)
-        end
-    end
     
     -- Initialize screens first (before BaseBrowser.init)
     self.main_screen = MainScreen:new()
@@ -66,30 +58,16 @@ function MainBrowser:init()
     
     -- Initialize with counts if available and set initial items
     if self.unread_count or self.feeds_count or self.categories_count then
-        if self.debug then
-            self.debug:info("Calling initWithCounts with unread=" .. tostring(self.unread_count) .. ", feeds=" .. tostring(self.feeds_count) .. ", categories=" .. tostring(self.categories_count))
-        end
         self:initWithCounts(self.unread_count, self.feeds_count, self.categories_count)
-    else
-        if self.debug then
-            self.debug:info("No counts available, skipping initWithCounts")
-        end
     end
     
     -- Generate the initial item table
     self.item_table = self.main_screen:genItemTable()
     
-    if self.debug then
-        self.debug:info("Generated item_table with " .. #self.item_table .. " items")
-        for i, item in ipairs(self.item_table) do
-            self.debug:info("Item " .. i .. ": " .. item.text .. " (" .. tostring(item.mandatory) .. ")")
-        end
-    end
-    
     -- Now call the parent init with the proper item_table set
     BaseBrowser.init(self)
     
-    -- Set browser type for debugging
+    -- Set browser type
     self.browser_type = "MinifluxBrowser"
     
     -- Initialize features with proper browser reference
@@ -116,110 +94,45 @@ end
 ---@return nil
 function MainBrowser:onMenuSelect(item)
     if not item or not item.action_type then
-        if self.debug then
-            self:debugLog("onMenuSelect: item or action_type is missing")
-        end
         return
     end
     
-    if self.debug then
-        self:debugLog("=== onMenuSelect called ===")
-        self:debugLog("action_type: " .. tostring(item.action_type))
-        self:debugLog("item.text: " .. tostring(item.text))
-        self:debugLog("=== onMenuSelect processing ===")
-    end
-    
     if item.action_type == "unread" then
-        if self.debug then
-            self:debugLog("Processing unread action")
-        end
         if self.main_screen and self.main_screen.showUnreadEntries then
             self.main_screen:showUnreadEntries()
-        else
-            if self.debug then
-                self:debugLog("Error: main_screen or showUnreadEntries method not available")
-            end
         end
         
     elseif item.action_type == "feeds" then
-        if self.debug then
-            self:debugLog("Processing feeds action")
-        end
         if self.feeds_screen and self.feeds_screen.show then
             self.feeds_screen:show()
-        else
-            if self.debug then
-                self:debugLog("Error: feeds_screen or show method not available")
-            end
         end
         
     elseif item.action_type == "categories" then
-        if self.debug then
-            self:debugLog("Processing categories action")
-        end
         if self.categories_screen and self.categories_screen.show then
             self.categories_screen:show()
-        else
-            if self.debug then
-                self:debugLog("Error: categories_screen or show method not available")
-            end
         end
         
     elseif item.action_type == "feed_entries" then
-        if self.debug then
-            self:debugLog("Processing feed_entries action")
-        end
         local feed_data = item.feed_data
         if feed_data and feed_data.id and feed_data.title then
             if self.feeds_screen and self.feeds_screen.showFeedEntries then
                 self.feeds_screen:showFeedEntries(feed_data.id, feed_data.title)
-            else
-                if self.debug then
-                    self:debugLog("Error: feeds_screen or showFeedEntries method not available")
-                end
-            end
-        else
-            if self.debug then
-                self:debugLog("Error: feed_data is missing or incomplete")
             end
         end
         
     elseif item.action_type == "category_entries" then
-        if self.debug then
-            self:debugLog("Processing category_entries action")
-        end
         local category_data = item.category_data
         if category_data and category_data.id and category_data.title then
             if self.categories_screen and self.categories_screen.showCategoryEntries then
                 self.categories_screen:showCategoryEntries(category_data.id, category_data.title)
-            else
-                if self.debug then
-                    self:debugLog("Error: categories_screen or showCategoryEntries method not available")
-                end
-            end
-        else
-            if self.debug then
-                self:debugLog("Error: category_data is missing or incomplete")
             end
         end
         
     elseif item.action_type == "read_entry" then
-        if self.debug then
-            self:debugLog("Processing read_entry action")
-        end
         local entry_data = item.entry_data
         local nav_context = item.navigation_context
         if entry_data and self.api then
-            BrowserUtils.showEntry(entry_data, self.api, self.debug, self.download_dir, nav_context)
-        else
-            if self.debug then
-                self:debugLog("Error: entry_data or api not available")
-            end
-        end
-        
-    else
-        if self.debug then
-            self:debugLog("Unknown action type: " .. tostring(item.action_type))
+            BrowserUtils.showEntry(entry_data, self.api, self.download_dir, nav_context)
         end
     end
 end
@@ -237,13 +150,6 @@ end
 ---@param nav_data? NavigationData Navigation context data
 ---@return nil
 function MainBrowser:updateBrowser(title, items, subtitle, nav_data)
-    if self.debug then
-        self:debugLog("=== MainBrowser:updateBrowser called ===")
-        self:debugLog("Current title: " .. tostring(self.title))
-        self:debugLog("New title: " .. tostring(title))
-        self:debugLog("Items count: " .. #items)
-    end
-    
     -- Call parent first to update the UI completely
     BaseBrowser.updateBrowser(self, title, items, subtitle, nav_data)
     
@@ -251,32 +157,17 @@ function MainBrowser:updateBrowser(title, items, subtitle, nav_data)
     if nav_data then
         self.navigation_manager:updateBrowser(title, items, subtitle, nav_data)
     end
-    
-    if self.debug then
-        self:debugLog("=== MainBrowser:updateBrowser end ===")
-    end
 end
 
 -- Override refreshCurrentView to refresh the current screen
 function MainBrowser:refreshCurrentView()
-    if self.debug then
-        self.debug:info("MainBrowser:refreshCurrentView called")
-    end
-    
     local context = self.current_context
     if not context or not context.type then
-        if self.debug then
-            self.debug:info("No current context available for refresh, defaulting to main screen")
-        end
         -- Default to main screen if no context
         if self.main_screen and self.main_screen.show then
             self.main_screen:show()
         end
         return
-    end
-    
-    if self.debug then
-        self.debug:info("Refreshing current context:", tostring(context.type))
     end
     
     -- Always make fresh API calls for consistency and simplicity
@@ -330,9 +221,6 @@ function MainBrowser:refreshCurrentView()
             self.main_screen:showUnreadEntries(true) -- is_refresh = true
         end
     else
-        if self.debug then
-            self.debug:info("Unknown context type for refresh:", context.type, "- defaulting to main screen")
-        end
         -- Fallback to main screen for unknown context types
         if self.main_screen and self.main_screen.show then
             self.main_screen:show()
@@ -342,10 +230,6 @@ end
 
 -- Show entries list (used by multiple screens)
 function MainBrowser:showEntriesList(entries, title_prefix, is_category, navigation_data)
-    if self.debug then
-        self:debugLog("showEntriesList called with " .. #entries .. " entries")
-    end
-    
     -- Update current context with proper field names
     if title_prefix:find(_("Unread")) then
         self.current_context = { type = "unread_entries" }
@@ -360,13 +244,7 @@ function MainBrowser:showEntriesList(entries, title_prefix, is_category, navigat
                     category_title = category_data.category_title or category_data.title
                 }
             }
-            if self.debug then
-                self:debugLog("Set category context: id=" .. tostring(self.current_context.data.category_id) .. ", title=" .. tostring(self.current_context.data.category_title))
-            end
         else
-            if self.debug then
-                self:debugLog("No valid category data in navigation_data, setting context without data")
-            end
             self.current_context = { type = "category_entries" }
         end
     else
@@ -380,13 +258,7 @@ function MainBrowser:showEntriesList(entries, title_prefix, is_category, navigat
                     feed_title = feed_data.feed_title or feed_data.title
                 }
             }
-            if self.debug then
-                self:debugLog("Set feed context: id=" .. tostring(self.current_context.data.feed_id) .. ", title=" .. tostring(self.current_context.data.feed_title))
-            end
         else
-            if self.debug then
-                self:debugLog("No valid feed data in navigation_data, setting context without data")
-            end
             self.current_context = { type = "feed_entries" }
         end
     end
@@ -534,46 +406,25 @@ end
 
 -- Override onSettingsChanged to handle specific settings changes
 function MainBrowser:onSettingsChanged(setting_name, new_value)
-    if self.debug then
-        self.debug:info("MainBrowser:onSettingsChanged -", setting_name, "=", tostring(new_value))
-    end
-    
     -- Call parent implementation for all settings - we want fresh API calls
     BaseBrowser.onSettingsChanged(self, setting_name, new_value)
 end
 
 -- Override invalidateEntryCaches to actually invalidate relevant caches
 function MainBrowser:invalidateEntryCaches()
-    if self.debug then
-        self.debug:info("MainBrowser:invalidateEntryCaches called")
-    end
-    
     -- Invalidate feeds cache (contains entry counts per feed)
     if self.feeds_screen and self.feeds_screen.invalidateCache then
-        if self.debug then
-            self.debug:info("Invalidating feeds screen cache")
-        end
         self.feeds_screen:invalidateCache()
     end
     
     -- Invalidate categories cache (contains entry counts per category)  
     if self.categories_screen and self.categories_screen.invalidateCache then
-        if self.debug then
-            self.debug:info("Invalidating categories screen cache")
-        end
         self.categories_screen:invalidateCache()
     end
     
     -- Invalidate main screen cache (contains unread count)
     if self.main_screen and self.main_screen.invalidateCache then
-        if self.debug then
-            self.debug:info("Invalidating main screen cache")
-        end
         self.main_screen:invalidateCache()
-    end
-    
-    if self.debug then
-        self.debug:info("All entry-related caches invalidated")
     end
 end
 

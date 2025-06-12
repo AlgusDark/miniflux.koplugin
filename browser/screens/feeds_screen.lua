@@ -46,14 +46,9 @@ end
 ---@param page_info? table Page information for restoration
 ---@return nil
 function FeedsScreen:show(paths_updated, page_info)
-    if self.browser.debug then
-        self.browser:debugLog("FeedsScreen:show called")
-        if page_info then
-            self.browser:debugLog("Page info provided (but restoration is disabled): page=" .. tostring(page_info.page))
-            self.browser:debugLog("Added page_info as restore_page_info: page=" .. tostring(page_info.page))
-            -- Store page_info to use during updateBrowser
-            self.restore_page_info = page_info
-        end
+    if page_info then
+        -- Store page_info to use during updateBrowser
+        self.restore_page_info = page_info
     end
     
     -- Get cached feeds or fetch new ones
@@ -71,9 +66,6 @@ function FeedsScreen:show(paths_updated, page_info)
         self.browser:closeLoadingMessage(loading_info)
         
         if not ok then
-            if self.browser.debug then
-                self.browser.debug:warn("Exception during getFeeds:", err)
-            end
             self.browser:showErrorMessage(_("Failed to fetch feeds: ") .. tostring(err))
             return
         end
@@ -102,47 +94,14 @@ function FeedsScreen:show(paths_updated, page_info)
         self.browser:closeLoadingMessage(loading_info)
         
         if not ok then
-            if self.browser.debug then
-                self.browser.debug:warn("Exception during getFeedCounters:", err)
-            end
             -- Continue with empty counters rather than failing completely
             feed_counters = { reads = {}, unreads = {} }
         elseif success and result then
             feed_counters = result
             self:cacheCounters(feed_counters)
         else
-            if self.browser.debug then
-                self.browser.debug:info("Failed to fetch feed counters, using feeds data only")
-            end
             feed_counters = { reads = {}, unreads = {} }
         end
-    end
-    
-    -- DEBUGGING: Log what the feeds list reports for entry counts
-    if self.browser.debug then
-        self.browser.debug:info("=== FEEDS LIST ENTRY COUNTS DEBUG ===")
-        self.browser.debug:info("Total feeds returned: " .. #feeds)
-        if feed_counters.reads then
-            local reads_count = 0
-            local unreads_count = 0
-            for _ in pairs(feed_counters.reads) do reads_count = reads_count + 1 end
-            for _ in pairs(feed_counters.unreads) do unreads_count = unreads_count + 1 end
-            self.browser.debug:info("Feed counters - reads: " .. reads_count .. ", unreads: " .. unreads_count)
-        end
-        
-        -- Show counts for first few feeds for comparison
-        for i = 1, math.min(3, #feeds) do
-            local feed = feeds[i]
-            local feed_id_str = tostring(feed.id)
-            local read_count = feed_counters.reads and feed_counters.reads[feed_id_str] or 0
-            local unread_count = feed_counters.unreads and feed_counters.unreads[feed_id_str] or 0
-            
-            self.browser.debug:info("Feed " .. i .. ": " .. tostring(feed.title))
-            self.browser.debug:info("  id: " .. tostring(feed.id))
-            self.browser.debug:info("  counter unread_count: " .. tostring(unread_count))
-            self.browser.debug:info("  counter read_count: " .. tostring(read_count))
-        end
-        self.browser.debug:info("=======================================")
     end
     
     local menu_items = {}
@@ -161,14 +120,6 @@ function FeedsScreen:show(paths_updated, page_info)
         
         -- Always show unread/total format for feeds (categories only show unread)
         local count_info = string.format("(%d/%d)", unread_count, total_count)
-        
-        if self.browser.debug then
-            self.browser.debug:info("Feed " .. feed_title .. ":")
-            self.browser.debug:info("  Unread from counters: " .. unread_count)
-            self.browser.debug:info("  Read from counters: " .. read_count)
-            self.browser.debug:info("  Total count used: " .. total_count .. (self:getAccurateEntryCount(feed.id) and " (cached)" or " (fallback)"))
-            self.browser.debug:info("  Display: " .. count_info)
-        end
         
         local menu_item = {
             text = feed_title,
@@ -209,14 +160,6 @@ function FeedsScreen:show(paths_updated, page_info)
             return a_title:lower() < b_title:lower()
         end
     end)
-    
-    if self.browser.debug then
-        self.browser.debug:info("Feeds sorted by unread count. First 5 feeds:")
-        for i = 1, math.min(5, #menu_items) do
-            local item = menu_items[i]
-            self.browser.debug:info("  " .. i .. ": " .. item.text .. " - unread: " .. (item.unread_count or 0))
-        end
-    end
     
     -- Create navigation data to save our current state
     local navigation_data = self.browser.page_state_manager:createNavigationData(
@@ -265,38 +208,7 @@ end
 
 -- Show entries for a specific feed
 function FeedsScreen:showFeedEntries(feed_id, feed_title, paths_updated)
-    if self.browser.debug then
-        self.browser:debugLog("FeedsScreen:showFeedEntries called for: " .. tostring(feed_title))
-    end
-    
     local loading_info = self.browser:showLoadingMessage(_("Fetching entries for feed..."))
-    
-    -- DEBUGGING: First get feed counters to compare
-    if self.browser.debug then
-        self.browser.debug:info("=== FEED COUNTERS COMPARISON DEBUG ===")
-        self.browser.debug:info("Fetching feed counters for comparison...")
-        
-        local counter_success, counter_result = self.browser.api:getFeedCounters()
-        if counter_success and counter_result then
-            -- Find this feed in the counters
-            for _, counter in ipairs(counter_result) do
-                if counter.feed_id == tonumber(feed_id) then
-                    self.browser.debug:info("Feed ID " .. feed_id .. " (" .. feed_title .. ") counters:")
-                    self.browser.debug:info("  unread_count: " .. tostring(counter.unread_count))
-                    if counter.read_count then
-                        self.browser.debug:info("  read_count: " .. tostring(counter.read_count))
-                    end
-                    if counter.total_count then
-                        self.browser.debug:info("  total_count: " .. tostring(counter.total_count))
-                    end
-                    break
-                end
-            end
-        else
-            self.browser.debug:info("Failed to get feed counters:", tostring(counter_result))
-        end
-        self.browser.debug:info("=========================================")
-    end
     
     local options = BrowserUtils.getApiOptions(self.browser.settings)
     local success, result
@@ -307,9 +219,6 @@ function FeedsScreen:showFeedEntries(feed_id, feed_title, paths_updated)
     self.browser:closeLoadingMessage(loading_info)
     
     if not ok then
-        if self.browser.debug then
-            self.browser.debug:warn("Exception during getFeedEntries:", err)
-        end
         self.browser:showErrorMessage(_("Failed to fetch feed entries: ") .. tostring(err))
         return
     end
@@ -353,77 +262,6 @@ function FeedsScreen:showFeedEntries(feed_id, feed_title, paths_updated)
         self.browser:showEntriesList(no_entries_items, feed_title, false, navigation_data)
         return
     end
-
-    -- DEBUGGING: Compare what we got vs feed counters
-    if self.browser.debug then
-        self.browser.debug:info("=== FEED ENTRIES vs COUNTERS COMPARISON ===")
-        self.browser.debug:info("Entries fetched: " .. #result.entries)
-        
-        local unread_fetched = 0
-        local read_fetched = 0
-        local status_counts = {} -- Track all status types
-        
-        for _, entry in ipairs(result.entries) do
-            local status = entry.status or "nil"
-            status_counts[status] = (status_counts[status] or 0) + 1
-            
-            if entry.status == "unread" then
-                unread_fetched = unread_fetched + 1
-            elseif entry.status == "read" then
-                read_fetched = read_fetched + 1
-            end
-        end
-        
-        self.browser.debug:info("Unread entries fetched: " .. unread_fetched)
-        self.browser.debug:info("Read entries fetched: " .. read_fetched)
-        self.browser.debug:info("Total entries fetched: " .. (unread_fetched + read_fetched))
-        
-        -- Show distribution of all statuses
-        self.browser.debug:info("Entry status distribution:")
-        for status, count in pairs(status_counts) do
-            self.browser.debug:info("  " .. tostring(status) .. ": " .. count)
-        end
-        
-        if result.total then
-            self.browser.debug:info("Total field from API response: " .. tostring(result.total))
-        end
-        
-        -- DEBUGGING: Try fetching with NO LIMIT to see real total
-        self.browser.debug:info("--- Testing with NO LIMIT ---")
-        local no_limit_options = {
-            order = options.order,
-            direction = options.direction,
-        }
-        -- Add status filter if it was in original options
-        if options.status then
-            no_limit_options.status = options.status
-        end
-        
-        local no_limit_success, no_limit_result = self.browser.api:getFeedEntries(feed_id, no_limit_options)
-        if no_limit_success and no_limit_result and no_limit_result.entries then
-            local unread_no_limit = 0
-            local read_no_limit = 0
-            for _, entry in ipairs(no_limit_result.entries) do
-                if entry.status == "unread" then
-                    unread_no_limit = unread_no_limit + 1
-                elseif entry.status == "read" then
-                    read_no_limit = read_no_limit + 1
-                end
-            end
-            
-            self.browser.debug:info("NO LIMIT results:")
-            self.browser.debug:info("  Total entries returned: " .. #no_limit_result.entries)
-            self.browser.debug:info("  Unread: " .. unread_no_limit)
-            self.browser.debug:info("  Read: " .. read_no_limit)
-            if no_limit_result.total then
-                self.browser.debug:info("  Total field from API: " .. tostring(no_limit_result.total))
-            end
-        else
-            self.browser.debug:info("NO LIMIT test failed:", tostring(no_limit_result))
-        end
-        
-        self.browser.debug:info("=============================================")
-    end
     
     -- Create navigation data - ensure we capture current page state unless paths are being updated  
     local navigation_data = self.browser.page_state_manager:createNavigationData(
@@ -442,41 +280,22 @@ end
 
 -- Handle feed screen content restoration from navigation
 function FeedsScreen:showContent(paths_updated, page_info)
-    if self.browser.debug then
-        self.browser:debugLog("FeedsScreen:showContent called - from navigation back")
-        if page_info then
-            self.browser:debugLog("Restoring to page: " .. tostring(page_info.page))
-        end
-    end
-    
     -- Show feeds but prevent adding to navigation history and include page restoration
     self:show(paths_updated or true, page_info)
 end
 
 -- Cache management methods
 function FeedsScreen:getCachedFeeds()
-    if self.browser.debug then
-        self.browser.debug:info("FeedsScreen:getCachedFeeds called")
-    end
-    
     -- Simple in-memory cache for feeds data
     return self.cached_feeds
 end
 
 function FeedsScreen:cacheFeeds(feeds)
-    if self.browser.debug then
-        self.browser.debug:info("FeedsScreen:cacheFeeds called with " .. #feeds .. " feeds")
-    end
-    
     -- Simple in-memory cache for feeds data
     self.cached_feeds = feeds
 end
 
 function FeedsScreen:invalidateCache()
-    if self.browser.debug then
-        self.browser.debug:info("FeedsScreen:invalidateCache called")
-    end
-    
     -- Clear the in-memory cache
     self.cached_feeds = nil
     self.cached_counters = nil
@@ -484,27 +303,11 @@ function FeedsScreen:invalidateCache()
 end
 
 function FeedsScreen:getCachedCounters()
-    if self.browser.debug then
-        self.browser.debug:info("FeedsScreen:getCachedCounters called")
-    end
-    
     -- Simple in-memory cache for counters data
     return self.cached_counters
 end
 
 function FeedsScreen:cacheCounters(counters)
-    if self.browser.debug then
-        local count_str = "unknown"
-        if counters and counters.reads and counters.unreads then
-            local reads_count = 0
-            local unreads_count = 0
-            for _ in pairs(counters.reads) do reads_count = reads_count + 1 end
-            for _ in pairs(counters.unreads) do unreads_count = unreads_count + 1 end
-            count_str = "reads: " .. reads_count .. ", unreads: " .. unreads_count
-        end
-        self.browser.debug:info("FeedsScreen:cacheCounters called with " .. count_str)
-    end
-    
     -- Simple in-memory cache for counters data
     self.cached_counters = counters
 end
@@ -529,10 +332,6 @@ function FeedsScreen:cacheAccurateEntryCount(feed_id, total_count)
     
     local cache_key = "feed_" .. tostring(feed_id) .. "_count" 
     self.cached_entry_counts[cache_key] = total_count
-    
-    if self.browser.debug then
-        self.browser.debug:info("Cached accurate count for feed " .. feed_id .. ": " .. total_count)
-    end
 end
 
 return FeedsScreen 

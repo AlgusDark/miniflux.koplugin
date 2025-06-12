@@ -17,7 +17,6 @@ local Enums = require("settings/enums")
 local ServerSettings = require("settings/server_settings")
 local SortingSettings = require("settings/sorting_settings")
 local DisplaySettings = require("settings/display_settings")
-local DebugSettings = require("settings/debug_settings")
 
 ---@class SettingsManager
 ---@field settings_file string Path to the settings file
@@ -25,7 +24,6 @@ local DebugSettings = require("settings/debug_settings")
 ---@field server ServerSettings Server settings module
 ---@field sorting SortingSettings Sorting settings module
 ---@field display DisplaySettings Display settings module
----@field debug DebugSettings Debug settings module
 local SettingsManager = {}
 
 ---Initialize the settings manager and all sub-modules
@@ -47,9 +45,6 @@ function SettingsManager:init()
     
     self.display = DisplaySettings:new()
     self.display:init(self.settings, logger)
-    
-    self.debug = DebugSettings:new()
-    self.debug:init(self.settings, logger)
     
     logger.info("Settings manager initialized with all modules")
 end
@@ -210,23 +205,6 @@ function SettingsManager:toggleIncludeImages()
 end
 
 -- =============================================================================
--- DEBUG SETTINGS - Delegate to DebugSettings module
--- =============================================================================
-
----Get debug logging setting
----@return boolean Whether debug logging is enabled
-function SettingsManager:getDebugLogging()
-    return self.debug:getDebugLogging()
-end
-
----Set debug logging setting
----@param debug boolean Whether to enable debug logging
----@return nil
-function SettingsManager:setDebugLogging(debug)
-    self.debug:setDebugLogging(debug)
-end
-
--- =============================================================================
 -- ADVANCED OPERATIONS
 -- =============================================================================
 
@@ -241,8 +219,7 @@ function SettingsManager:export()
         direction = self:getDirection(),
         hide_read_entries = self:getHideReadEntries(),
         auto_mark_read = self:getAutoMarkRead(),
-        include_images = self:getIncludeImages(),
-        debug_logging = self:getDebugLogging()
+        include_images = self:getIncludeImages()
     }
 end
 
@@ -257,11 +234,10 @@ function SettingsManager:reset()
     self.server:init(self.settings, logger)
     self.sorting:init(self.settings, logger)
     self.display:init(self.settings, logger)
-    self.debug:init(self.settings, logger)
 end
 
 ---Get settings for a specific module
----@param module_name string Module name (server, sorting, display, debug)
+---@param module_name string Module name (server, sorting, display)
 ---@return table<string, any>|nil Settings for the module or nil if module not found
 function SettingsManager:getModuleSettings(module_name)
     if module_name == "server" then
@@ -270,8 +246,6 @@ function SettingsManager:getModuleSettings(module_name)
         return self.sorting:getAllSortingSettings()
     elseif module_name == "display" then
         return self.display:getAllDisplaySettings()
-    elseif module_name == "debug" then
-        return self.debug:getAllDebugSettings()
     else
         logger.warn("Unknown module name:", module_name)
         return nil
@@ -279,7 +253,7 @@ function SettingsManager:getModuleSettings(module_name)
 end
 
 ---Set settings for a specific module
----@param module_name string Module name (server, sorting, display, debug)
+---@param module_name string Module name (server, sorting, display)
 ---@param settings table<string, any> Settings to apply
 ---@return boolean True if successfully applied
 function SettingsManager:setModuleSettings(module_name, settings)
@@ -289,8 +263,6 @@ function SettingsManager:setModuleSettings(module_name, settings)
         return self.sorting:setAllSortingSettings(settings)
     elseif module_name == "display" then
         return self.display:setAllDisplaySettings(settings)
-    elseif module_name == "debug" then
-        return self.debug:setAllDebugSettings(settings)
     else
         logger.warn("Unknown module name:", module_name)
         return false

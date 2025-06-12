@@ -36,10 +36,6 @@ end
 
 -- Show categories list screen
 function CategoriesScreen:show(paths_updated, page_info)
-    if self.browser.debug then
-        self.browser:debugLog("CategoriesScreen:show called")
-    end
-    
     local loading_info = self.browser:showLoadingMessage(_("Fetching categories..."))
     
     -- Request categories with counts enabled
@@ -51,9 +47,6 @@ function CategoriesScreen:show(paths_updated, page_info)
     self.browser:closeLoadingMessage(loading_info)
     
     if not ok then
-        if self.browser.debug then
-            self.browser.debug:warn("Exception during getCategories:", err)
-        end
         self.browser:showErrorMessage(_("Failed to fetch categories: ") .. tostring(err))
         return
     end
@@ -64,11 +57,6 @@ function CategoriesScreen:show(paths_updated, page_info)
     
     if not self.browser:validateData(result, "categories") then
         return
-    end
-    
-    -- Simple log of categories count
-    if self.browser.debug then
-        self.browser:debugLog("Fetched " .. #result .. " categories with counts")
     end
     
     -- Build menu items
@@ -88,9 +76,6 @@ function CategoriesScreen:show(paths_updated, page_info)
     -- If page_info is provided (back navigation), add it as restore_page_info
     if page_info then
         navigation_data.restore_page_info = page_info
-        if self.browser.debug then
-            self.browser:debugLog("Added page_info as restore_page_info: page=" .. tostring(page_info.page))
-        end
     end
     
     -- Build subtitle with status icon
@@ -130,13 +115,6 @@ end
 
 -- Show entries for a specific category
 function CategoriesScreen:showCategoryEntries(category_id, category_title, paths_updated)
-    if self.browser.debug then
-        self.browser:debugLog("=== CategoriesScreen:showCategoryEntries called ===")
-        self.browser:debugLog("category_id: " .. tostring(category_id))
-        self.browser:debugLog("category_title: " .. tostring(category_title))
-        self.browser:debugLog("paths_updated: " .. tostring(paths_updated))
-    end
-    
     local loading_info = self.browser:showLoadingMessage(_("Fetching entries for category..."))
     
     local options = BrowserUtils.getApiOptions(self.browser.settings)
@@ -148,9 +126,6 @@ function CategoriesScreen:showCategoryEntries(category_id, category_title, paths
     self.browser:closeLoadingMessage(loading_info)
     
     if not ok then
-        if self.browser.debug then
-            self.browser.debug:warn("Exception during getCategoryEntries:", err)
-        end
         self.browser:showErrorMessage(_("Failed to fetch category entries: ") .. tostring(err))
         return
     end
@@ -200,68 +175,33 @@ function CategoriesScreen:showCategoryEntries(category_id, category_title, paths
         paths_updated  -- is_settings_refresh when paths_updated is true
     )
     
-    if self.browser.debug then
-        self.browser:debugLog("navigation_data.paths_updated: " .. tostring(navigation_data.paths_updated))
-        self.browser:debugLog("navigation_data.current_type: " .. tostring(navigation_data.current_type))
-        if navigation_data.current_data then
-            self.browser:debugLog("navigation_data.current_data.category_title: " .. tostring(navigation_data.current_data.category_title))
-        end
-    end
-    
     self.browser:showEntriesList(entries, category_title, true, navigation_data)
-    
-    if self.browser.debug then
-        self.browser:debugLog("=== CategoriesScreen:showCategoryEntries end ===")
-    end
 end
 
 -- Show entries for a specific category (refresh version - no navigation context)
 function CategoriesScreen:showCategoryEntriesRefresh(category_id, category_title)
-    if self.browser.debug then
-        self.browser:debugLog("CategoriesScreen:showCategoryEntriesRefresh called for: " .. tostring(category_title))
-    end
-    
     -- Call the regular method but indicate this is a refresh (paths_updated = true)
     self:showCategoryEntries(category_id, category_title, true)
 end
 
 -- Handle category screen content restoration from navigation
 function CategoriesScreen:showContent(paths_updated, page_info)
-    if self.browser.debug then
-        self.browser:debugLog("CategoriesScreen:showContent called - from navigation back")
-        if page_info then
-            self.browser:debugLog("Restoring to page: " .. tostring(page_info.page))
-        end
-    end
-    
     -- Show categories but prevent adding to navigation history and include page restoration
     self:show(paths_updated or true, page_info)
 end
 
 -- Cache management methods
 function CategoriesScreen:getCachedCategories()
-    if self.browser.debug then
-        self.browser.debug:info("CategoriesScreen:getCachedCategories called")
-    end
-    
     -- Simple in-memory cache for categories data
     return self.cached_categories
 end
 
 function CategoriesScreen:cacheCategories(categories)
-    if self.browser.debug then
-        self.browser.debug:info("CategoriesScreen:cacheCategories called with " .. #categories .. " categories")
-    end
-    
     -- Simple in-memory cache for categories data
     self.cached_categories = categories
 end
 
 function CategoriesScreen:invalidateCache()
-    if self.browser.debug then
-        self.browser.debug:info("CategoriesScreen:invalidateCache called")
-    end
-    
     -- Clear the in-memory cache
     self.cached_categories = nil
 end

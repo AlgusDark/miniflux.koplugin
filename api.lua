@@ -11,7 +11,6 @@ local json = require("json")
 local ltn12 = require("ltn12")
 local socket = require("socket")
 local socketutil = require("socketutil")
-local logger = require("logger")
 local _ = require("gettext")
 
 ---@alias HttpMethod "GET"|"POST"|"PUT"|"DELETE"
@@ -147,12 +146,10 @@ function MinifluxAPI:makeRequest(method, endpoint, body)
     socketutil:reset_timeout()
 
     if not network_success then
-        logger.warn("Miniflux API network error")
         return false, _("Network error occurred")
     end
 
     if not result then
-        logger.warn("Miniflux API request failed:", status_code)
         if status_code == socketutil.TIMEOUT_CODE then
             return false, _("Request timed out")
         elseif status_code == socketutil.SSL_HANDSHAKE_CODE then
@@ -171,7 +168,6 @@ function MinifluxAPI:makeRequest(method, endpoint, body)
             if success then
                 return true, data
             else
-                logger.warn("Failed to parse JSON response:", response_text)
                 return false, _("Invalid JSON response from server")
             end
         else
@@ -200,14 +196,11 @@ end
 ---Test connection to the Miniflux server
 ---@return boolean success, string message
 function MinifluxAPI:testConnection()
-    logger.info("Testing Miniflux connection to:", self.server_address)
     local success, result = self:makeRequest("GET", "/me")
 
     if success then
-        logger.info("Connection test successful. User:", result.username)
         return true, _("Connection successful! Logged in as: ") .. result.username
     else
-        logger.warn("Connection test failed:", result)
         return false, result
     end
 end
@@ -235,7 +228,8 @@ function MinifluxAPI:getEntries(options)
     if options.status then
         if type(options.status) == "table" then
             -- Handle multiple status values
-            for _, status in ipairs(options.status) do
+            local status_array = options.status ---@type EntryStatus[]
+            for _, status in ipairs(status_array) do
                 table.insert(params, "status=" .. status)
             end
         else
@@ -250,7 +244,6 @@ function MinifluxAPI:getEntries(options)
     end
 
     local endpoint = "/entries" .. query_string
-    logger.info("Fetching entries from:", endpoint)
 
     return self:makeRequest("GET", endpoint)
 end
@@ -289,7 +282,6 @@ end
 ---Get all feeds
 ---@return boolean success, MinifluxFeed[]|string result_or_error
 function MinifluxAPI:getFeeds()
-    logger.info("Fetching feeds")
     return self:makeRequest("GET", "/feeds")
 end
 
@@ -317,7 +309,8 @@ function MinifluxAPI:getFeedEntries(feed_id, options)
     if options.status then
         if type(options.status) == "table" then
             -- Handle multiple status values
-            for _, status in ipairs(options.status) do
+            local status_array = options.status ---@type EntryStatus[]
+            for _, status in ipairs(status_array) do
                 table.insert(params, "status=" .. status)
             end
         else
@@ -333,90 +326,12 @@ function MinifluxAPI:getFeedEntries(feed_id, options)
 
     local endpoint = "/feeds/" .. tostring(feed_id) .. "/entries" .. query_string
 
-    -- COMPREHENSIVE DEBUGGING
-    logger.info("=== MINIFLUX API CALL DEBUG ===")
-    logger.info("Feed ID:", feed_id)
-    logger.info("Full endpoint:", endpoint)
-    logger.info("Raw options received:")
-    for k, v in pairs(options) do
-        if k == "status" and type(v) == "table" then
-            logger.info("  " .. k .. " = {" .. table.concat(v, ", ") .. "}")
-        else
-            logger.info("  " .. k .. " = " .. tostring(v))
-        end
-    end
-    logger.info("Query parameters:")
-    for i, param in ipairs(params) do
-        logger.info("  " .. i .. ": " .. param)
-    end
-    logger.info("================================")
-
-    local success, result = self:makeRequest("GET", endpoint)
-
-    -- DEBUG THE RESPONSE
-    if success and result then
-        logger.info("=== MINIFLUX API RESPONSE DEBUG ===")
-        logger.info("Success: true")
-        if result.entries then
-            logger.info("Total entries returned:", #result.entries)
-
-            -- Count read vs unread
-            local unread_count = 0
-            local read_count = 0
-            for _, entry in ipairs(result.entries) do
-                if entry.status == "unread" then
-                    unread_count = unread_count + 1
-                elseif entry.status == "read" then
-                    read_count = read_count + 1
-                end
-            end
-
-            logger.info("Unread entries:", unread_count)
-            logger.info("Read entries:", read_count)
-            logger.info("Total count field:", tostring(result.total))
-
-            -- Show first few entries for debugging
-            logger.info("First 3 entries (for debugging):")
-            for i = 1, math.min(3, #result.entries) do
-                local entry = result.entries[i]
-                logger.info(
-                    "  "
-                        .. i
-                        .. ": "
-                        .. tostring(entry.title)
-                        .. " [status: "
-                        .. tostring(entry.status)
-                        .. ", id: "
-                        .. tostring(entry.id)
-                        .. "]"
-                )
-            end
-        else
-            logger.info("No entries field in response")
-        end
-
-        -- Show other response fields
-        logger.info("Other response fields:")
-        for k, v in pairs(result) do
-            if k ~= "entries" then
-                logger.info("  " .. k .. " = " .. tostring(v))
-            end
-        end
-        logger.info("=====================================")
-    else
-        logger.warn("=== MINIFLUX API RESPONSE DEBUG ===")
-        logger.warn("Success: false")
-        logger.warn("Error:", tostring(result))
-        logger.warn("=====================================")
-    end
-
-    return success, result
+    return self:makeRequest("GET", endpoint)
 end
 
 ---Get feed counters (read/unread counts)
 ---@return boolean success, FeedCounters|string result_or_error
 function MinifluxAPI:getFeedCounters()
-    logger.info("Fetching feed counters")
     return self:makeRequest("GET", "/feeds/counters")
 end
 
@@ -428,7 +343,6 @@ function MinifluxAPI:getCategories(include_counts)
     if include_counts then
         endpoint = endpoint .. "?counts=true"
     end
-    logger.info("Fetching categories from:", endpoint)
     return self:makeRequest("GET", endpoint)
 end
 
@@ -456,7 +370,8 @@ function MinifluxAPI:getCategoryEntries(category_id, options)
     if options.status then
         if type(options.status) == "table" then
             -- Handle multiple status values
-            for _, status in ipairs(options.status) do
+            local status_array = options.status ---@type EntryStatus[]
+            for _, status in ipairs(status_array) do
                 table.insert(params, "status=" .. status)
             end
         else
@@ -471,7 +386,6 @@ function MinifluxAPI:getCategoryEntries(category_id, options)
     end
 
     local endpoint = "/categories/" .. tostring(category_id) .. "/entries" .. query_string
-    logger.info("Fetching entries for category", category_id, "from:", endpoint)
 
     return self:makeRequest("GET", endpoint)
 end
@@ -481,7 +395,6 @@ end
 ---@return boolean success, MinifluxEntry|string result_or_error
 function MinifluxAPI:getEntry(entry_id)
     local endpoint = "/entries/" .. tostring(entry_id)
-    logger.info("Fetching single entry:", endpoint)
 
     return self:makeRequest("GET", endpoint)
 end
@@ -504,7 +417,8 @@ function MinifluxAPI:getPreviousEntry(entry_id, options)
     -- Add other filter options if provided
     if options.status then
         if type(options.status) == "table" then
-            for _, status in ipairs(options.status) do
+            local status_array = options.status ---@type EntryStatus[]
+            for _, status in ipairs(status_array) do
                 table.insert(params, "status=" .. status)
             end
         else
@@ -526,7 +440,6 @@ function MinifluxAPI:getPreviousEntry(entry_id, options)
     end
 
     local endpoint = "/entries" .. query_string
-    logger.info("Fetching previous entry:", endpoint)
 
     return self:makeRequest("GET", endpoint)
 end
@@ -549,7 +462,8 @@ function MinifluxAPI:getNextEntry(entry_id, options)
     -- Add other filter options if provided
     if options.status then
         if type(options.status) == "table" then
-            for _, status in ipairs(options.status) do
+            local status_array = options.status ---@type EntryStatus[]
+            for _, status in ipairs(status_array) do
                 table.insert(params, "status=" .. status)
             end
         else
@@ -571,7 +485,6 @@ function MinifluxAPI:getNextEntry(entry_id, options)
     end
 
     local endpoint = "/entries" .. query_string
-    logger.info("Fetching next entry:", endpoint)
 
     return self:makeRequest("GET", endpoint)
 end

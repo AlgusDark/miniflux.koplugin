@@ -38,8 +38,7 @@ MinifluxEnums.DEFAULTS = {
     auto_mark_read = false,
     download_images = false,
     include_images = true,
-    entry_font_size = 14,
-    debug_logging = false
+    entry_font_size = 14
 }
 
 ---Get all valid sort order keys

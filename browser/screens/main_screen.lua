@@ -66,10 +66,6 @@ end
 ---Show main content screen
 ---@return nil
 function MainScreen:show()
-    if self.browser.debug then
-        self.browser:debugLog("MainScreen:show called")
-    end
-    
     local main_items = self:genItemTable()
     
     -- Build subtitle with status icon
@@ -84,10 +80,6 @@ end
 ---@param is_refresh? boolean Whether this is a refresh operation
 ---@return nil
 function MainScreen:showUnreadEntries(is_refresh)
-    if self.browser.debug then
-        self.browser:debugLog("MainScreen:showUnreadEntries called, is_refresh=" .. tostring(is_refresh))
-    end
-    
     local loading_info = self.browser:showLoadingMessage(_("Fetching entries..."))
     
     -- HARDCODE: Always fetch only unread entries for this view, regardless of user settings
@@ -106,9 +98,6 @@ function MainScreen:showUnreadEntries(is_refresh)
     self.browser:closeLoadingMessage(loading_info)
     
     if not ok then
-        if self.browser.debug then
-            self.browser.debug:warn("Exception during getEntries:", err)
-        end
         self.browser:showErrorMessage(_("Failed to fetch entries: ") .. tostring(err))
         return
     end
@@ -159,10 +148,6 @@ end
 ---Show unread entries screen (refresh version - no navigation context)
 ---@return nil
 function MainScreen:showUnreadEntriesRefresh()
-    if self.browser.debug then
-        self.browser:debugLog("MainScreen:showUnreadEntriesRefresh called")
-    end
-    
     -- Call the main method with is_refresh = true
     self:showUnreadEntries(true)
 end
@@ -170,10 +155,6 @@ end
 ---Get cached unread count
 ---@return number|nil Cached unread count or nil if not cached
 function MainScreen:getCachedUnreadCount()
-    if self.browser.debug then
-        self.browser.debug:info("MainScreen:getCachedUnreadCount called")
-    end
-    
     -- Simple in-memory cache for unread count
     return self.cached_unread_count
 end
@@ -182,10 +163,6 @@ end
 ---@param count number Unread count to cache
 ---@return nil
 function MainScreen:cacheUnreadCount(count)
-    if self.browser.debug then
-        self.browser.debug:info("MainScreen:cacheUnreadCount called with count: " .. tostring(count))
-    end
-    
     -- Simple in-memory cache for unread count
     self.cached_unread_count = count
 end
@@ -193,10 +170,6 @@ end
 ---Invalidate cache
 ---@return nil
 function MainScreen:invalidateCache()
-    if self.browser.debug then
-        self.browser.debug:info("MainScreen:invalidateCache called")
-    end
-    
     -- Clear the in-memory cache
     self.cached_unread_count = nil
 end
