@@ -1,29 +1,26 @@
 --[[--
+Miniflux Plugin for KOReader
+
 This plugin provides integration with Miniflux RSS reader.
+This main file acts as a coordinator, delegating to specialized modules.
 
 @module koplugin.miniflux
 --]]
---
 
-local Dispatcher = require("dispatcher")
-local InfoMessage = require("ui/widget/infomessage")
-local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
-local DataStorage = require("datastorage")
-local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
-local _ = require("gettext")
-local T = require("ffi/util").template
 
--- Import our modules
-local MinifluxAPI = require("api/api_client")
-local MinifluxSettingsManager = require("settings/settings_manager")
-local SettingsDialogs = require("settings/ui/settings_dialogs")
-local BrowserLauncher = require("browser/ui/browser_launcher")
+-- Import specialized modules
+local PluginInitializer = require("initialization/plugin_initializer")
+local MenuManager = require("menu/menu_manager")
+local EventHandler = require("events/event_handler")
 
 ---@class Miniflux : WidgetContainer
 ---@field name string Plugin name identifier
----@field download_dir_name string Directory name for downloads
+---@field is_doc_only boolean Whether plugin is document-only
+---@field initializer PluginInitializer Plugin initialization manager
+---@field menu_manager MenuManager Menu construction manager
+---@field event_handler EventHandler Event handling manager
 ---@field download_dir string Full path to download directory
 ---@field settings SettingsManager Settings manager instance
 ---@field api MinifluxAPI API client instance
@@ -31,158 +28,47 @@ local BrowserLauncher = require("browser/ui/browser_launcher")
 ---@field browser_launcher BrowserLauncher Browser launcher instance
 local Miniflux = WidgetContainer:extend({
     name = "miniflux",
-    download_dir_name = "miniflux",
-    download_dir = nil,
     is_doc_only = false,
 })
 
----Register dispatcher actions for the plugin
----@return nil
-function Miniflux:onDispatcherRegisterActions()
-    Dispatcher:registerAction("miniflux_read_entries", {
-        category = "none",
-        event = "ReadMinifluxEntries",
-        title = _("Read Miniflux entries"),
-        general = true,
-    })
-end
-
----Initialize the plugin
+---Initialize the plugin by delegating to specialized modules
 ---@return nil
 function Miniflux:init()
-    self:onDispatcherRegisterActions()
+    logger.info("Initializing Miniflux plugin")
+    
+    -- Create specialized managers
+    self.initializer = PluginInitializer:new()
+    self.menu_manager = MenuManager:new()
+    self.event_handler = EventHandler:new()
+    
+    -- Initialize plugin components
+    local init_success = self.initializer:initializePlugin(self)
+    if not init_success then
+        logger.err("Failed to initialize Miniflux plugin")
+        return
+    end
+    
+    -- Set up event handling
+    self.event_handler:initializeEvents(self)
+    
+    -- Register with KOReader menu system
     self.ui.menu:registerToMainMenu(self)
-
-    -- Initialize download directory
-    self:initializeDownloadDirectory()
-
-    -- Initialize modules
-    self.settings = MinifluxSettingsManager
-    self.settings:init()  -- Initialize the settings manager
-    self.api = MinifluxAPI:new()
     
-    -- Initialize UI modules
-    self.settings_dialogs = SettingsDialogs:new()
-    self.settings_dialogs:init(self.settings, self.api)
-    
-    self.browser_launcher = BrowserLauncher:new()
-    self.browser_launcher:init(self.settings, self.api, self.download_dir)
-
-    -- Initialize API with current settings if available
-    if self.settings:isConfigured() then
-        self.api:init(self.settings:getServerAddress(), self.settings:getApiToken())
-    end
+    logger.info("Miniflux plugin initialization complete")
 end
 
----Initialize the download directory for entries
----@return nil
-function Miniflux:initializeDownloadDirectory()
-    -- Set up download directory similar to newsdownloader
-    self.download_dir = ("%s/%s/"):format(DataStorage:getFullDataDir(), self.download_dir_name)
-
-    -- Create the directory if it doesn't exist
-    if not lfs.attributes(self.download_dir, "mode") then
-        logger.dbg("Miniflux: Creating download directory:", self.download_dir)
-        lfs.mkdir(self.download_dir)
-    end
-end
-
----Add Miniflux items to the main menu
+---Add Miniflux items to the main menu (called by KOReader)
 ---@param menu_items table The main menu items table
 ---@return nil
 function Miniflux:addToMainMenu(menu_items)
-    menu_items.miniflux = {
-        text = _("Miniflux"),
-        sub_item_table = {
-            {
-                text = _("Read entries"),
-                callback = function()
-                    self.browser_launcher:showMainScreen()
-                end,
-            },
-            {
-                text = _("Settings"),
-                separator = true,
-                sub_item_table = {
-                    {
-                        text = _("Server address"),
-                        keep_menu_open = true,
-                        callback = function()
-                            self.settings_dialogs:showServerSettings()
-                        end,
-                    },
-                    {
-                        text_func = function()
-                            return T(_("Entries limit - %1"), self.settings:getLimit())
-                        end,
-                        keep_menu_open = true,
-                        callback = function()
-                            self.settings_dialogs:showLimitSettings()
-                        end,
-                    },
-                    {
-                        text_func = function()
-                            local order_names = {
-                                id = _("ID"),
-                                status = _("Status"),
-                                published_at = _("Published date"),
-                                category_title = _("Category title"),
-                                category_id = _("Category ID"),
-                            }
-                            local current_order = self.settings:getOrder()
-                            local order_name = order_names[current_order] or _("Published date")
-                            return T(_("Sort order - %1"), order_name)
-                        end,
-                        keep_menu_open = true,
-                        sub_item_table_func = function()
-                            return self.settings_dialogs:getOrderSubMenu()
-                        end,
-                    },
-                    {
-                        text_func = function()
-                            local direction_name = self.settings:getDirection() == "asc" and _("Ascending")
-                                or _("Descending")
-                            return T(_("Sort direction - %1"), direction_name)
-                        end,
-                        keep_menu_open = true,
-                        sub_item_table_func = function()
-                            return self.settings_dialogs:getDirectionSubMenu()
-                        end,
-                    },
-                    {
-                        text_func = function()
-                            return self.settings:getIncludeImages() and _("Include images - ON")
-                                or _("Include images - OFF")
-                        end,
-                        keep_menu_open = true,
-                        callback = function(touchmenu_instance)
-                            local new_value = self.settings:toggleIncludeImages()
-                            local message = new_value and _("Images will be downloaded with entries")
-                                or _("Images will be skipped when downloading entries")
-                            UIManager:show(InfoMessage:new({
-                                text = message,
-                                timeout = 2,
-                            }))
-                            touchmenu_instance:updateItems()
-                        end,
-                    },
-                    {
-                        text = _("Test connection"),
-                        keep_menu_open = true,
-                        callback = function()
-                            self.settings_dialogs:testConnection()
-                        end,
-                    },
-                },
-            },
-        },
-    }
+    self.menu_manager:addToMainMenu(menu_items, self)
 end
 
----Handle the read entries dispatcher event
+---Handle dispatcher events (method required by KOReader)
 ---@return nil
-function Miniflux:onReadMinifluxEntries()
-    self.browser_launcher:showMainScreen()
+function Miniflux:onDispatcherRegisterActions()
+    -- Delegate to event handler
+    self.event_handler:registerDispatcherActions()
 end
 
 return Miniflux
