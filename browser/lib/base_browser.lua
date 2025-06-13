@@ -396,4 +396,67 @@ function BaseBrowser:validateData(data, data_name)
     return true
 end
 
+---Show entries list (base implementation for all browsers)
+---@param entries table[] List of entries or message items
+---@param title_prefix string Screen title
+---@param is_category? boolean Whether this is a category view
+---@param navigation_data? table Navigation context data
+---@return nil
+function BaseBrowser:showEntriesList(entries, title_prefix, is_category, navigation_data)
+    local menu_items = {}
+    local has_no_entries_message = false
+    
+    for i, entry in ipairs(entries) do
+        -- Check if this is a special non-entry item (like "no entries" message)
+        if entry.action_type == "no_action" then
+            local menu_item = {
+                text = entry.text,
+                mandatory = entry.mandatory or "",
+                action_type = entry.action_type,
+            }
+            table.insert(menu_items, menu_item)
+            has_no_entries_message = true
+        else
+            -- This is a regular entry, process it normally
+            local entry_title = entry.title or _("Untitled Entry")
+            local feed_title = entry.feed and entry.feed.title or _("Unknown Feed")
+            
+            -- Add read/unread status indicator
+            local status_indicator = ""
+            if entry.status == "read" then
+                status_indicator = "○ "  -- Open circle for read entries
+            else
+                status_indicator = "● "  -- Filled circle for unread entries
+            end
+            
+            local display_text = status_indicator .. entry_title
+            if is_category then
+                display_text = status_indicator .. entry_title .. " (" .. feed_title .. ")"
+            end
+            
+            local menu_item = {
+                text = display_text,
+                entry_data = entry,
+                action_type = "read_entry",
+            }
+            
+            table.insert(menu_items, menu_item)
+        end
+    end
+    
+    if #menu_items == 0 then
+        menu_items = {{
+            text = _("No entries found"),
+            action_type = "none",
+        }}
+    end
+    
+    -- Build subtitle with appropriate icon and count
+    local hide_read_entries = self.settings and self.settings:getHideReadEntries()
+    local eye_icon = hide_read_entries and "⊘ " or "◯ "
+    local subtitle = eye_icon .. #entries .. _(" entries")
+    
+    self:updateBrowser(title_prefix, menu_items, subtitle, navigation_data)
+end
+
 return BaseBrowser 

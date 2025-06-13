@@ -235,13 +235,19 @@ function MainBrowser:refreshCurrentView()
     end
 end
 
--- Show entries list (used by multiple screens)
+
+
+---Show entries list with enhanced navigation context (overrides BaseBrowser)
+---@param entries table[] List of entries or message items
+---@param title_prefix string Screen title
+---@param is_category boolean Whether this is a category view
+---@param navigation_data table Navigation context data
+---@return nil
 function MainBrowser:showEntriesList(entries, title_prefix, is_category, navigation_data)
     -- Update current context with proper field names
     if title_prefix:find(_("Unread")) then
         self.current_context = { type = "unread_entries" }
     elseif is_category then
-        -- Get category data from navigation_data.current_data (not category_data)
         local category_data = navigation_data and navigation_data.current_data
         if category_data and (category_data.category_id or category_data.id) and (category_data.category_title or category_data.title) then
             self.current_context = { 
@@ -255,7 +261,6 @@ function MainBrowser:showEntriesList(entries, title_prefix, is_category, navigat
             self.current_context = { type = "category_entries" }
         end
     else
-        -- Get feed data from navigation_data.current_data (not feed_data)
         local feed_data = navigation_data and navigation_data.current_data
         if feed_data and (feed_data.feed_id or feed_data.id) and (feed_data.feed_title or feed_data.title) then
             self.current_context = { 
@@ -277,9 +282,7 @@ function MainBrowser:showEntriesList(entries, title_prefix, is_category, navigat
     local has_no_entries_message = false
     
     for i, entry in ipairs(entries) do
-        -- Check if this is a special non-entry item (like "no entries" message)
         if entry.action_type == "no_action" then
-            -- This is a special message item, use it directly without entry processing
             local menu_item = {
                 text = entry.text,
                 mandatory = entry.mandatory or "",
@@ -288,16 +291,14 @@ function MainBrowser:showEntriesList(entries, title_prefix, is_category, navigat
             table.insert(menu_items, menu_item)
             has_no_entries_message = true
         else
-            -- This is a regular entry, process it normally
             local entry_title = entry.title or _("Untitled Entry")
             local feed_title = entry.feed and entry.feed.title or _("Unknown Feed")
             
-            -- Add read/unread status indicator
             local status_indicator = ""
             if entry.status == "read" then
-                status_indicator = "○ "  -- Open circle for read entries
+                status_indicator = "○ "
             else
-                status_indicator = "● "  -- Filled circle for unread entries
+                status_indicator = "● "
             end
             
             local display_text = status_indicator .. entry_title
@@ -314,10 +315,8 @@ function MainBrowser:showEntriesList(entries, title_prefix, is_category, navigat
             
             local menu_item = {
                 text = display_text,
-                -- Remove mandatory field - we don't want anything on the right
                 entry_data = entry,
                 action_type = "read_entry",
-                -- Add enhanced navigation context for previous/next functionality
                 navigation_context = entry_navigation_context
             }
             
@@ -332,35 +331,26 @@ function MainBrowser:showEntriesList(entries, title_prefix, is_category, navigat
         }}
     end
     
-    -- Build subtitle with appropriate icon and count
+    -- Build subtitle with enhanced logic for different view types
     local subtitle = ""
     local hide_read_entries = self.settings and self.settings:getHideReadEntries()
-    
-    -- For unread entries view, always show the "show only unread" icon (⊘)
-    -- regardless of the global setting, since this view is specifically for unread entries
     local is_unread_entries_view = self.current_context and self.current_context.type == "unread_entries"
     
     if is_unread_entries_view then
-        -- Unread entries view: ALWAYS show ⊘ and "unread entries" text
         if has_no_entries_message then
             subtitle = "⊘ 0 " .. _("unread entries")
         else
             subtitle = "⊘ " .. #entries .. " " .. _("unread entries")
         end
     else
-        -- Other views (feeds, categories): follow normal logic
-        local should_show_unread_icon = hide_read_entries
-        local eye_icon = should_show_unread_icon and "⊘ " or "◯ "
-        
+        local eye_icon = hide_read_entries and "⊘ " or "◯ "
         if has_no_entries_message then
-            -- For empty feeds/categories, show appropriate message based on settings
             if hide_read_entries then
                 subtitle = eye_icon .. "0 " .. _("unread entries")
             else
                 subtitle = eye_icon .. "0 " .. _("entries")
             end
         else
-            -- Regular case with actual entries
             subtitle = eye_icon .. #entries .. _(" entries")
         end
     end
