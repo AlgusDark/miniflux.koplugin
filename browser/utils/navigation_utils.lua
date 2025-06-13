@@ -7,6 +7,22 @@ file management, and integration with the file manager.
 @module miniflux.browser.utils.navigation_utils
 --]]--
 
+---Navigation context for preserving filtering state between entry navigations
+---@alias NavigationContext {
+---    entries: MinifluxEntry[],           -- List of entries in current context
+---    current_index: integer,             -- Index of current entry in the list
+---    context_type: string,               -- Type of context: "unread", "starred", "history", "category", "feed", "search"
+---    category_id?: integer,              -- Category ID if browsing a specific category
+---    feed_id?: integer,                  -- Feed ID if browsing a specific feed
+---    status?: string,                    -- Entry status filter: "unread", "read", "removed"
+---    starred?: boolean,                  -- Whether showing only starred entries
+---    search_query?: string,              -- Search query if this is a search context
+---    order?: string,                     -- Sort order: "published_at", "created_at", "status"
+---    direction?: string,                 -- Sort direction: "asc", "desc"
+---    limit?: integer,                    -- Number of entries per page
+---    offset?: integer,                   -- Offset for pagination
+---}
+
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 local lfs = require("libs/libkoreader-lfs")
@@ -18,6 +34,362 @@ local NavigationUtils = {}
 ---@param entry_info table Current entry information
 ---@return nil
 function NavigationUtils.navigateToPreviousEntry(entry_info)
+    -- First try to use the stored navigation context
+    local prev_entry_id = NavigationUtils.getPreviousEntryFromContext(entry_info)
+    
+    if prev_entry_id then
+        -- Get the current navigation context (don't load from target entry)
+        local current_context = NavigationUtils.getCurrentNavigationContext(entry_info)
+        if current_context then
+            -- Update context to point to the previous entry
+            local updated_context = NavigationUtils.updateNavigationContextForEntry(current_context, prev_entry_id)
+            
+            -- Check if previous entry is already downloaded locally
+            local prev_html_file = NavigationUtils.getLocalEntryPath(entry_info, prev_entry_id)
+            if prev_html_file and lfs.attributes(prev_html_file, "mode") == "file" then
+                -- Update the target entry's metadata with correct context
+                NavigationUtils.updateEntryMetadataContext(entry_info, prev_entry_id, updated_context)
+                
+                local EntryUtils = require("browser/utils/entry_utils")
+                EntryUtils.openEntryFile(prev_html_file, updated_context)
+                return
+            else
+                -- Entry not downloaded locally, fetch it from server with updated context
+                NavigationUtils.fetchAndShowEntryWithContext(prev_entry_id, updated_context)
+                return
+            end
+        else
+            -- Fall back to using stored context from entry_info
+            NavigationUtils.fetchAndShowEntryWithContext(prev_entry_id, entry_info.navigation_context)
+            return
+        end
+    end
+    
+    -- Fallback to old behavior if no context available
+    NavigationUtils.navigateToPreviousEntryLegacy(entry_info)
+end
+
+---Navigate to the next entry
+---@param entry_info table Current entry information
+---@return nil
+function NavigationUtils.navigateToNextEntry(entry_info)
+    -- First try to use the stored navigation context
+    local next_entry_id = NavigationUtils.getNextEntryFromContext(entry_info)
+    
+    if next_entry_id then
+        -- Get the current navigation context (don't load from target entry)
+        local current_context = NavigationUtils.getCurrentNavigationContext(entry_info)
+        if current_context then
+            -- Update context to point to the next entry
+            local updated_context = NavigationUtils.updateNavigationContextForEntry(current_context, next_entry_id)
+            
+            -- Check if next entry is already downloaded locally
+            local next_html_file = NavigationUtils.getLocalEntryPath(entry_info, next_entry_id)
+            if next_html_file and lfs.attributes(next_html_file, "mode") == "file" then
+                -- Update the target entry's metadata with correct context
+                NavigationUtils.updateEntryMetadataContext(entry_info, next_entry_id, updated_context)
+                
+                local EntryUtils = require("browser/utils/entry_utils")
+                EntryUtils.openEntryFile(next_html_file, updated_context)
+                return
+            else
+                -- Entry not downloaded locally, fetch it from server with updated context
+                NavigationUtils.fetchAndShowEntryWithContext(next_entry_id, updated_context)
+                return
+            end
+        else
+            -- Fall back to using stored context from entry_info
+            NavigationUtils.fetchAndShowEntryWithContext(next_entry_id, entry_info.navigation_context)
+            return
+        end
+    end
+    
+    -- Fallback to old behavior if no context available
+    NavigationUtils.navigateToNextEntryLegacy(entry_info)
+end
+
+---Get previous entry ID from navigation context
+---@param entry_info table Current entry information
+---@return integer|nil Previous entry ID
+function NavigationUtils.getPreviousEntryFromContext(entry_info)
+    -- First, try to load metadata from the current entry
+    local metadata = NavigationUtils.loadCurrentEntryMetadata(entry_info)
+    if metadata and metadata.navigation_context then
+        local context = metadata.navigation_context
+        local current_index = context.current_index
+        
+        if current_index and current_index > 1 and context.entries then
+            local prev_entry = context.entries[current_index - 1]
+            if prev_entry and prev_entry.id then
+                return prev_entry.id
+            end
+        end
+    end
+    
+    -- Fallback: try from stored entry info
+    if entry_info.navigation_context then
+        local context = entry_info.navigation_context
+        local current_index = context.current_index
+        
+        if current_index and current_index > 1 and context.entries then
+            local prev_entry = context.entries[current_index - 1]
+            if prev_entry and prev_entry.id then
+                return prev_entry.id
+            end
+        end
+    end
+    
+    return nil
+end
+
+---Get next entry ID from navigation context
+---@param entry_info table Current entry information
+---@return integer|nil Next entry ID
+function NavigationUtils.getNextEntryFromContext(entry_info)
+    -- First, try to load metadata from the current entry
+    local metadata = NavigationUtils.loadCurrentEntryMetadata(entry_info)
+    if metadata and metadata.navigation_context then
+        local context = metadata.navigation_context
+        local current_index = context.current_index
+        
+        if current_index and context.entries and current_index < #context.entries then
+            local next_entry = context.entries[current_index + 1]
+            if next_entry and next_entry.id then
+                return next_entry.id
+            end
+        end
+    end
+    
+    -- Fallback: try from stored entry info
+    if entry_info.navigation_context then
+        local context = entry_info.navigation_context
+        local current_index = context.current_index
+        
+        if current_index and context.entries and current_index < #context.entries then
+            local next_entry = context.entries[current_index + 1]
+            if next_entry and next_entry.id then
+                return next_entry.id
+            end
+        end
+    end
+    
+    return nil
+end
+
+---Load current entry metadata
+---@param entry_info table Current entry information
+---@return table|nil Entry metadata
+function NavigationUtils.loadCurrentEntryMetadata(entry_info)
+    if not entry_info.file_path or not entry_info.entry_id then
+        return nil
+    end
+    
+    local entry_dir = entry_info.file_path:match("(.*)/entry%.html$")
+    if not entry_dir then
+        return nil
+    end
+    
+    local metadata_file = entry_dir .. "/metadata.lua"
+    if lfs.attributes(metadata_file, "mode") ~= "file" then
+        return nil
+    end
+    
+    local success, metadata = pcall(dofile, metadata_file)
+    if success and metadata then
+        return metadata
+    end
+    
+    return nil
+end
+
+---Load navigation context for a specific entry
+---@param entry_info table Current entry information
+---@param target_entry_id integer|string Target entry ID
+---@return NavigationContext|nil Navigation context for target entry
+function NavigationUtils.loadNavigationContext(entry_info, target_entry_id)
+    local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
+    if not miniflux_dir then
+        return nil
+    end
+    
+    local target_entry_dir = miniflux_dir .. "/miniflux/" .. tostring(target_entry_id) .. "/"
+    local metadata_file = target_entry_dir .. "metadata.lua"
+    
+    if lfs.attributes(metadata_file, "mode") ~= "file" then
+        return nil
+    end
+    
+    local success, metadata = pcall(dofile, metadata_file)
+    if success and metadata and metadata.navigation_context then
+        return metadata.navigation_context
+    end
+    
+    return nil
+end
+
+---Get current navigation context from various sources
+---@param entry_info table Current entry information
+---@return NavigationContext|nil Current navigation context
+function NavigationUtils.getCurrentNavigationContext(entry_info)
+    -- First priority: navigation context stored in entry_info (most recent)
+    if entry_info.navigation_context then
+        return entry_info.navigation_context
+    end
+    
+    -- Second priority: try to load from current entry's metadata
+    local metadata = NavigationUtils.loadCurrentEntryMetadata(entry_info)
+    if metadata and metadata.navigation_context then
+        return metadata.navigation_context
+    end
+    
+    return nil
+end
+
+---Update target entry's metadata with correct navigation context
+---@param entry_info table Current entry information
+---@param target_entry_id integer|string Target entry ID
+---@param updated_context NavigationContext Updated navigation context
+---@return boolean True if successfully updated
+function NavigationUtils.updateEntryMetadataContext(entry_info, target_entry_id, updated_context)
+    local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
+    if not miniflux_dir then
+        return false
+    end
+    
+    local target_entry_dir = miniflux_dir .. "/miniflux/" .. tostring(target_entry_id) .. "/"
+    local metadata_file = target_entry_dir .. "metadata.lua"
+    
+    if lfs.attributes(metadata_file, "mode") ~= "file" then
+        return false
+    end
+    
+    -- Load existing metadata
+    local success, metadata = pcall(dofile, metadata_file)
+    if not success or not metadata then
+        return false
+    end
+    
+    -- Update the navigation context
+    metadata.navigation_context = updated_context
+    
+    -- Save the updated metadata
+    local BrowserUtils = require("browser/utils/browser_utils")
+    local metadata_content = "return " .. BrowserUtils.tableToString(metadata)
+    
+    local file = io.open(metadata_file, "w")
+    if file then
+        file:write(metadata_content)
+        file:close()
+        return true
+    end
+    
+    return false
+end
+
+---Get local path for an entry
+---@param entry_info table Current entry information
+---@param entry_id integer|string Entry ID
+---@return string|nil Local file path
+function NavigationUtils.getLocalEntryPath(entry_info, entry_id)
+    local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
+    if not miniflux_dir then
+        return nil
+    end
+    
+    local entry_dir = miniflux_dir .. "/miniflux/" .. tostring(entry_id) .. "/"
+    local html_file = entry_dir .. "entry.html"
+    
+    return html_file
+end
+
+---Fetch and show entry with navigation context
+---@param entry_id integer Entry ID to fetch
+---@param navigation_context NavigationContext Navigation context
+---@return nil
+function NavigationUtils.fetchAndShowEntryWithContext(entry_id, navigation_context)
+    -- Show loading message
+    local loading_info = InfoMessage:new{
+        text = _("Fetching entry from server..."),
+    }
+    UIManager:show(loading_info)
+    UIManager:forceRePaint()
+    
+    -- Get API instance with stored settings
+    local MinifluxAPI = require("api/api_client")
+    local MinifluxSettingsManager = require("settings/settings_manager")
+    local MinifluxSettings = MinifluxSettingsManager
+    MinifluxSettings:init()  -- Create and initialize instance
+    
+    local api = MinifluxAPI:new()
+    api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())
+    
+    -- Fetch the entry by ID
+    local success, result = api:getEntry(entry_id)
+    
+    UIManager:close(loading_info)
+    
+    if success and result then
+        -- Update the navigation context with the new current index
+        local updated_context = NavigationUtils.updateNavigationContextForEntry(navigation_context, entry_id)
+        NavigationUtils.downloadAndShowEntryWithContext(result, updated_context)
+    else
+        UIManager:show(InfoMessage:new{
+            text = _("Failed to fetch entry: ") .. tostring(result),
+            timeout = 5,
+        })
+    end
+end
+
+---Update navigation context for a specific entry
+---@param navigation_context NavigationContext Original context
+---@param entry_id integer Entry ID to find in context
+---@return NavigationContext Updated context
+function NavigationUtils.updateNavigationContextForEntry(navigation_context, entry_id)
+    if not navigation_context or not navigation_context.entries then
+        return navigation_context
+    end
+    
+    -- Find the entry in the context and update current_index
+    for i, entry in ipairs(navigation_context.entries) do
+        if entry.id == entry_id then
+            local updated_context = {}
+            for k, v in pairs(navigation_context) do
+                updated_context[k] = v
+            end
+            updated_context.current_index = i
+            return updated_context
+        end
+    end
+    
+    return navigation_context
+end
+
+---Download and show an entry with context
+---@param entry MinifluxEntry Entry to download and show
+---@param navigation_context NavigationContext Navigation context
+---@return nil
+function NavigationUtils.downloadAndShowEntryWithContext(entry, navigation_context)
+    -- Create download directory
+    local DataStorage = require("datastorage")
+    local download_dir = ("%s/%s/"):format(DataStorage:getFullDataDir(), "miniflux")
+    
+    -- Download and show the entry with context
+    local EntryUtils = require("browser/utils/entry_utils")
+    local MinifluxAPI = require("api/api_client")
+    local MinifluxSettingsManager = require("settings/settings_manager")
+    local MinifluxSettings = MinifluxSettingsManager
+    MinifluxSettings:init()
+    
+    local api = MinifluxAPI:new()
+    api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())
+    
+    EntryUtils.downloadEntry(entry, api, download_dir, navigation_context, nil)
+end
+
+---Legacy navigation to previous entry (fallback)
+---@param entry_info table Current entry information
+---@return nil
+function NavigationUtils.navigateToPreviousEntryLegacy(entry_info)
     -- Get current entry ID
     local current_entry_id = entry_info.entry_id
     if not current_entry_id then
@@ -77,10 +449,10 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
     end
 end
 
----Navigate to the next entry
+---Legacy navigation to next entry (fallback)
 ---@param entry_info table Current entry information
 ---@return nil
-function NavigationUtils.navigateToNextEntry(entry_info)
+function NavigationUtils.navigateToNextEntryLegacy(entry_info)
     -- Get current entry ID
     local current_entry_id = entry_info.entry_id
     if not current_entry_id then

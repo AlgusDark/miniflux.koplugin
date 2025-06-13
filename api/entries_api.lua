@@ -7,6 +7,21 @@ reading status management, bookmarking, and navigation between entries.
 @module koplugin.miniflux.api.entries_api
 --]]--
 
+---@class MinifluxFeed
+---@field id number Feed ID
+---@field title string Feed title
+
+---@class MinifluxEntry
+---@field id number Entry ID
+---@field title string Entry title
+---@field content? string Entry content (HTML)
+---@field summary? string Entry summary/excerpt
+---@field url? string Entry URL
+---@field published_at? string Publication timestamp
+---@field status string Entry status: "read", "unread", "removed"
+---@field starred boolean Whether entry is bookmarked/starred
+---@field feed? MinifluxFeed Feed information
+
 local QueryBuilder = require("api/utils/query_builder")
 local RequestHelpers = require("api/utils/request_helpers")
 local _ = require("gettext")

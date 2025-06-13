@@ -1,6 +1,13 @@
 # KOReader Type Definitions
 
-This directory contains EmmyLua type definitions for KOReader classes used in the Miniflux plugin. Each file defines types for a specific KOReader class or module.
+This directory contains EmmyLua type definitions for **external KOReader classes** used in the Miniflux plugin. These are types we don't control and that don't have built-in type definitions.
+
+## Important: Co-located Types
+
+**Our own types** (like `MinifluxEntry`, `NavigationContext`, etc.) should be **co-located with their implementations**, not in this directory. This follows modern best practices:
+
+- **External types** (KOReader classes) → `typedefs/` directory
+- **Internal types** (our plugin types) → Co-located with implementation
 
 ## Organization
 
@@ -21,6 +28,7 @@ These files provide IDE support and type checking for development. The type defi
 
 ## Files
 
+### KOReader UI Components
 - `LuaSettings.lua` - Settings persistence and management
 - `WidgetContainer.lua` - Base widget container class
 - `Menu.lua` - Menu widget with navigation
@@ -28,10 +36,12 @@ These files provide IDE support and type checking for development. The type defi
 - `InfoMessage.lua` - Information message dialogs
 - `MultiInputDialog.lua` - Multi-field input dialogs
 - `ButtonDialogTitle.lua` - Button dialogs with titles
-- `DataStorage.lua` - Data and settings storage paths
 - `TextViewer.lua` - Text viewing widget
 
-## Adding New Types
+### KOReader System Components
+- `DataStorage.lua` - Data and settings storage paths
+
+## Adding New External Types
 
 To add new KOReader type definitions:
 
@@ -55,4 +65,11 @@ EmmyLua type definitions for MyWidget
 ---@field method fun(self: MyWidget, param: string): boolean Widget method
 ```
 
-This modular approach makes type definitions much easier to maintain and extend as the project grows. 
+## Do NOT Add Here
+
+- **Plugin-specific types** → Co-locate with implementation
+- **API response types** → Define in API modules
+- **Browser types** → Define in browser modules
+- **Settings types** → Define in settings modules
+
+This approach makes type definitions much easier to maintain and follows modern software engineering principles. 

@@ -22,10 +22,7 @@ local T = require("ffi/util").template
 ---@field height? number Image height
 ---@field downloaded boolean Whether image was successfully downloaded
 
----@class NavigationContext
----@field entries MinifluxEntry[] Array of entries in current view
----@field current_index number Index of current entry
----@field total_entries number Total number of entries
+
 
 ---@class EntryMetadata
 ---@field title string Entry title

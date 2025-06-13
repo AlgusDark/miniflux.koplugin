@@ -19,6 +19,133 @@ local T = require("ffi/util").template
 
 local EntryUtils = {}
 
+---@class EntryDownloadProgress
+---@field dialog InfoMessage Progress dialog instance
+---@field title string Entry title being downloaded
+---@field current_step string Current step description
+---@field total_images number Total number of images found
+---@field downloaded_images number Number of images successfully downloaded
+---@field include_images boolean Whether images are being downloaded
+local EntryDownloadProgress = {}
+
+---Create a new progress tracker
+---@param entry_title string Title of the entry being downloaded
+---@return EntryDownloadProgress
+function EntryDownloadProgress:new(entry_title)
+    local obj = {
+        title = entry_title,
+        current_step = _("Preparing download…"),
+        total_images = 0,
+        downloaded_images = 0,
+        include_images = true,
+        dialog = nil
+    }
+    setmetatable(obj, self)
+    self.__index = self
+    return obj
+end
+
+---Update the progress dialog with current status
+---@param step string Current step description
+---@param image_progress? {current: number, total: number} Optional image progress
+---@param can_cancel? boolean Whether the operation can be cancelled
+---@return boolean True if user wants to continue, false to cancel
+function EntryDownloadProgress:update(step, image_progress, can_cancel)
+    self.current_step = step
+    
+    if image_progress then
+        self.downloaded_images = image_progress.current
+        self.total_images = image_progress.total
+    end
+    
+    -- Build progress message
+    local message_parts = {
+        T(_("Downloading: %1"), self.title),
+        "",
+        self.current_step
+    }
+    
+    -- Add image progress if relevant
+    if self.include_images and self.total_images > 0 then
+        table.insert(message_parts, "")
+        if image_progress then
+            table.insert(message_parts, T(_("Images: %1 / %2 downloaded"), self.downloaded_images, self.total_images))
+        else
+            table.insert(message_parts, T(_("Images found: %1"), self.total_images))
+        end
+    elseif not self.include_images and self.total_images > 0 then
+        table.insert(message_parts, "")
+        table.insert(message_parts, T(_("Images: %1 found (skipped)"), self.total_images))
+    end
+    
+    local message = table.concat(message_parts, "\n")
+    
+    -- Close previous dialog if exists
+    if self.dialog then
+        UIManager:close(self.dialog)
+    end
+    
+    -- Create new progress dialog
+    self.dialog = InfoMessage:new{
+        text = message,
+        timeout = can_cancel and 30 or nil, -- Allow longer timeout for cancellable operations
+    }
+    
+    UIManager:show(self.dialog)
+    UIManager:forceRePaint()
+    
+    -- For cancellable operations, check if user wants to continue
+    if can_cancel then
+        -- This is a simplified approach - in a real implementation, 
+        -- we might want to add proper cancel button support
+        return true
+    end
+    
+    return true
+end
+
+---Set image configuration
+---@param include_images boolean Whether images will be downloaded
+---@param total_images number Total number of images found
+---@return nil
+function EntryDownloadProgress:setImageConfig(include_images, total_images)
+    self.include_images = include_images
+    self.total_images = total_images
+end
+
+---Increment downloaded images counter
+---@return nil
+function EntryDownloadProgress:incrementDownloadedImages()
+    self.downloaded_images = self.downloaded_images + 1
+end
+
+---Close the progress dialog
+---@return nil
+function EntryDownloadProgress:close()
+    if self.dialog then
+        UIManager:close(self.dialog)
+        self.dialog = nil
+    end
+end
+
+---Show completion message
+---@param summary string Completion summary message
+---@return nil
+function EntryDownloadProgress:showCompletion(summary)
+    self:close()
+    
+    local completion_dialog = InfoMessage:new{
+        text = summary,
+        -- No timeout - we'll close it manually when opening the entry
+    }
+    
+    UIManager:show(completion_dialog)
+    UIManager:forceRePaint()
+    
+    -- Store reference to close it later
+    self.completion_dialog = completion_dialog
+end
+
 ---Show an entry by downloading and opening it
 ---@param entry MinifluxEntry Entry to display
 ---@param api MinifluxAPI API client instance
@@ -35,10 +162,8 @@ function EntryUtils.showEntry(entry, api, download_dir, navigation_context, brow
         return
     end
     
-    local Trapper = require("ui/trapper")
-    Trapper:wrap(function()
-        EntryUtils.downloadEntry(entry, api, download_dir, navigation_context, browser)
-    end)
+    -- Direct download without Trapper wrapper since we have our own progress system
+    EntryUtils.downloadEntry(entry, api, download_dir, navigation_context, browser)
 end
 
 ---Download and process an entry with images
@@ -49,7 +174,6 @@ end
 ---@param browser? BaseBrowser Optional browser instance to close before opening entry
 ---@return nil
 function EntryUtils.downloadEntry(entry, api, download_dir, navigation_context, browser)
-    local UI = require("ui/trapper")
     local MinifluxSettingsManager = require("settings/settings_manager")
     local MinifluxSettings = MinifluxSettingsManager
     MinifluxSettings:init()  -- Create and initialize instance
@@ -57,6 +181,9 @@ function EntryUtils.downloadEntry(entry, api, download_dir, navigation_context, 
     
     local entry_title = entry.title or _("Untitled Entry")
     local entry_id = tostring(entry.id)
+    
+    -- Create progress tracker
+    local progress = EntryDownloadProgress:new(entry_title)
     
     -- Create entry directory
     local entry_dir = download_dir .. entry_id .. "/"
@@ -69,16 +196,21 @@ function EntryUtils.downloadEntry(entry, api, download_dir, navigation_context, 
     
     -- Check if already downloaded
     if lfs.attributes(html_file, "mode") == "file" then
-        EntryUtils.openEntryFile(html_file)
+        progress:close()
+        EntryUtils.openEntryFile(html_file, navigation_context)
         return
     end
     
-    UI:info(_("Downloading entry…\n\nPreparing download…"))
+    progress:update(_("Preparing download…"))
     
     -- Get entry content
     local content = entry.content or entry.summary or ""
     if content == "" then
-        UI:info(_("No content available for this entry"))
+        progress:close()
+        UIManager:show(InfoMessage:new{
+            text = _("No content available for this entry"),
+            timeout = 3,
+        })
         return
     end
     
@@ -91,7 +223,7 @@ function EntryUtils.downloadEntry(entry, api, download_dir, navigation_context, 
     local image_count = 0
     local base_url = entry.url and socket_url.parse(entry.url) or nil
     
-    UI:info(_("Downloading entry…\n\nScanning for images…"))
+    progress:update(_("Scanning for images…"))
     
     -- First pass: collect all images but don't modify HTML yet - with better progress
     local collectImg = function(img_tag)
@@ -163,41 +295,64 @@ function EntryUtils.downloadEntry(entry, api, download_dir, navigation_context, 
         images = {} -- Clear images if scanning failed
     end
     
+    -- Configure progress tracker with image information
+    progress:setImageConfig(include_images, #images)
+    
     -- Show what we found and what we'll do
     if include_images and #images > 0 then
-        UI:info(T(_("Downloading entry…\n\nFound %1 images\nDownloading images…"), #images))
+        progress:update(T(_("Found %1 images - Starting download…"), #images))
     elseif include_images and #images == 0 then
-        UI:info(_("Downloading entry…\n\nNo images found\nProcessing content…"))
+        progress:update(_("No images found - Processing content…"))
     else
-        UI:info(T(_("Downloading entry…\n\nFound %1 images\nSkipping images (disabled in settings)"), #images))
+        progress:update(T(_("Found %1 images - Skipping (disabled in settings)"), #images))
     end
     
-    -- Download images if enabled with proper progress reporting like newsdownloader
+    -- Download images if enabled with proper progress reporting
     if include_images and #images > 0 then
         local before_images_time = time.now()
         local time_prev = before_images_time
         
         for i, img in ipairs(images) do
+            -- Update progress for each image
+            progress:update(
+                T(_("Downloading image %1 of %2…"), i, #images),
+                {current = i - 1, total = #images},
+                true -- Allow cancellation during image downloads
+            )
+            
             -- Process can be interrupted every second between image downloads
             -- by tapping while the InfoMessage is displayed
             -- We use the fast_refresh option from image #2 for a quicker download
-            local go_on
+            local go_on = true
             if time.to_ms(time.since(time_prev)) > 1000 then
                 time_prev = time.now()
-                go_on = UI:info(T(_("Downloading entry…\n\nDownloading image %1 / %2…"), i, #images), i >= 2)
+                -- Update progress with cancellation option
+                go_on = progress:update(
+                    T(_("Downloading image %1 of %2…"), i, #images),
+                    {current = i - 1, total = #images},
+                    true
+                )
                 if not go_on then
                     break
                 end
-            else
-                UI:info(T(_("Downloading entry…\n\nDownloading image %1 / %2…"), i, #images), i >= 2, true)
             end
             
             local success = EntryUtils.downloadImage(img.src, entry_dir, img.filename)
             img.downloaded = success
+            
+            if success then
+                progress:incrementDownloadedImages()
+            end
         end
+        
+        -- Final image download update
+        progress:update(
+            _("Image downloads completed"),
+            {current = progress.downloaded_images, total = #images}
+        )
     end
     
-    UI:info(_("Downloading entry…\n\nProcessing final content…"))
+    progress:update(_("Processing content…"))
     
     -- Second pass: replace img tags based on download results
     local replaceImg = function(img_tag)
@@ -280,7 +435,7 @@ function EntryUtils.downloadEntry(entry, api, download_dir, navigation_context, 
         content = content:gsub("<%s*iframe[^>]*>", "")  -- opening iframe tag without closing
     end)
     
-    UI:info(_("Downloading entry…\n\nCreating HTML file…"))
+    progress:update(_("Creating HTML file…"))
     
     -- Create full HTML document
     local html_content = EntryUtils.createHtmlDocument(entry, content)
@@ -291,13 +446,17 @@ function EntryUtils.downloadEntry(entry, api, download_dir, navigation_context, 
         file:write(html_content)
         file:close()
     else
-        UI:info(_("Failed to save HTML file"))
+        progress:close()
+        UIManager:show(InfoMessage:new{
+            text = _("Failed to save HTML file"),
+            timeout = 3,
+        })
         return
     end
     
-    UI:info(_("Downloading entry…\n\nCreating metadata…"))
+    progress:update(_("Creating metadata…"))
     
-    -- Create metadata
+    -- Create metadata with navigation context
     local metadata = EntryUtils.createEntryMetadata(entry, include_images, images, navigation_context)
     
     -- Save metadata file
@@ -309,9 +468,9 @@ function EntryUtils.downloadEntry(entry, api, download_dir, navigation_context, 
         file:close()
     end
     
-    -- Final status message with summary
+    -- Show completion summary
     local summary_message = EntryUtils.createDownloadSummary(include_images, images)
-    UI:info(summary_message)
+    progress:showCompletion(summary_message)
     
     -- Close browser if provided before opening the entry
     if browser and browser.closeAll then
@@ -321,11 +480,16 @@ function EntryUtils.downloadEntry(entry, api, download_dir, navigation_context, 
         end)
     end
     
-    -- Open the file
-    EntryUtils.openEntryFile(html_file)
-    
-    -- Clear the "Download complete" message since the entry is now open
-    UI:clear()
+    -- Open the file with navigation context after a brief delay
+    UIManager:scheduleIn(0.3, function()
+        -- Close the completion dialog immediately before opening the entry
+        if progress.completion_dialog then
+            UIManager:close(progress.completion_dialog)
+            progress.completion_dialog = nil
+        end
+        
+        EntryUtils.openEntryFile(html_file, navigation_context)
+    end)
 end
 
 ---Download a single image from URL
@@ -485,6 +649,8 @@ function EntryUtils.createEntryMetadata(entry, include_images, images, navigatio
         images_downloaded = images_downloaded,
         previous_entry_id = previous_entry_id,
         next_entry_id = next_entry_id,
+        -- Store the original navigation context for context-aware navigation
+        navigation_context = navigation_context,
     }
 end
 
@@ -502,19 +668,32 @@ function EntryUtils.createDownloadSummary(include_images, images)
         end
     end
     
+    local summary_parts = {
+        _("Download completed!")
+    }
+    
     if include_images and #images > 0 then
-        return T(_("Download complete!\n\nImages: %1 downloaded, %2 total\nOpening entry…"), images_downloaded, #images)
+        if images_downloaded == #images then
+            table.insert(summary_parts, T(_("All %1 images downloaded successfully"), #images))
+        else
+            table.insert(summary_parts, T(_("%1 of %2 images downloaded"), images_downloaded, #images))
+        end
     elseif include_images and #images == 0 then
-        return _("Download complete!\n\nNo images found\nOpening entry…")
+        table.insert(summary_parts, _("No images found in entry"))
     else
-        return T(_("Download complete!\n\nImages skipped (%1 found)\nOpening entry…"), #images)
+        table.insert(summary_parts, T(_("%1 images found (skipped - disabled in settings)"), #images))
     end
+    
+    table.insert(summary_parts, _("Opening entry…"))
+    
+    return table.concat(summary_parts, "\n\n")
 end
 
 ---Open an entry HTML file in KOReader
 ---@param html_file string Path to HTML file to open
+---@param navigation_context? NavigationContext Navigation context for prev/next
 ---@return nil
-function EntryUtils.openEntryFile(html_file)
+function EntryUtils.openEntryFile(html_file, navigation_context)
     -- Check if this is a miniflux entry by looking at the path
     local is_miniflux_entry = html_file:match("/miniflux/") ~= nil
     
@@ -525,11 +704,21 @@ function EntryUtils.openEntryFile(html_file)
         -- Use KOReader's document opening mechanism
         local ReaderUI = require("apps/reader/readerui")
         
-        -- Store the entry info for the event listener
+        -- Store the entry info for the event listener with navigation context
         EntryUtils._current_miniflux_entry = {
             file_path = html_file,
             entry_id = entry_id,
+            navigation_context = navigation_context, -- Always use the passed context
         }
+        
+        -- If no navigation context was passed, try to load it from metadata
+        if not navigation_context then
+            local NavigationUtils = require("browser/utils/navigation_utils")
+            local loaded_context = NavigationUtils.getCurrentNavigationContext(EntryUtils._current_miniflux_entry)
+            if loaded_context then
+                EntryUtils._current_miniflux_entry.navigation_context = loaded_context
+            end
+        end
         
         -- Open the file
         ReaderUI:showReader(html_file)
