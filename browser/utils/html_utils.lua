@@ -48,13 +48,6 @@ function HtmlUtils.createHtmlDocument(entry, content)
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>%s</title>
     <style>
-        body { 
-            font-family: serif; 
-            line-height: 1.6; 
-            max-width: 800px; 
-            margin: 0 auto; 
-            padding: 20px;
-        }
         img { 
             max-width: 100%%; 
             height: auto; 
@@ -74,7 +67,7 @@ function HtmlUtils.createHtmlDocument(entry, content)
             margin-bottom: 1em;
         }
         .entry-content h1, .entry-content h2, .entry-content h3 {
-            margin-top: 1.5em;
+            margin-top: 0;
             margin-bottom: 0.5em;
         }
         .entry-content blockquote {

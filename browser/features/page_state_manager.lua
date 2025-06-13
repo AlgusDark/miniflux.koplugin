@@ -37,19 +37,11 @@ function PageStateManager:getCurrentPageInfo()
         return nil
     end
     
-    if self.browser.debug then
-        self.browser:debugLog("Getting current page info")
-    end
-    
     -- Get basic page info
     local page_info = {
         page = self.browser.page or 1,
         perpage = self.browser.perpage or 20,
     }
-    
-    if self.browser.debug then
-        self.browser:debugLog("Current page info - page: " .. tostring(page_info.page) .. ", perpage: " .. tostring(page_info.perpage))
-    end
     
     return page_info
 end
@@ -58,14 +50,6 @@ end
 ---@param page_info PageInfo|nil Page information to restore
 ---@return nil
 function PageStateManager:restorePageInfo(page_info)
-    if self.browser.debug then
-        if page_info then
-            self.browser:debugLog("Page restoration requested - page: " .. tostring(page_info.page))
-        else
-            self.browser:debugLog("No page info to restore")
-        end
-    end
-    
     -- Page restoration is handled directly in BaseBrowser:updateBrowser method
     -- This method is kept for compatibility but actual restoration happens there
 end
@@ -93,18 +77,11 @@ function PageStateManager:createNavigationData(paths_updated, current_type, curr
         -- IMPORTANT: Capture the current title BEFORE it changes
         -- This way we save where we came FROM, not where we're going TO
         navigation_data.current_title = self.browser.title
-        
-        if self.browser.debug and current_page_info then
-            self.browser:debugLog("Captured current page state for navigation: page=" .. tostring(current_page_info.page) .. ", title=" .. tostring(self.browser.title))
-        end
     end
     
     -- Add page restoration info if provided
     if page_info then
         navigation_data.restore_page_info = page_info
-        if self.browser.debug then
-            self.browser:debugLog("Page info provided for restoration: page=" .. tostring(page_info.page))
-        end
     end
     
     return navigation_data
