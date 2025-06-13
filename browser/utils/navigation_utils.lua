@@ -383,7 +383,12 @@ function NavigationUtils.downloadAndShowEntryWithContext(entry, navigation_conte
     local api = MinifluxAPI:new()
     api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())
     
-    EntryUtils.downloadEntry(entry, api, download_dir, navigation_context, nil)
+    EntryUtils.downloadEntry({
+        entry = entry,
+        api = api,
+        download_dir = download_dir,
+        navigation_context = navigation_context
+    })
 end
 
 ---Legacy navigation to previous entry (fallback)
@@ -530,7 +535,11 @@ function NavigationUtils.downloadAndShowEntry(entry)
     local api = MinifluxAPI:new()
     api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())
     
-    EntryUtils.downloadEntry(entry, api, download_dir, nil, nil)
+    EntryUtils.downloadEntry({
+        entry = entry,
+        api = api,
+        download_dir = download_dir
+    })
 end
 
 ---Mark an entry as read

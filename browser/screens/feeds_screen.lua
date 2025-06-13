@@ -9,6 +9,7 @@ It manages feed data presentation and user interactions.
 
 local BrowserUtils = require("browser/utils/browser_utils")
 local SortingUtils = require("browser/utils/sorting_utils")
+local ErrorUtils = require("browser/utils/error_utils")
 local _ = require("gettext")
 
 ---@class FeedMenuItem
@@ -57,51 +58,43 @@ function FeedsScreen:show(paths_updated, page_info)
     local feed_counters = self:getCachedCounters()
     
     if not feeds then
-        local loading_info = self.browser:showLoadingMessage(_("Fetching feeds..."))
+        feeds = ErrorUtils.handleApiCall({
+            browser = self.browser,
+            operation_name = "fetch feeds",
+            api_call_func = function()
+                return self.browser.api:getFeeds()
+            end,
+            loading_message = _("Fetching feeds..."),
+            data_name = "feeds"
+        })
         
-        local success, result
-        local ok, err = pcall(function()
-            success, result = self.browser.api:getFeeds()
-        end)
-        
-        self.browser:closeLoadingMessage(loading_info)
-        
-        if not ok then
-            self.browser:showErrorMessage(_("Failed to fetch feeds: ") .. tostring(err))
+        if not feeds then
             return
         end
         
-        if not self.browser:handleApiError(success, result, _("Failed to fetch feeds")) then
-            return
-        end
-        
-        if not self.browser:validateData(result, "feeds") then
-            return
-        end
-        
-        feeds = result
         self:cacheFeeds(feeds)
     end
     
     -- Fetch feed counters if not cached
     if not feed_counters then
-        local loading_info = self.browser:showLoadingMessage(_("Fetching feed counters..."))
+        feed_counters = ErrorUtils.handleApiCall({
+            browser = self.browser,
+            operation_name = "fetch feed counters",
+            api_call_func = function()
+                return self.browser.api:getFeedCounters()
+            end,
+            loading_message = _("Fetching feed counters..."),
+            data_name = "feed counters",
+            skip_validation = true  -- Skip validation since we handle failure gracefully
+        })
         
-        local success, result
-        local ok, err = pcall(function()
-            success, result = self.browser.api:getFeedCounters()
-        end)
-        
-        self.browser:closeLoadingMessage(loading_info)
-        
-        if not ok then
-            -- Continue with empty counters rather than failing completely
+        -- Use empty counters if fetch failed instead of stopping
+        if not feed_counters then
+            -- Feed counters endpoint might not be available on older Miniflux versions
+            -- Continue with empty counters to show basic feed list
             feed_counters = { reads = {}, unreads = {} }
-        elseif success and result then
-            feed_counters = result
-            self:cacheCounters(feed_counters)
         else
-            feed_counters = { reads = {}, unreads = {} }
+            self:cacheCounters(feed_counters)
         end
     end
     
@@ -186,22 +179,20 @@ end
 
 -- Show entries for a specific feed
 function FeedsScreen:showFeedEntries(feed_id, feed_title, paths_updated)
-    local loading_info = self.browser:showLoadingMessage(_("Fetching entries for feed..."))
-    
     local options = BrowserUtils.getApiOptions(self.browser.settings)
-    local success, result
-    local ok, err = pcall(function()
-        success, result = self.browser.api:getFeedEntries(feed_id, options)
-    end)
     
-    self.browser:closeLoadingMessage(loading_info)
+    local result = ErrorUtils.handleApiCall({
+        browser = self.browser,
+        operation_name = "fetch feed entries",
+        api_call_func = function()
+            return self.browser.api:getFeedEntries(feed_id, options)
+        end,
+        loading_message = _("Fetching entries for feed..."),
+        data_name = "feed entries",
+        skip_validation = true  -- Skip validation since we handle empty entries properly
+    })
     
-    if not ok then
-        self.browser:showErrorMessage(_("Failed to fetch feed entries: ") .. tostring(err))
-        return
-    end
-    
-    if not self.browser:handleApiError(success, result, _("Failed to fetch feed entries")) then
+    if not result then
         return
     end
 

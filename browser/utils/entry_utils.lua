@@ -17,6 +17,14 @@ local socketutil = require("socketutil")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
+-- Move frequently used requires to module level for performance
+local MinifluxSettingsManager = require("settings/settings_manager")
+local time = require("ui/time")
+local BrowserUtils = require("browser/utils/browser_utils")
+local ReaderUI = require("apps/reader/readerui")
+local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
+local NavigationUtils = require("browser/utils/navigation_utils")
+
 local EntryUtils = {}
 
 ---@class EntryDownloadProgress
@@ -147,13 +155,13 @@ function EntryDownloadProgress:showCompletion(summary)
 end
 
 ---Show an entry by downloading and opening it
----@param entry MinifluxEntry Entry to display
----@param api MinifluxAPI API client instance
----@param download_dir string Download directory path
----@param navigation_context? NavigationContext Navigation context for prev/next
----@param browser? BaseBrowser Optional browser instance to close before opening entry
----@return nil
-function EntryUtils.showEntry(entry, api, download_dir, navigation_context, browser)
+---@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, navigation_context?: NavigationContext, browser?: BaseBrowser}
+function EntryUtils.showEntry(params)
+    local entry = params.entry
+    local api = params.api
+    local download_dir = params.download_dir
+    local navigation_context = params.navigation_context
+    local browser = params.browser
     if not download_dir then
         UIManager:show(InfoMessage:new{
             text = _("Download directory not configured"),
@@ -163,21 +171,25 @@ function EntryUtils.showEntry(entry, api, download_dir, navigation_context, brow
     end
     
     -- Direct download without Trapper wrapper since we have our own progress system
-    EntryUtils.downloadEntry(entry, api, download_dir, navigation_context, browser)
+    EntryUtils.downloadEntry({
+        entry = entry,
+        api = api,
+        download_dir = download_dir,
+        navigation_context = navigation_context,
+        browser = browser
+    })
 end
 
 ---Download and process an entry with images
----@param entry MinifluxEntry Entry to download
----@param api MinifluxAPI API client instance
----@param download_dir string Download directory path
----@param navigation_context? NavigationContext Navigation context for prev/next
----@param browser? BaseBrowser Optional browser instance to close before opening entry
----@return nil
-function EntryUtils.downloadEntry(entry, api, download_dir, navigation_context, browser)
-    local MinifluxSettingsManager = require("settings/settings_manager")
+---@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, navigation_context?: NavigationContext, browser?: BaseBrowser, progress_callback?: function, include_images?: boolean}
+function EntryUtils.downloadEntry(params)
+    local entry = params.entry
+    local api = params.api
+    local download_dir = params.download_dir
+    local navigation_context = params.navigation_context
+    local browser = params.browser
     local MinifluxSettings = MinifluxSettingsManager
     MinifluxSettings:init()  -- Create and initialize instance
-    local time = require("ui/time")
     
     local entry_title = entry.title or _("Untitled Entry")
     local entry_id = tostring(entry.id)
@@ -457,10 +469,14 @@ function EntryUtils.downloadEntry(entry, api, download_dir, navigation_context, 
     progress:update(_("Creating metadata…"))
     
     -- Create metadata with navigation context
-    local metadata = EntryUtils.createEntryMetadata(entry, include_images, images, navigation_context)
+    local metadata = EntryUtils.createEntryMetadata({
+        entry = entry,
+        include_images = include_images,
+        images = images,
+        navigation_context = navigation_context
+    })
     
     -- Save metadata file
-    local BrowserUtils = require("browser/utils/browser_utils")
     local metadata_content = "return " .. BrowserUtils.tableToString(metadata)
     file = io.open(metadata_file, "w")
     if file then
@@ -596,12 +612,13 @@ function EntryUtils.createHtmlDocument(entry, content)
 end
 
 ---Create entry metadata
----@param entry MinifluxEntry Entry data
----@param include_images boolean Whether images were included
----@param images ImageInfo[] Image information
----@param navigation_context? NavigationContext Navigation context
----@return EntryMetadata Metadata structure
-function EntryUtils.createEntryMetadata(entry, include_images, images, navigation_context)
+---@param params {entry: MinifluxEntry, include_images: boolean, images: ImageInfo[], navigation_context?: NavigationContext}
+---@return EntryMetadata
+function EntryUtils.createEntryMetadata(params)
+    local entry = params.entry
+    local include_images = params.include_images
+    local images = params.images
+    local navigation_context = params.navigation_context
     local images_downloaded = 0
     if include_images then
         for _, img in ipairs(images) do
@@ -702,7 +719,6 @@ function EntryUtils.openEntryFile(html_file, navigation_context)
         local entry_id = html_file:match("/miniflux/(%d+)/")
         
         -- Use KOReader's document opening mechanism
-        local ReaderUI = require("apps/reader/readerui")
         
         -- Store the entry info for the event listener with navigation context
         EntryUtils._current_miniflux_entry = {
@@ -713,7 +729,6 @@ function EntryUtils.openEntryFile(html_file, navigation_context)
         
         -- If no navigation context was passed, try to load it from metadata
         if not navigation_context then
-            local NavigationUtils = require("browser/utils/navigation_utils")
             local loaded_context = NavigationUtils.getCurrentNavigationContext(EntryUtils._current_miniflux_entry)
             if loaded_context then
                 EntryUtils._current_miniflux_entry.navigation_context = loaded_context
@@ -729,7 +744,6 @@ function EntryUtils.openEntryFile(html_file, navigation_context)
         end)
     else
         -- Regular file opening for non-Miniflux entries
-        local ReaderUI = require("apps/reader/readerui")
         ReaderUI:showReader(html_file)
     end
 end
@@ -738,7 +752,6 @@ end
 ---@return nil
 function EntryUtils.addMinifluxEventListeners()
     -- Get the current ReaderUI instance
-    local ReaderUI = require("apps/reader/readerui")
     local reader_instance = ReaderUI.instance
     
     if not reader_instance then
@@ -783,8 +796,6 @@ function EntryUtils.showEndOfEntryDialog()
     if not current_entry then
         return
     end
-    
-    local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
     
     local dialog = ButtonDialogTitle:new{
         title = _("You've reached the end of the entry."),
@@ -842,9 +853,6 @@ function EntryUtils.showEndOfEntryDialog()
     
     UIManager:show(dialog)
 end
-
--- Import navigation utilities for the remaining functions
-local NavigationUtils = require("browser/utils/navigation_utils")
 
 -- Delegate navigation functions to NavigationUtils
 EntryUtils.navigateToPreviousEntry = NavigationUtils.navigateToPreviousEntry
