@@ -30,13 +30,13 @@ local HtmlUtils = require("browser/utils/html_utils")
 local EntryUtils = {}
 
 ---Show an entry by downloading and opening it
----@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, navigation_context?: NavigationContext, browser?: BaseBrowser}
+---@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, browser?: BaseBrowser, context?: table}
 function EntryUtils.showEntry(params)
     local entry = params.entry
     local api = params.api
     local download_dir = params.download_dir
-    local navigation_context = params.navigation_context
     local browser = params.browser
+    local context = params.context
     
     if not download_dir then
         UIManager:show(InfoMessage:new{
@@ -51,19 +51,19 @@ function EntryUtils.showEntry(params)
         entry = entry,
         api = api,
         download_dir = download_dir,
-        navigation_context = navigation_context,
-        browser = browser
+        browser = browser,
+        context = context
     })
 end
 
 ---Download and process an entry with images
----@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, navigation_context?: NavigationContext, browser?: BaseBrowser, progress_callback?: function, include_images?: boolean}
+---@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, browser?: BaseBrowser, context?: table, progress_callback?: function, include_images?: boolean}
 function EntryUtils.downloadEntry(params)
     local entry = params.entry
     local api = params.api
     local download_dir = params.download_dir
-    local navigation_context = params.navigation_context
     local browser = params.browser
+    local context = params.context
     
     local MinifluxSettings = MinifluxSettingsManager
     MinifluxSettings:init()  -- Create and initialize instance
@@ -86,7 +86,7 @@ function EntryUtils.downloadEntry(params)
     -- Check if already downloaded
     if lfs.attributes(html_file, "mode") == "file" then
         progress:close()
-        EntryUtils.openEntryFile(html_file, navigation_context)
+        EntryUtils.openEntryFile(html_file)
         return
     end
     
@@ -196,12 +196,12 @@ function EntryUtils.downloadEntry(params)
     
     progress:update(_("Creating metadata…"))
     
-    -- Create metadata with navigation context
+    -- Create metadata
     local metadata = EntryUtils.createEntryMetadata({
         entry = entry,
         include_images = include_images,
         images = images,
-        navigation_context = navigation_context
+        context = context
     })
     
     -- Save metadata file
@@ -225,80 +225,61 @@ function EntryUtils.downloadEntry(params)
         end)
     end
     
-    -- Open the file with navigation context after a brief delay
+    -- Open the file after a brief delay
     UIManager:scheduleIn(0.3, function()
         -- Close the completion dialog immediately before opening the entry
         progress:closeCompletion()
-        EntryUtils.openEntryFile(html_file, navigation_context)
+        EntryUtils.openEntryFile(html_file)
     end)
 end
 
 ---Create entry metadata
----@param params {entry: MinifluxEntry, include_images: boolean, images: ImageInfo[], navigation_context?: NavigationContext}
+---@param params {entry: MinifluxEntry, include_images: boolean, images: ImageInfo[], context?: table}
 ---@return EntryMetadata
 function EntryUtils.createEntryMetadata(params)
     local entry = params.entry
     local include_images = params.include_images
     local images = params.images
-    local navigation_context = params.navigation_context
+    local context = params.context
     
-    local images_downloaded = 0
-    if include_images then
-        for _, img in ipairs(images) do
-            if img.downloaded then
-                images_downloaded = images_downloaded + 1
-            end
-        end
-    end
-    
-    -- Calculate previous/next entry IDs from navigation context
-    local previous_entry_id = nil
-    local next_entry_id = nil
-    if navigation_context and navigation_context.entries and navigation_context.current_index then
-        local entries = navigation_context.entries
-        local current_index = navigation_context.current_index
-        
-        -- Get previous entry (index - 1)
-        if current_index > 1 then
-            local prev_entry = entries[current_index - 1]
-            if prev_entry and prev_entry.id then
-                previous_entry_id = prev_entry.id
-            end
-        end
-        
-        -- Get next entry (index + 1)
-        if current_index < #entries then
-            local next_entry = entries[current_index + 1]
-            if next_entry and next_entry.id then
-                next_entry_id = next_entry.id
-            end
-        end
-    end
-    
-    return {
-        title = entry.title or _("Untitled Entry"),
+    -- Essential metadata for navigation and status tracking
+    local metadata = {
+        -- Entry identification
         id = entry.id,
+        title = entry.title or _("Untitled Entry"),
         url = entry.url,
-        published_at = entry.published_at,
-        feed_title = entry.feed and entry.feed.title,
+        
+        -- Entry status and properties
         status = entry.status,
         starred = entry.starred,
-        download_time = os.time(),
-        include_images = include_images,
-        images_found = #images,
-        images_downloaded = images_downloaded,
-        previous_entry_id = previous_entry_id,
-        next_entry_id = next_entry_id,
-        -- Store the original navigation context for context-aware navigation
-        navigation_context = navigation_context,
+        published_at = entry.published_at,
+        
+        -- Image processing results (minimal info)
+        images_included = include_images,
+        images_count = include_images and #images or 0
     }
+    
+    -- Context-Aware Navigation (like Miniflux frontend)
+    -- Only store the context the user was actually browsing when they downloaded this entry
+    if context then
+        if context.feed_id then
+            -- User was browsing a specific feed → WithFeedID equivalent
+            metadata.browsing_feed_id = context.feed_id
+        elseif context.category_id then
+            -- User was browsing a specific category → WithCategoryID equivalent  
+            metadata.browsing_category_id = context.category_id
+        end
+        -- If neither feed_id nor category_id in context → user was browsing "Unread" (global)
+        -- In this case, we store no browsing context (navigate globally)
+    end
+    
+    return metadata
 end
 
 ---Open an entry HTML file in KOReader
 ---@param html_file string Path to HTML file to open
----@param navigation_context? NavigationContext Navigation context for prev/next
 ---@return nil
-function EntryUtils.openEntryFile(html_file, navigation_context)
+function EntryUtils.openEntryFile(html_file)
     -- Check if this is a miniflux entry by looking at the path
     local is_miniflux_entry = html_file:match("/miniflux/") ~= nil
     
@@ -306,27 +287,16 @@ function EntryUtils.openEntryFile(html_file, navigation_context)
         -- Extract entry ID from path for later use
         local entry_id = html_file:match("/miniflux/(%d+)/")
         
-        -- Store the entry info for the EndOfBook event handler with navigation context
+        -- Store the entry info for the EndOfBook event handler
         EntryUtils._current_miniflux_entry = {
             file_path = html_file,
-            entry_id = entry_id,
-            navigation_context = navigation_context, -- Always use the passed context
+            entry_id = entry_id
         }
-        
-        -- If no navigation context was passed, try to load it from metadata
-        if not navigation_context then
-            local loaded_context = NavigationUtils.getCurrentNavigationContext(EntryUtils._current_miniflux_entry)
-            if loaded_context then
-                EntryUtils._current_miniflux_entry.navigation_context = loaded_context
-            end
-        end
     end
     
     -- Open the file - EndOfBook event handler will detect miniflux entries automatically
     ReaderUI:showReader(html_file)
 end
-
-
 
 ---Show end of entry dialog with navigation options
 ---@return nil

@@ -33,15 +33,14 @@ This document summarizes the **High Priority** refactoring tasks completed for t
 #### `EntryUtils.showEntry(params)`
 ```lua
 -- Before: 5 parameters
-EntryUtils.showEntry(entry, api, download_dir, navigation_context, browser)
+EntryUtils.showEntry(entry, api, download_dir, browser)
 
 -- After: table-based with type annotations
----@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, navigation_context?: NavigationContext, browser?: BaseBrowser}
+---@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, browser?: BaseBrowser}
 EntryUtils.showEntry({
     entry = entry_data,
     api = self.api,
     download_dir = self.download_dir,
-    navigation_context = nav_context, -- Optional
     browser = self                   -- Optional
 })
 ```
@@ -49,15 +48,14 @@ EntryUtils.showEntry({
 #### `EntryUtils.downloadEntry(params)`
 ```lua
 -- Before: 5 parameters  
-EntryUtils.downloadEntry(entry, api, download_dir, navigation_context, browser)
+EntryUtils.downloadEntry(entry, api, download_dir, browser)
 
 -- After: table-based with type annotations
----@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, navigation_context?: NavigationContext, browser?: BaseBrowser}
+---@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, browser?: BaseBrowser}
 EntryUtils.downloadEntry({
     entry = entry,
     api = api,
     download_dir = download_dir,
-    navigation_context = navigation_context, -- Optional
     browser = browser               -- Optional
 })
 ```
@@ -65,15 +63,14 @@ EntryUtils.downloadEntry({
 #### `EntryUtils.createEntryMetadata(params)`
 ```lua
 -- Before: 4 parameters
-EntryUtils.createEntryMetadata(entry, include_images, images, navigation_context)
+EntryUtils.createEntryMetadata(entry, include_images, images)
 
 -- After: table-based with type annotations
----@param params {entry: MinifluxEntry, include_images: boolean, images: ImageInfo[], navigation_context?: NavigationContext}
+---@param params {entry: MinifluxEntry, include_images: boolean, images: ImageInfo[]}
 EntryUtils.createEntryMetadata({
     entry = entry,
     include_images = include_images,
-    images = images,
-    navigation_context = navigation_context -- Optional
+    images = images
 })
 ```
 
@@ -149,7 +146,7 @@ end
 
 **Type Annotations**: Enhanced function signatures with inline type definitions:
 ```lua
----@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, navigation_context?: NavigationContext}
+---@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, browser?: BaseBrowser}
 ```
 
 **Benefits**:
@@ -206,7 +203,6 @@ EntryUtils.showEntry({
     entry = entry_data,
     api = api_client,
     download_dir = "/path/to/downloads",
-    navigation_context = nav_context,  -- Optional
     browser = browser_instance         -- Optional
 })
 

@@ -89,19 +89,11 @@ function Miniflux:onEndOfBook()
         local entry_id = file_path:match("/miniflux/(%d+)/")
         
         if entry_id then
-            -- Set up entry info for the dialog with navigation context
+            -- Set up entry info for the dialog
             EntryUtils._current_miniflux_entry = {
                 file_path = file_path,
-                entry_id = entry_id,
-                navigation_context = nil, -- Will be loaded from metadata if available
+                entry_id = entry_id
             }
-            
-            -- Load navigation context from metadata if available
-            local NavigationUtils = require("browser/utils/navigation_utils")
-            local loaded_context = NavigationUtils.getCurrentNavigationContext(EntryUtils._current_miniflux_entry)
-            if loaded_context then
-                EntryUtils._current_miniflux_entry.navigation_context = loaded_context
-            end
             
             -- Show the end of entry dialog
             EntryUtils.showEndOfEntryDialog()

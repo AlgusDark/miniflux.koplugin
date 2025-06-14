@@ -88,7 +88,6 @@ EntryUtils.downloadEntry({
     entry = entry_data,
     api = api_client,
     download_dir = directory,
-    navigation_context = context,  -- Optional
     browser = browser_instance      -- Optional
 })
 ```

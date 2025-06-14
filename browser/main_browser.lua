@@ -24,7 +24,6 @@ local _ = require("gettext")
 ---@field entry_data? MinifluxEntry Entry data for entry items
 ---@field feed_data? MinifluxFeed Feed data for feed items
 ---@field category_data? MinifluxCategory Category data for category items
----@field navigation_context? table Navigation context for entries
 
 ---@class MainBrowser : BaseBrowser
 ---@field browser_type string Browser type identifier
@@ -131,14 +130,19 @@ function MainBrowser:onMenuSelect(item)
         
     elseif item.action_type == "read_entry" then
         local entry_data = item.entry_data
-        local nav_context = item.navigation_context
         if entry_data and self.api then
+            -- Pass current context for proper metadata storage
+            local context_data = nil
+            if self.current_context and self.current_context.data then
+                context_data = self.current_context.data
+            end
+            
             EntryUtils.showEntry({
                 entry = entry_data,
                 api = self.api,
                 download_dir = self.download_dir,
-                navigation_context = nav_context,
-                browser = self
+                browser = self,
+                context = context_data  -- Pass category/feed context
             })
         end
     end
@@ -235,9 +239,7 @@ function MainBrowser:refreshCurrentView()
     end
 end
 
-
-
----Show entries list with enhanced navigation context (overrides BaseBrowser)
+---Show entries list with navigation data (overrides BaseBrowser)
 ---@param entries table[] List of entries or message items
 ---@param title_prefix string Screen title
 ---@param is_category boolean Whether this is a category view
@@ -275,9 +277,6 @@ function MainBrowser:showEntriesList(entries, title_prefix, is_category, navigat
         end
     end
     
-    -- Create enhanced navigation context for each entry
-    local enhanced_navigation_context = self:createNavigationContext(entries, title_prefix, is_category, navigation_data)
-    
     local menu_items = {}
     local has_no_entries_message = false
     
@@ -306,18 +305,10 @@ function MainBrowser:showEntriesList(entries, title_prefix, is_category, navigat
                 display_text = status_indicator .. entry_title .. " (" .. feed_title .. ")"
             end
             
-            -- Create entry-specific navigation context
-            local entry_navigation_context = {}
-            for k, v in pairs(enhanced_navigation_context) do
-                entry_navigation_context[k] = v
-            end
-            entry_navigation_context.current_index = i
-            
             local menu_item = {
                 text = display_text,
                 entry_data = entry,
-                action_type = "read_entry",
-                navigation_context = entry_navigation_context
+                action_type = "read_entry"
             }
             
             table.insert(menu_items, menu_item)
@@ -356,64 +347,6 @@ function MainBrowser:showEntriesList(entries, title_prefix, is_category, navigat
     end
     
     self:updateBrowser(title_prefix, menu_items, subtitle, navigation_data)
-end
-
----Create enhanced navigation context for entries
----@param entries MinifluxEntry[] List of entries
----@param title_prefix string Screen title prefix
----@param is_category boolean Whether this is a category view
----@param navigation_data NavigationData Navigation data
----@return NavigationContext Enhanced navigation context
-function MainBrowser:createNavigationContext(entries, title_prefix, is_category, navigation_data)
-    local context = {
-        entries = entries,
-        current_index = 1,  -- Will be overridden for each entry
-    }
-    
-    -- Determine context type and relevant IDs
-    if title_prefix:find(_("Unread")) then
-        context.context_type = "unread"
-        context.status = {"unread"}
-    elseif is_category then
-        context.context_type = "category"
-        local category_data = navigation_data and navigation_data.current_data
-        if category_data then
-            context.category_id = category_data.category_id or category_data.id
-        end
-    else
-        context.context_type = "feed"
-        local feed_data = navigation_data and navigation_data.current_data
-        if feed_data then
-            context.feed_id = feed_data.feed_id or feed_data.id
-        end
-    end
-    
-    -- Add current settings-based filters
-    if self.settings then
-        context.order = self.settings:getOrder()
-        context.direction = self.settings:getDirection() 
-        context.limit = self.settings:getLimit()
-        
-        -- Add status filter based on current settings and context
-        if context.context_type == "unread" then
-            -- Unread view always shows only unread entries
-            context.status = {"unread"}
-        else
-            -- For feed/category views, respect the hide read entries setting
-            local hide_read_entries = self.settings:getHideReadEntries()
-            if hide_read_entries then
-                context.status = {"unread"}
-            else
-                -- Show all entries when hide_read_entries is false
-                context.status = {"unread", "read"}
-            end
-        end
-        
-        -- Add starred filter if applicable (future enhancement)
-        -- context.starred = self.settings:getShowOnlyStarred()
-    end
-    
-    return context
 end
 
 -- Initialize browser with counts

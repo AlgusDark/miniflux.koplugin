@@ -7,22 +7,6 @@ file management, and integration with the file manager.
 @module miniflux.browser.utils.navigation_utils
 --]]--
 
----Navigation context for preserving filtering state between entry navigations
----@alias NavigationContext {
----    entries: MinifluxEntry[],           -- List of entries in current context
----    current_index: integer,             -- Index of current entry in the list
----    context_type: string,               -- Type of context: "unread", "starred", "history", "category", "feed", "search"
----    category_id?: integer,              -- Category ID if browsing a specific category
----    feed_id?: integer,                  -- Feed ID if browsing a specific feed
----    status?: string,                    -- Entry status filter: "unread", "read", "removed"
----    starred?: boolean,                  -- Whether showing only starred entries
----    search_query?: string,              -- Search query if this is a search context
----    order?: string,                     -- Sort order: "published_at", "created_at", "status"
----    direction?: string,                 -- Sort direction: "asc", "desc"
----    limit?: integer,                    -- Number of entries per page
----    offset?: integer,                   -- Offset for pagination
----}
-
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 local lfs = require("libs/libkoreader-lfs")
@@ -30,93 +14,10 @@ local _ = require("gettext")
 
 local NavigationUtils = {}
 
----Get API options for navigation, preserving original context filtering
----@param entry_info table Current entry information
----@param settings SettingsManager Settings manager instance
----@return ApiOptions Options for API calls with preserved context
-function NavigationUtils.getNavigationApiOptions(entry_info, settings)
-    -- First, try to get the navigation context to preserve original filtering
-    local navigation_context = NavigationUtils.getCurrentNavigationContext(entry_info)
-    
-    if navigation_context then
-        -- Build options from navigation context to preserve original filtering
-        local options = {
-            order = navigation_context.order or settings:getOrder(),
-            direction = navigation_context.direction or settings:getDirection(),
-        }
-        
-        -- Preserve the original context filtering
-        if navigation_context.status then
-            options.status = navigation_context.status
-        elseif navigation_context.context_type == "unread" then
-            -- If context type is unread, force unread status
-            options.status = {"unread"}
-        elseif navigation_context.starred then
-            -- If this was a starred context, we'll handle it in the API call
-            options.starred = true
-        else
-            -- Fall back to current settings for status
-            local hide_read_entries = settings:getHideReadEntries()
-            if hide_read_entries then
-                options.status = {"unread"}
-            else
-                options.status = {"unread", "read"}
-            end
-        end
-        
-        -- Preserve category and feed filters if they exist
-        if navigation_context.category_id then
-            options.category_id = navigation_context.category_id
-        end
-        
-        if navigation_context.feed_id then
-            options.feed_id = navigation_context.feed_id
-        end
-        
-        return options
-    else
-        -- No navigation context available, fall back to current settings
-        local BrowserUtils = require("browser/utils/browser_utils")
-        return BrowserUtils.getApiOptions(settings)
-    end
-end
-
 ---Navigate to the previous entry
 ---@param entry_info table Current entry information
 ---@return nil
 function NavigationUtils.navigateToPreviousEntry(entry_info)
-    -- First try to use the stored navigation context
-    local prev_entry_id = NavigationUtils.getPreviousEntryFromContext(entry_info)
-    
-    if prev_entry_id then
-        -- Get the current navigation context (don't load from target entry)
-        local current_context = NavigationUtils.getCurrentNavigationContext(entry_info)
-        if current_context then
-            -- Update context to point to the previous entry
-            local updated_context = NavigationUtils.updateNavigationContextForEntry(current_context, prev_entry_id)
-            
-            -- Check if previous entry is already downloaded locally
-            local prev_html_file = NavigationUtils.getLocalEntryPath(entry_info, prev_entry_id)
-            if prev_html_file and lfs.attributes(prev_html_file, "mode") == "file" then
-                -- Update the target entry's metadata with correct context
-                NavigationUtils.updateEntryMetadataContext(entry_info, prev_entry_id, updated_context)
-                
-                local EntryUtils = require("browser/utils/entry_utils")
-                EntryUtils.openEntryFile(prev_html_file, updated_context)
-                return
-            else
-                -- Entry not downloaded locally, fetch it from server with updated context
-                NavigationUtils.fetchAndShowEntryWithContext(prev_entry_id, updated_context)
-                return
-            end
-        else
-            -- Fall back to using stored context from entry_info
-            NavigationUtils.fetchAndShowEntryWithContext(prev_entry_id, entry_info.navigation_context)
-            return
-        end
-    end
-    
-    -- Fallback: if no context available, use direct API call
     local current_entry_id = entry_info.entry_id
     if not current_entry_id then
         return
@@ -138,8 +39,13 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
     UIManager:show(loading_info)
     UIManager:forceRePaint()
     
-    -- Get filter options - use navigation context if available, otherwise fall back to settings
-    local options = NavigationUtils.getNavigationApiOptions(entry_info, MinifluxSettings)
+    -- Get filter options from current settings
+    local BrowserUtils = require("browser/utils/browser_utils")
+    local base_options = BrowserUtils.getApiOptions(MinifluxSettings)
+    
+    -- Apply context-aware filtering (like Miniflux's EntryQueryBuilder)
+    local metadata = NavigationUtils.loadCurrentEntryMetadata(entry_info)
+    local options = NavigationUtils.buildContextAwareOptions(base_options, metadata)
     options.limit = 1  -- We only want the immediate previous entry
     
     -- Get the correct API method based on sort direction  
@@ -169,58 +75,33 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
         end
         
         -- Entry not downloaded locally, download and show it
-        NavigationUtils.downloadAndShowEntry(prev_entry)
+        NavigationUtils.downloadAndShowEntry(prev_entry, metadata)
     else
-        -- Create more descriptive error message based on context
-        local error_message = _("No previous entry available")
-        local navigation_context = NavigationUtils.getCurrentNavigationContext(entry_info)
-        if navigation_context and navigation_context.context_type == "unread" then
-            error_message = _("No previous unread entry available")
+        -- If no previous entry found with browsing context, try global navigation
+        if metadata and (metadata.browsing_feed_id or metadata.browsing_category_id) then
+            -- Build global options (no feed/category filter for global search)
+            local global_options = NavigationUtils.buildContextAwareOptions(base_options, nil)
+            global_options.limit = 1
+            success, result = api[api_method](api, current_entry_id, global_options)
+            
+            if success and result and result.entries and #result.entries > 0 then
+                local prev_entry = result.entries[1]
+                NavigationUtils.downloadAndShowEntry(prev_entry, metadata)
+                return
+            end
         end
         
         UIManager:show(InfoMessage:new{
-            text = error_message,
+            text = _("No previous entry available"),
             timeout = 3,
         })
-        end
+    end
 end
 
 ---Navigate to the next entry
 ---@param entry_info table Current entry information
 ---@return nil
 function NavigationUtils.navigateToNextEntry(entry_info)
-    -- First try to use the stored navigation context
-    local next_entry_id = NavigationUtils.getNextEntryFromContext(entry_info)
-    
-    if next_entry_id then
-        -- Get the current navigation context (don't load from target entry)
-        local current_context = NavigationUtils.getCurrentNavigationContext(entry_info)
-        if current_context then
-            -- Update context to point to the next entry
-            local updated_context = NavigationUtils.updateNavigationContextForEntry(current_context, next_entry_id)
-            
-            -- Check if next entry is already downloaded locally
-            local next_html_file = NavigationUtils.getLocalEntryPath(entry_info, next_entry_id)
-            if next_html_file and lfs.attributes(next_html_file, "mode") == "file" then
-                -- Update the target entry's metadata with correct context
-                NavigationUtils.updateEntryMetadataContext(entry_info, next_entry_id, updated_context)
-                
-                local EntryUtils = require("browser/utils/entry_utils")
-                EntryUtils.openEntryFile(next_html_file, updated_context)
-                return
-            else
-                -- Entry not downloaded locally, fetch it from server with updated context
-                NavigationUtils.fetchAndShowEntryWithContext(next_entry_id, updated_context)
-                return
-            end
-        else
-            -- Fall back to using stored context from entry_info
-            NavigationUtils.fetchAndShowEntryWithContext(next_entry_id, entry_info.navigation_context)
-            return
-        end
-    end
-    
-    -- Fallback: if no context available, use direct API call
     local current_entry_id = entry_info.entry_id
     if not current_entry_id then
         return
@@ -242,8 +123,13 @@ function NavigationUtils.navigateToNextEntry(entry_info)
     UIManager:show(loading_info)
     UIManager:forceRePaint()
     
-    -- Get filter options - use navigation context if available, otherwise fall back to settings
-    local options = NavigationUtils.getNavigationApiOptions(entry_info, MinifluxSettings)
+    -- Get filter options from current settings
+    local BrowserUtils = require("browser/utils/browser_utils")
+    local base_options = BrowserUtils.getApiOptions(MinifluxSettings)
+    
+    -- Apply context-aware filtering (like Miniflux's EntryQueryBuilder)
+    local metadata = NavigationUtils.loadCurrentEntryMetadata(entry_info)
+    local options = NavigationUtils.buildContextAwareOptions(base_options, metadata)
     options.limit = 1  -- We only want the immediate next entry
     
     -- Get the correct API method based on sort direction
@@ -273,112 +159,27 @@ function NavigationUtils.navigateToNextEntry(entry_info)
         end
         
         -- Entry not downloaded locally, download and show it
-        NavigationUtils.downloadAndShowEntry(next_entry)
+        NavigationUtils.downloadAndShowEntry(next_entry, metadata)
     else
-        -- Create more descriptive error message based on context
-        local error_message = _("No next entry available")
-        local navigation_context = NavigationUtils.getCurrentNavigationContext(entry_info)
-        if navigation_context and navigation_context.context_type == "unread" then
-            error_message = _("No next unread entry available")
+        -- If no next entry found with browsing context, try global navigation
+        if metadata and (metadata.browsing_feed_id or metadata.browsing_category_id) then
+            -- Build global options (no feed/category filter for global search)
+            local global_options = NavigationUtils.buildContextAwareOptions(base_options, nil)
+            global_options.limit = 1
+            success, result = api[api_method](api, current_entry_id, global_options)
+            
+            if success and result and result.entries and #result.entries > 0 then
+                local next_entry = result.entries[1]
+                NavigationUtils.downloadAndShowEntry(next_entry, metadata)
+                return
+            end
         end
         
         UIManager:show(InfoMessage:new{
-            text = error_message,
+            text = _("No next entry available"),
             timeout = 3,
         })
     end
-end
-
----Get previous entry ID from navigation context
----@param entry_info table Current entry information
----@return integer|nil Previous entry ID
-function NavigationUtils.getPreviousEntryFromContext(entry_info)
-    -- First, try to load metadata from the current entry
-    local metadata = NavigationUtils.loadCurrentEntryMetadata(entry_info)
-    if metadata and metadata.navigation_context then
-        local context = metadata.navigation_context
-        local current_index = context.current_index
-        
-        if current_index and context.entries then
-            local prev_entry = NavigationUtils.getPreviousEntryByDirection(context, current_index)
-            if prev_entry and prev_entry.id then
-                return prev_entry.id
-            end
-        end
-    end
-    
-    -- Fallback: try from stored entry info
-    if entry_info.navigation_context then
-        local context = entry_info.navigation_context
-        local current_index = context.current_index
-        
-        if current_index and context.entries then
-            local prev_entry = NavigationUtils.getPreviousEntryByDirection(context, current_index)
-            if prev_entry and prev_entry.id then
-                return prev_entry.id
-            end
-        end
-    end
-    
-    return nil
-end
-
----Get next entry ID from navigation context
----@param entry_info table Current entry information
----@return integer|nil Next entry ID
-function NavigationUtils.getNextEntryFromContext(entry_info)
-    -- First, try to load metadata from the current entry
-    local metadata = NavigationUtils.loadCurrentEntryMetadata(entry_info)
-    if metadata and metadata.navigation_context then
-        local context = metadata.navigation_context
-        local current_index = context.current_index
-        
-        if current_index and context.entries then
-            local next_entry = NavigationUtils.getNextEntryByDirection(context, current_index)
-            if next_entry and next_entry.id then
-                return next_entry.id
-            end
-        end
-    end
-    
-    -- Fallback: try from stored entry info
-    if entry_info.navigation_context then
-        local context = entry_info.navigation_context
-        local current_index = context.current_index
-        
-        if current_index and context.entries then
-            local next_entry = NavigationUtils.getNextEntryByDirection(context, current_index)
-            if next_entry and next_entry.id then
-                return next_entry.id
-            end
-        end
-    end
-    
-    return nil
-end
-
----Get previous entry from context array (always go up visually)
----@param context NavigationContext Navigation context
----@param current_index integer Current entry index
----@return MinifluxEntry|nil Previous entry
-function NavigationUtils.getPreviousEntryByDirection(context, current_index)
-    -- Previous = go up visually in the list (regardless of sort direction)
-    if current_index > 1 then
-        return context.entries[current_index - 1]
-    end
-    return nil
-end
-
----Get next entry from context array (always go down visually)
----@param context NavigationContext Navigation context
----@param current_index integer Current entry index
----@return MinifluxEntry|nil Next entry
-function NavigationUtils.getNextEntryByDirection(context, current_index)
-    -- Next = go down visually in the list (regardless of sort direction)
-    if current_index < #context.entries then
-        return context.entries[current_index + 1]
-    end
-    return nil
 end
 
 ---Get API method for previous entry based on sort direction
@@ -442,202 +243,26 @@ function NavigationUtils.loadCurrentEntryMetadata(entry_info)
     return nil
 end
 
----Load navigation context for a specific entry
----@param entry_info table Current entry information
----@param target_entry_id integer|string Target entry ID
----@return NavigationContext|nil Navigation context for target entry
-function NavigationUtils.loadNavigationContext(entry_info, target_entry_id)
-    local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
-    if not miniflux_dir then
-        return nil
-    end
-    
-    local target_entry_dir = miniflux_dir .. "/miniflux/" .. tostring(target_entry_id) .. "/"
-    local metadata_file = target_entry_dir .. "metadata.lua"
-    
-    if lfs.attributes(metadata_file, "mode") ~= "file" then
-        return nil
-    end
-    
-    local success, metadata = pcall(dofile, metadata_file)
-    if success and metadata and metadata.navigation_context then
-        return metadata.navigation_context
-    end
-    
-    return nil
-end
-
----Get current navigation context from various sources
----@param entry_info table Current entry information
----@return NavigationContext|nil Current navigation context
-function NavigationUtils.getCurrentNavigationContext(entry_info)
-    -- First priority: navigation context stored in entry_info (most recent)
-    if entry_info.navigation_context then
-        return entry_info.navigation_context
-    end
-    
-    -- Second priority: try to load from current entry's metadata
-    local metadata = NavigationUtils.loadCurrentEntryMetadata(entry_info)
-    if metadata and metadata.navigation_context then
-        return metadata.navigation_context
-    end
-    
-    return nil
-end
-
----Update target entry's metadata with correct navigation context
----@param entry_info table Current entry information
----@param target_entry_id integer|string Target entry ID
----@param updated_context NavigationContext Updated navigation context
----@return boolean True if successfully updated
-function NavigationUtils.updateEntryMetadataContext(entry_info, target_entry_id, updated_context)
-    local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
-    if not miniflux_dir then
-        return false
-    end
-    
-    local target_entry_dir = miniflux_dir .. "/miniflux/" .. tostring(target_entry_id) .. "/"
-    local metadata_file = target_entry_dir .. "metadata.lua"
-    
-    if lfs.attributes(metadata_file, "mode") ~= "file" then
-        return false
-    end
-    
-    -- Load existing metadata
-    local success, metadata = pcall(dofile, metadata_file)
-    if not success or not metadata then
-        return false
-    end
-    
-    -- Update the navigation context
-    metadata.navigation_context = updated_context
-    
-    -- Save the updated metadata
-    local BrowserUtils = require("browser/utils/browser_utils")
-    local metadata_content = "return " .. BrowserUtils.tableToString(metadata)
-    
-    local file = io.open(metadata_file, "w")
-    if file then
-        file:write(metadata_content)
-        file:close()
-        return true
-    end
-    
-    return false
-end
-
----Get local path for an entry
----@param entry_info table Current entry information
----@param entry_id integer|string Entry ID
----@return string|nil Local file path
-function NavigationUtils.getLocalEntryPath(entry_info, entry_id)
-    local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
-    if not miniflux_dir then
-        return nil
-    end
-    
-    local entry_dir = miniflux_dir .. "/miniflux/" .. tostring(entry_id) .. "/"
-    local html_file = entry_dir .. "entry.html"
-    
-    return html_file
-end
-
----Fetch and show entry with navigation context
----@param entry_id integer Entry ID to fetch
----@param navigation_context NavigationContext Navigation context
----@return nil
-function NavigationUtils.fetchAndShowEntryWithContext(entry_id, navigation_context)
-    -- Show loading message
-    local loading_info = InfoMessage:new{
-        text = _("Fetching entry from server..."),
-    }
-    UIManager:show(loading_info)
-    UIManager:forceRePaint()
-    
-    -- Get API instance with stored settings
-    local MinifluxAPI = require("api/api_client")
-    local MinifluxSettingsManager = require("settings/settings_manager")
-    local MinifluxSettings = MinifluxSettingsManager
-    MinifluxSettings:init()  -- Create and initialize instance
-    
-    local api = MinifluxAPI:new()
-    api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())
-    
-    -- Fetch the entry by ID
-    local success, result = api:getEntry(entry_id)
-    
-    UIManager:close(loading_info)
-    
-    if success and result then
-        -- Update the navigation context with the new current index
-        local updated_context = NavigationUtils.updateNavigationContextForEntry(navigation_context, entry_id)
-        NavigationUtils.downloadAndShowEntryWithContext(result, updated_context)
-    else
-        UIManager:show(InfoMessage:new{
-            text = _("Failed to fetch entry: ") .. tostring(result),
-            timeout = 5,
-        })
-    end
-end
-
----Update navigation context for a specific entry
----@param navigation_context NavigationContext Original context
----@param entry_id integer Entry ID to find in context
----@return NavigationContext Updated context
-function NavigationUtils.updateNavigationContextForEntry(navigation_context, entry_id)
-    if not navigation_context or not navigation_context.entries then
-        return navigation_context
-    end
-    
-    -- Find the entry in the context and update current_index
-    for i, entry in ipairs(navigation_context.entries) do
-        if entry.id == entry_id then
-            local updated_context = {}
-            for k, v in pairs(navigation_context) do
-                updated_context[k] = v
-            end
-            updated_context.current_index = i
-            return updated_context
-        end
-    end
-    
-    return navigation_context
-end
-
----Download and show an entry with context
----@param entry MinifluxEntry Entry to download and show
----@param navigation_context NavigationContext Navigation context
----@return nil
-function NavigationUtils.downloadAndShowEntryWithContext(entry, navigation_context)
-    -- Create download directory
-    local DataStorage = require("datastorage")
-    local download_dir = ("%s/%s/"):format(DataStorage:getFullDataDir(), "miniflux")
-    
-    -- Download and show the entry with context
-    local EntryUtils = require("browser/utils/entry_utils")
-    local MinifluxAPI = require("api/api_client")
-    local MinifluxSettingsManager = require("settings/settings_manager")
-    local MinifluxSettings = MinifluxSettingsManager
-    MinifluxSettings:init()
-    
-    local api = MinifluxAPI:new()
-    api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())
-    
-    EntryUtils.downloadEntry({
-        entry = entry,
-        api = api,
-        download_dir = download_dir,
-        navigation_context = navigation_context
-    })
-end
-
 ---Download and show an entry
 ---@param entry MinifluxEntry Entry to download and show
+---@param source_metadata? table Optional source entry metadata for context inheritance
 ---@return nil
-function NavigationUtils.downloadAndShowEntry(entry)
+function NavigationUtils.downloadAndShowEntry(entry, source_metadata)
     -- Create download directory
     local DataStorage = require("datastorage")
     local download_dir = ("%s/%s/"):format(DataStorage:getFullDataDir(), "miniflux")
+    
+    -- Build context to pass to new entry (inherit from source)
+    local context = nil
+    if source_metadata then
+        context = {}
+        if source_metadata.browsing_feed_id then
+            context.feed_id = source_metadata.browsing_feed_id
+        elseif source_metadata.browsing_category_id then
+            context.category_id = source_metadata.browsing_category_id
+        end
+        -- If no browsing context in source → context remains nil (global navigation)
+    end
     
     -- Download and show the entry
     local EntryUtils = require("browser/utils/entry_utils")
@@ -652,7 +277,8 @@ function NavigationUtils.downloadAndShowEntry(entry)
     EntryUtils.downloadEntry({
         entry = entry,
         api = api,
-        download_dir = download_dir
+        download_dir = download_dir,
+        context = context  -- Pass inherited browsing context
     })
 end
 
@@ -915,6 +541,33 @@ function NavigationUtils.fetchAndShowEntry(entry_id)
             timeout = 5,
         })
     end
+end
+
+---Build context-aware API options (similar to Miniflux's EntryQueryBuilder)
+---@param base_options ApiOptions Base API options from settings  
+---@param metadata table|nil Entry metadata containing browsing context
+---@return ApiOptions Context-aware options with WithFeedID/WithCategoryID equivalent
+function NavigationUtils.buildContextAwareOptions(base_options, metadata)
+    local options = {}
+    
+    -- Copy base options
+    for k, v in pairs(base_options) do
+        options[k] = v
+    end
+    
+    -- Add context-aware filtering (like Miniflux's WithFeedID/WithCategoryID)
+    if metadata then
+        if metadata.browsing_feed_id then
+            -- WithFeedID equivalent - filter by the feed the user was browsing
+            options.feed_id = metadata.browsing_feed_id
+        elseif metadata.browsing_category_id then
+            -- WithCategoryID equivalent - filter by the category the user was browsing  
+            options.category_id = metadata.browsing_category_id
+        end
+        -- No browsing context = global navigation (unread entries view)
+    end
+    
+    return options
 end
 
 return NavigationUtils 
