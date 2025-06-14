@@ -30,6 +30,57 @@ local _ = require("gettext")
 
 local NavigationUtils = {}
 
+---Get API options for navigation, preserving original context filtering
+---@param entry_info table Current entry information
+---@param settings SettingsManager Settings manager instance
+---@return ApiOptions Options for API calls with preserved context
+function NavigationUtils.getNavigationApiOptions(entry_info, settings)
+    -- First, try to get the navigation context to preserve original filtering
+    local navigation_context = NavigationUtils.getCurrentNavigationContext(entry_info)
+    
+    if navigation_context then
+        -- Build options from navigation context to preserve original filtering
+        local options = {
+            order = navigation_context.order or settings:getOrder(),
+            direction = navigation_context.direction or settings:getDirection(),
+        }
+        
+        -- Preserve the original context filtering
+        if navigation_context.status then
+            options.status = navigation_context.status
+        elseif navigation_context.context_type == "unread" then
+            -- If context type is unread, force unread status
+            options.status = {"unread"}
+        elseif navigation_context.starred then
+            -- If this was a starred context, we'll handle it in the API call
+            options.starred = true
+        else
+            -- Fall back to current settings for status
+            local hide_read_entries = settings:getHideReadEntries()
+            if hide_read_entries then
+                options.status = {"unread"}
+            else
+                options.status = {"unread", "read"}
+            end
+        end
+        
+        -- Preserve category and feed filters if they exist
+        if navigation_context.category_id then
+            options.category_id = navigation_context.category_id
+        end
+        
+        if navigation_context.feed_id then
+            options.feed_id = navigation_context.feed_id
+        end
+        
+        return options
+    else
+        -- No navigation context available, fall back to current settings
+        local BrowserUtils = require("browser/utils/browser_utils")
+        return BrowserUtils.getApiOptions(settings)
+    end
+end
+
 ---Navigate to the previous entry
 ---@param entry_info table Current entry information
 ---@return nil
@@ -65,8 +116,73 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
         end
     end
     
-    -- Fallback to old behavior if no context available
-    NavigationUtils.navigateToPreviousEntryLegacy(entry_info)
+    -- Fallback: if no context available, use direct API call
+    local current_entry_id = entry_info.entry_id
+    if not current_entry_id then
+        return
+    end
+    
+    -- Get API instance with stored settings
+    local MinifluxAPI = require("api/api_client")
+    local MinifluxSettingsManager = require("settings/settings_manager")
+    local MinifluxSettings = MinifluxSettingsManager
+    MinifluxSettings:init()  -- Create and initialize instance
+    
+    local api = MinifluxAPI:new()
+    api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())
+    
+    -- Show loading message
+    local loading_info = InfoMessage:new{
+        text = _("Finding previous entry..."),
+    }
+    UIManager:show(loading_info)
+    UIManager:forceRePaint()
+    
+    -- Get filter options - use navigation context if available, otherwise fall back to settings
+    local options = NavigationUtils.getNavigationApiOptions(entry_info, MinifluxSettings)
+    options.limit = 1  -- We only want the immediate previous entry
+    
+    -- Get the correct API method based on sort direction  
+    local direction = options.direction or MinifluxSettings:getDirection() or "desc"
+    local api_method = NavigationUtils.getPreviousApiMethod(direction)
+    
+    -- Fetch previous entry using direction-aware API method
+    local success, result = api[api_method](api, current_entry_id, options)
+    
+    UIManager:close(loading_info)
+    
+    if success and result and result.entries and #result.entries > 0 then
+        local prev_entry = result.entries[1]
+        local prev_entry_id = tostring(prev_entry.id)
+        
+        -- Check if previous entry is already downloaded locally
+        local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
+        if miniflux_dir then
+            local prev_entry_dir = miniflux_dir .. "/miniflux/" .. prev_entry_id .. "/"
+            local prev_html_file = prev_entry_dir .. "entry.html"
+            
+            if lfs.attributes(prev_html_file, "mode") == "file" then
+                local EntryUtils = require("browser/utils/entry_utils")
+                EntryUtils.openEntryFile(prev_html_file)
+                return
+            end
+        end
+        
+        -- Entry not downloaded locally, download and show it
+        NavigationUtils.downloadAndShowEntry(prev_entry)
+    else
+        -- Create more descriptive error message based on context
+        local error_message = _("No previous entry available")
+        local navigation_context = NavigationUtils.getCurrentNavigationContext(entry_info)
+        if navigation_context and navigation_context.context_type == "unread" then
+            error_message = _("No previous unread entry available")
+        end
+        
+        UIManager:show(InfoMessage:new{
+            text = error_message,
+            timeout = 3,
+        })
+        end
 end
 
 ---Navigate to the next entry
@@ -104,8 +220,73 @@ function NavigationUtils.navigateToNextEntry(entry_info)
         end
     end
     
-    -- Fallback to old behavior if no context available
-    NavigationUtils.navigateToNextEntryLegacy(entry_info)
+    -- Fallback: if no context available, use direct API call
+    local current_entry_id = entry_info.entry_id
+    if not current_entry_id then
+        return
+    end
+    
+    -- Get API instance with stored settings
+    local MinifluxAPI = require("api/api_client")
+    local MinifluxSettingsManager = require("settings/settings_manager")
+    local MinifluxSettings = MinifluxSettingsManager
+    MinifluxSettings:init()  -- Create and initialize instance
+    
+    local api = MinifluxAPI:new()
+    api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())
+    
+    -- Show loading message
+    local loading_info = InfoMessage:new{
+        text = _("Finding next entry..."),
+    }
+    UIManager:show(loading_info)
+    UIManager:forceRePaint()
+    
+    -- Get filter options - use navigation context if available, otherwise fall back to settings
+    local options = NavigationUtils.getNavigationApiOptions(entry_info, MinifluxSettings)
+    options.limit = 1  -- We only want the immediate next entry
+    
+    -- Get the correct API method based on sort direction
+    local direction = options.direction or MinifluxSettings:getDirection() or "desc"
+    local api_method = NavigationUtils.getNextApiMethod(direction)
+    
+    -- Fetch next entry using direction-aware API method
+    local success, result = api[api_method](api, current_entry_id, options)
+    
+    UIManager:close(loading_info)
+    
+    if success and result and result.entries and #result.entries > 0 then
+        local next_entry = result.entries[1]
+        local next_entry_id = tostring(next_entry.id)
+        
+        -- Check if next entry is already downloaded locally
+        local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
+        if miniflux_dir then
+            local next_entry_dir = miniflux_dir .. "/miniflux/" .. next_entry_id .. "/"
+            local next_html_file = next_entry_dir .. "entry.html"
+            
+            if lfs.attributes(next_html_file, "mode") == "file" then
+                local EntryUtils = require("browser/utils/entry_utils")
+                EntryUtils.openEntryFile(next_html_file)
+                return
+            end
+        end
+        
+        -- Entry not downloaded locally, download and show it
+        NavigationUtils.downloadAndShowEntry(next_entry)
+    else
+        -- Create more descriptive error message based on context
+        local error_message = _("No next entry available")
+        local navigation_context = NavigationUtils.getCurrentNavigationContext(entry_info)
+        if navigation_context and navigation_context.context_type == "unread" then
+            error_message = _("No next unread entry available")
+        end
+        
+        UIManager:show(InfoMessage:new{
+            text = error_message,
+            timeout = 3,
+        })
+    end
 end
 
 ---Get previous entry ID from navigation context
@@ -118,8 +299,8 @@ function NavigationUtils.getPreviousEntryFromContext(entry_info)
         local context = metadata.navigation_context
         local current_index = context.current_index
         
-        if current_index and current_index > 1 and context.entries then
-            local prev_entry = context.entries[current_index - 1]
+        if current_index and context.entries then
+            local prev_entry = NavigationUtils.getPreviousEntryByDirection(context, current_index)
             if prev_entry and prev_entry.id then
                 return prev_entry.id
             end
@@ -131,8 +312,8 @@ function NavigationUtils.getPreviousEntryFromContext(entry_info)
         local context = entry_info.navigation_context
         local current_index = context.current_index
         
-        if current_index and current_index > 1 and context.entries then
-            local prev_entry = context.entries[current_index - 1]
+        if current_index and context.entries then
+            local prev_entry = NavigationUtils.getPreviousEntryByDirection(context, current_index)
             if prev_entry and prev_entry.id then
                 return prev_entry.id
             end
@@ -152,8 +333,8 @@ function NavigationUtils.getNextEntryFromContext(entry_info)
         local context = metadata.navigation_context
         local current_index = context.current_index
         
-        if current_index and context.entries and current_index < #context.entries then
-            local next_entry = context.entries[current_index + 1]
+        if current_index and context.entries then
+            local next_entry = NavigationUtils.getNextEntryByDirection(context, current_index)
             if next_entry and next_entry.id then
                 return next_entry.id
             end
@@ -165,8 +346,8 @@ function NavigationUtils.getNextEntryFromContext(entry_info)
         local context = entry_info.navigation_context
         local current_index = context.current_index
         
-        if current_index and context.entries and current_index < #context.entries then
-            local next_entry = context.entries[current_index + 1]
+        if current_index and context.entries then
+            local next_entry = NavigationUtils.getNextEntryByDirection(context, current_index)
             if next_entry and next_entry.id then
                 return next_entry.id
             end
@@ -174,6 +355,65 @@ function NavigationUtils.getNextEntryFromContext(entry_info)
     end
     
     return nil
+end
+
+---Get previous entry from context array (always go up visually)
+---@param context NavigationContext Navigation context
+---@param current_index integer Current entry index
+---@return MinifluxEntry|nil Previous entry
+function NavigationUtils.getPreviousEntryByDirection(context, current_index)
+    -- Previous = go up visually in the list (regardless of sort direction)
+    if current_index > 1 then
+        return context.entries[current_index - 1]
+    end
+    return nil
+end
+
+---Get next entry from context array (always go down visually)
+---@param context NavigationContext Navigation context
+---@param current_index integer Current entry index
+---@return MinifluxEntry|nil Next entry
+function NavigationUtils.getNextEntryByDirection(context, current_index)
+    -- Next = go down visually in the list (regardless of sort direction)
+    if current_index < #context.entries then
+        return context.entries[current_index + 1]
+    end
+    return nil
+end
+
+---Get API method for previous entry based on sort direction
+---
+--- Navigation Logic Explanation:
+--- - "Previous" = go UP visually in the list (towards index 1)
+--- - "Next" = go DOWN visually in the list (towards higher index)
+---
+--- Sort Direction Impact:
+--- - DESC (newest first): previous=newer entry, next=older entry
+--- - ASC (oldest first): previous=older entry, next=newer entry  
+---
+---@param direction string Sort direction ("asc" or "desc")
+---@return string API method name ("getNextEntry" or "getPreviousEntry")
+function NavigationUtils.getPreviousApiMethod(direction)
+    if direction == "desc" then
+        -- DESC: previous = go up = chronologically newer = use getNextEntry (after_entry_id)
+        return "getNextEntry"
+    else
+        -- ASC: previous = go up = chronologically older = use getPreviousEntry (before_entry_id)
+        return "getPreviousEntry"
+    end
+end
+
+---Get API method for next entry based on sort direction
+---@param direction string Sort direction ("asc" or "desc")
+---@return string API method name ("getNextEntry" or "getPreviousEntry")
+function NavigationUtils.getNextApiMethod(direction)
+    if direction == "desc" then
+        -- DESC: next = go down = chronologically older = use getPreviousEntry (before_entry_id)
+        return "getPreviousEntry"
+    else
+        -- ASC: next = go down = chronologically newer = use getNextEntry (after_entry_id)
+        return "getNextEntry"  
+    end
 end
 
 ---Load current entry metadata
@@ -389,132 +629,6 @@ function NavigationUtils.downloadAndShowEntryWithContext(entry, navigation_conte
         download_dir = download_dir,
         navigation_context = navigation_context
     })
-end
-
----Legacy navigation to previous entry (fallback)
----@param entry_info table Current entry information
----@return nil
-function NavigationUtils.navigateToPreviousEntryLegacy(entry_info)
-    -- Get current entry ID
-    local current_entry_id = entry_info.entry_id
-    if not current_entry_id then
-        return
-    end
-    
-    -- Get API instance with stored settings
-    local MinifluxAPI = require("api/api_client")
-    local MinifluxSettingsManager = require("settings/settings_manager")
-    local MinifluxSettings = MinifluxSettingsManager
-    MinifluxSettings:init()  -- Create and initialize instance
-    
-    local api = MinifluxAPI:new()
-    api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())
-    
-    -- Show loading message
-    local loading_info = InfoMessage:new{
-        text = _("Finding previous entry..."),
-    }
-    UIManager:show(loading_info)
-    UIManager:forceRePaint()
-    
-    -- Get filter options based on current settings
-    local BrowserUtils = require("browser/utils/browser_utils")
-    local options = BrowserUtils.getApiOptions(MinifluxSettings)
-    options.limit = 1  -- We only want the immediate previous entry
-    
-    -- Fetch previous entry using before_entry_id
-    local success, result = api:getPreviousEntry(current_entry_id, options)
-    
-    UIManager:close(loading_info)
-    
-    if success and result and result.entries and #result.entries > 0 then
-        local prev_entry = result.entries[1]
-        local prev_entry_id = tostring(prev_entry.id)
-        
-        -- Check if previous entry is already downloaded locally
-        local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
-        if miniflux_dir then
-            local prev_entry_dir = miniflux_dir .. "/miniflux/" .. prev_entry_id .. "/"
-            local prev_html_file = prev_entry_dir .. "entry.html"
-            
-            if lfs.attributes(prev_html_file, "mode") == "file" then
-                local EntryUtils = require("browser/utils/entry_utils")
-                EntryUtils.openEntryFile(prev_html_file)
-                return
-            end
-        end
-        
-        -- Entry not downloaded locally, download and show it
-        NavigationUtils.downloadAndShowEntry(prev_entry)
-    else
-        UIManager:show(InfoMessage:new{
-            text = _("No previous entry available"),
-            timeout = 3,
-        })
-    end
-end
-
----Legacy navigation to next entry (fallback)
----@param entry_info table Current entry information
----@return nil
-function NavigationUtils.navigateToNextEntryLegacy(entry_info)
-    -- Get current entry ID
-    local current_entry_id = entry_info.entry_id
-    if not current_entry_id then
-        return
-    end
-    
-    -- Get API instance with stored settings
-    local MinifluxAPI = require("api/api_client")
-    local MinifluxSettingsManager = require("settings/settings_manager")
-    local MinifluxSettings = MinifluxSettingsManager
-    MinifluxSettings:init()  -- Create and initialize instance
-    
-    local api = MinifluxAPI:new()
-    api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())
-    
-    -- Show loading message
-    local loading_info = InfoMessage:new{
-        text = _("Finding next entry..."),
-    }
-    UIManager:show(loading_info)
-    UIManager:forceRePaint()
-    
-    -- Get filter options based on current settings
-    local BrowserUtils = require("browser/utils/browser_utils")
-    local options = BrowserUtils.getApiOptions(MinifluxSettings)
-    options.limit = 1  -- We only want the immediate next entry
-    
-    -- Fetch next entry using after_entry_id
-    local success, result = api:getNextEntry(current_entry_id, options)
-    
-    UIManager:close(loading_info)
-    
-    if success and result and result.entries and #result.entries > 0 then
-        local next_entry = result.entries[1]
-        local next_entry_id = tostring(next_entry.id)
-        
-        -- Check if next entry is already downloaded locally
-        local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
-        if miniflux_dir then
-            local next_entry_dir = miniflux_dir .. "/miniflux/" .. next_entry_id .. "/"
-            local next_html_file = next_entry_dir .. "entry.html"
-            
-            if lfs.attributes(next_html_file, "mode") == "file" then
-                local EntryUtils = require("browser/utils/entry_utils")
-                EntryUtils.openEntryFile(next_html_file)
-                return
-            end
-        end
-        
-        -- Entry not downloaded locally, download and show it
-        NavigationUtils.downloadAndShowEntry(next_entry)
-    else
-        UIManager:show(InfoMessage:new{
-            text = _("No next entry available"),
-            timeout = 3,
-        })
-    end
 end
 
 ---Download and show an entry

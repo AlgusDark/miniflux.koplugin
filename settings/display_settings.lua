@@ -136,27 +136,7 @@ function DisplaySettings:setEntryFontSize(size)
     )
 end
 
----Get download images setting (legacy support)
----@return boolean Whether to download images
-function DisplaySettings:getDownloadImages()
-    return self:get("download_images", Enums.DEFAULTS.download_images)
-end
 
----Set download images setting (legacy support)
----@param download boolean Whether to download images
----@return boolean True if successfully set
-function DisplaySettings:setDownloadImages(download)
-    local function isValidBoolean(val)
-        return type(val) == "boolean"
-    end
-    
-    return self:setWithValidation(
-        "download_images", 
-        download, 
-        isValidBoolean, 
-        Enums.DEFAULTS.download_images
-    )
-end
 
 ---Get all display settings as a table
 ---@return table<string, any> Map of display settings
@@ -165,8 +145,7 @@ function DisplaySettings:getAllDisplaySettings()
         hide_read_entries = self:getHideReadEntries(),
         include_images = self:getIncludeImages(),
         auto_mark_read = self:getAutoMarkRead(),
-        entry_font_size = self:getEntryFontSize(),
-        download_images = self:getDownloadImages()
+        entry_font_size = self:getEntryFontSize()
     }
 end
 
@@ -192,10 +171,6 @@ function DisplaySettings:setAllDisplaySettings(settings)
         success = success and self:setEntryFontSize(settings.entry_font_size)
     end
     
-    if settings.download_images ~= nil then
-        success = success and self:setDownloadImages(settings.download_images)
-    end
-    
     return success
 end
 
@@ -207,7 +182,6 @@ function DisplaySettings:resetToDefaults()
     success = success and self:setIncludeImages(Enums.DEFAULTS.include_images)
     success = success and self:setAutoMarkRead(Enums.DEFAULTS.auto_mark_read)
     success = success and self:setEntryFontSize(Enums.DEFAULTS.entry_font_size)
-    success = success and self:setDownloadImages(Enums.DEFAULTS.download_images)
     return success
 end
 

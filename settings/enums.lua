@@ -36,7 +36,6 @@ MinifluxEnums.DEFAULTS = {
     direction = "desc",
     hide_read_entries = true,
     auto_mark_read = false,
-    download_images = false,
     include_images = true,
     entry_font_size = 14
 }

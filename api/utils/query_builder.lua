@@ -38,6 +38,21 @@ function QueryBuilder.buildParams(options)
             table.insert(params, "status=" .. status)
         end
     end
+    
+    -- Add category filter if provided
+    if options.category_id then
+        table.insert(params, "category_id=" .. tostring(options.category_id))
+    end
+    
+    -- Add feed filter if provided  
+    if options.feed_id then
+        table.insert(params, "feed_id=" .. tostring(options.feed_id))
+    end
+    
+    -- Add starred filter if provided
+    if options.starred then
+        table.insert(params, "starred=true")
+    end
 
     return params
 end
@@ -93,6 +108,21 @@ function QueryBuilder.buildNavigationQuery(entry_id, direction, options)
 
         if options.direction then
             table.insert(params, "direction=" .. options.direction)
+        end
+        
+        -- Add category filter if provided
+        if options.category_id then
+            table.insert(params, "category_id=" .. tostring(options.category_id))
+        end
+        
+        -- Add feed filter if provided  
+        if options.feed_id then
+            table.insert(params, "feed_id=" .. tostring(options.feed_id))
+        end
+        
+        -- Add starred filter if provided
+        if options.starred then
+            table.insert(params, "starred=true")
         end
     end
     
