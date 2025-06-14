@@ -71,4 +71,42 @@ function Miniflux:onDispatcherRegisterActions()
     self.event_handler:registerDispatcherActions()
 end
 
+---Handle EndOfBook event for miniflux entries
+---@return nil
+function Miniflux:onEndOfBook()
+    -- Check if current document is a miniflux HTML file
+    if not self.ui or not self.ui.document or not self.ui.document.file then
+        return
+    end
+    
+    local file_path = self.ui.document.file
+    
+    -- Check if this is a miniflux HTML entry
+    if file_path:match("/miniflux/") and file_path:match("%.html$") then
+        local EntryUtils = require("browser/utils/entry_utils")
+        
+        -- Extract entry ID from path
+        local entry_id = file_path:match("/miniflux/(%d+)/")
+        
+        if entry_id then
+            -- Set up entry info for the dialog with navigation context
+            EntryUtils._current_miniflux_entry = {
+                file_path = file_path,
+                entry_id = entry_id,
+                navigation_context = nil, -- Will be loaded from metadata if available
+            }
+            
+            -- Load navigation context from metadata if available
+            local NavigationUtils = require("browser/utils/navigation_utils")
+            local loaded_context = NavigationUtils.getCurrentNavigationContext(EntryUtils._current_miniflux_entry)
+            if loaded_context then
+                EntryUtils._current_miniflux_entry.navigation_context = loaded_context
+            end
+            
+            -- Show the end of entry dialog
+            EntryUtils.showEndOfEntryDialog()
+        end
+    end
+end
+
 return Miniflux

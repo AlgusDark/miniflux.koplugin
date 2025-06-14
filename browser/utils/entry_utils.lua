@@ -306,7 +306,7 @@ function EntryUtils.openEntryFile(html_file, navigation_context)
         -- Extract entry ID from path for later use
         local entry_id = html_file:match("/miniflux/(%d+)/")
         
-        -- Store the entry info for the event listener with navigation context
+        -- Store the entry info for the EndOfBook event handler with navigation context
         EntryUtils._current_miniflux_entry = {
             file_path = html_file,
             entry_id = entry_id,
@@ -320,60 +320,13 @@ function EntryUtils.openEntryFile(html_file, navigation_context)
                 EntryUtils._current_miniflux_entry.navigation_context = loaded_context
             end
         end
-        
-        -- Open the file
-        ReaderUI:showReader(html_file)
-        
-        -- Add event listener after a short delay to ensure ReaderUI is ready
-        UIManager:scheduleIn(0.5, function()
-            EntryUtils.addMinifluxEventListeners()
-        end)
-    else
-        -- Regular file opening for non-Miniflux entries
-        ReaderUI:showReader(html_file)
     end
+    
+    -- Open the file - EndOfBook event handler will detect miniflux entries automatically
+    ReaderUI:showReader(html_file)
 end
 
----Add event listeners for Miniflux entry navigation
----@return nil
-function EntryUtils.addMinifluxEventListeners()
-    -- Get the current ReaderUI instance
-    local reader_instance = ReaderUI.instance
-    
-    if not reader_instance then
-        return
-    end
-    
-    -- Add event listener for page turn events
-    if not reader_instance._miniflux_listener_added then
-        reader_instance._miniflux_listener_added = true
-        
-        -- Store original onPageUpdate function if it exists
-        local original_onPageUpdate = reader_instance.onPageUpdate
-        
-        -- Override onPageUpdate to detect end of document
-        reader_instance.onPageUpdate = function(self, new_page_no)
-            -- Call original function first
-            if original_onPageUpdate then
-                original_onPageUpdate(self, new_page_no)
-            end
-            
-            -- Check if we're at the end and user tried to go forward
-            if self.document and self.document.info and new_page_no then
-                local total_pages = self.document.info.number_of_pages or 0
-                
-                -- If we're on the last page and user tries to go forward
-                if new_page_no >= total_pages then
-                    -- Check if this was triggered by a forward navigation attempt
-                    -- We'll show the dialog after a brief delay to ensure UI is stable
-                    UIManager:scheduleIn(0.1, function()
-                        EntryUtils.showEndOfEntryDialog()
-                    end)
-                end
-            end
-        end
-    end
-end
+
 
 ---Show end of entry dialog with navigation options
 ---@return nil
@@ -383,7 +336,27 @@ function EntryUtils.showEndOfEntryDialog()
         return
     end
     
-    local dialog = ButtonDialogTitle:new{
+    -- Load entry metadata to check current status
+    local metadata = NavigationUtils.loadCurrentEntryMetadata(current_entry)
+    local entry_status = metadata and metadata.status or "unread"
+    
+    -- Determine mark button text and action based on current status
+    local mark_button_text, mark_callback
+    if entry_status == "read" then
+        mark_button_text = _("✓ Mark as unread")
+        mark_callback = function()
+            EntryUtils.markEntryAsUnread(current_entry)
+        end
+    else
+        mark_button_text = _("✓ Mark as read")
+        mark_callback = function()
+            EntryUtils.markEntryAsRead(current_entry)
+        end
+    end
+    
+    -- Create dialog with proper variable scope
+    local dialog
+    dialog = ButtonDialogTitle:new{
         title = _("You've reached the end of the entry."),
         title_align = "center",
         buttons = {
@@ -412,10 +385,10 @@ function EntryUtils.showEndOfEntryDialog()
                     end,
                 },
                 {
-                    text = _("✓ Mark as read"),
+                    text = mark_button_text,
                     callback = function()
                         UIManager:close(dialog)
-                        EntryUtils.markEntryAsRead(current_entry)
+                        mark_callback()
                     end,
                 },
             },
@@ -444,6 +417,7 @@ end
 EntryUtils.navigateToPreviousEntry = NavigationUtils.navigateToPreviousEntry
 EntryUtils.navigateToNextEntry = NavigationUtils.navigateToNextEntry
 EntryUtils.markEntryAsRead = NavigationUtils.markEntryAsRead
+EntryUtils.markEntryAsUnread = NavigationUtils.markEntryAsUnread
 EntryUtils.deleteLocalEntry = NavigationUtils.deleteLocalEntry
 EntryUtils.openMinifluxFolder = NavigationUtils.openMinifluxFolder
 EntryUtils.fetchAndShowEntry = NavigationUtils.fetchAndShowEntry

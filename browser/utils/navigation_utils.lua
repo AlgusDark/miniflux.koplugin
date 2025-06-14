@@ -580,6 +580,9 @@ function NavigationUtils.markEntryAsRead(entry_info)
             timeout = 2,
         })
         
+        -- Update local metadata to reflect the new status
+        NavigationUtils.updateLocalEntryStatus(entry_info, "read")
+        
         -- Delete local entry and go to miniflux folder
         UIManager:scheduleIn(0.5, function()
             NavigationUtils.deleteLocalEntry(entry_info)
@@ -590,6 +593,105 @@ function NavigationUtils.markEntryAsRead(entry_info)
             timeout = 5,
         })
     end
+end
+
+---Mark an entry as unread
+---@param entry_info table Current entry information
+---@return nil
+function NavigationUtils.markEntryAsUnread(entry_info)
+    local entry_id = entry_info.entry_id
+    
+    if not entry_id then
+        return
+    end
+    
+    -- Show loading message
+    local loading_info = InfoMessage:new{
+        text = _("Marking entry as unread..."),
+    }
+    UIManager:show(loading_info)
+    UIManager:forceRePaint()
+    
+    -- Get API instance with stored settings
+    local MinifluxAPI = require("api/api_client")
+    local MinifluxSettingsManager = require("settings/settings_manager")
+    local MinifluxSettings = MinifluxSettingsManager
+    MinifluxSettings:init()  -- Create and initialize instance
+    
+    local api = MinifluxAPI:new()
+    api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())
+    
+    -- Mark as unread
+    local success, result = api:markEntryAsUnread(tonumber(entry_id))
+    
+    UIManager:close(loading_info)
+    
+    if success then
+        UIManager:show(InfoMessage:new{
+            text = _("Entry marked as unread"),
+            timeout = 2,
+        })
+        
+        -- Update local metadata to reflect the new status
+        NavigationUtils.updateLocalEntryStatus(entry_info, "unread")
+        
+        -- Show success message but don't delete the entry since it's now unread
+        UIManager:show(InfoMessage:new{
+            text = _("Entry marked as unread. File kept locally."),
+            timeout = 3,
+        })
+    else
+        UIManager:show(InfoMessage:new{
+            text = _("Failed to mark entry as unread: ") .. tostring(result),
+            timeout = 5,
+        })
+    end
+end
+
+---Update local entry metadata status
+---@param entry_info table Current entry information
+---@param new_status string New status to set
+---@return boolean True if successfully updated
+function NavigationUtils.updateLocalEntryStatus(entry_info, new_status)
+    local entry_id = entry_info.entry_id
+    if not entry_id then
+        return false
+    end
+    
+    -- Extract miniflux directory from file path
+    local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
+    if not miniflux_dir then
+        return false
+    end
+    
+    local entry_dir = miniflux_dir .. "/miniflux/" .. entry_id .. "/"
+    local metadata_file = entry_dir .. "metadata.lua"
+    
+    if lfs.attributes(metadata_file, "mode") ~= "file" then
+        return false
+    end
+    
+    -- Load existing metadata
+    local success, metadata = pcall(dofile, metadata_file)
+    if not success or not metadata then
+        return false
+    end
+    
+    -- Update the status
+    metadata.status = new_status
+    
+    -- Save the updated metadata
+    local BrowserUtils = require("browser/utils/browser_utils")
+    local metadata_content = "return " .. BrowserUtils.tableToString(metadata)
+    
+    local file = io.open(metadata_file, "w")
+    if file then
+        file:write(metadata_content)
+        file:close()
+        return true
+    end
+    
+    return false
 end
 
 ---Delete a local entry
