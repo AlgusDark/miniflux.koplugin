@@ -11,11 +11,21 @@ local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 local lfs = require("libs/libkoreader-lfs")
 local _ = require("gettext")
+local MinifluxAPI = require("api/api_client")
+local MinifluxSettingsManager = require("settings/settings_manager")
+local BrowserUtils = require("browser/utils/browser_utils")
+local NavigationContext = require("browser/utils/navigation_context")
+local DataStorage = require("datastorage")
+local ReaderUI = require("apps/reader/readerui")
+local FFIUtil = require("ffi/util")
+local FileManager = require("apps/filemanager/filemanager")
 
 local NavigationUtils = {}
 
 --- Pure-Lua ISO-8601 → Unix timestamp (UTC)
 -- Handles "YYYY-MM-DDTHH:MM:SS±HH:MM"
+---@param s string ISO-8601 formatted date string
+---@return number Unix timestamp in seconds
 local function iso8601_to_unix(s)
     -- 1) Parse all the pieces in one go
     local Y, M, D, h, m, sec, sign, tzh, tzm = s:match(
@@ -69,8 +79,6 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
     end
     
     -- Get API instance with stored settings
-    local MinifluxAPI = require("api/api_client")
-    local MinifluxSettingsManager = require("settings/settings_manager")
     local MinifluxSettings = MinifluxSettingsManager
     MinifluxSettings:init()  -- Create and initialize instance
     
@@ -85,7 +93,6 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
     UIManager:forceRePaint()
     
     -- Get current entry information from global navigation context
-    local NavigationContext = require("browser/utils/navigation_context")
     if not NavigationContext.hasValidContext() then
         UIManager:close(loading_info)
         UIManager:show(InfoMessage:new{
@@ -108,7 +115,7 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
     
     -- Convert published_at to Unix timestamp
     local published_unix
-    local ok, _ = pcall(function()
+    local ok = pcall(function()
         published_unix = iso8601_to_unix(metadata.published_at)
     end)
     
@@ -122,7 +129,6 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
     end
     
     -- Get filter options from current settings and global navigation context
-    local BrowserUtils = require("browser/utils/browser_utils")
     local base_options = BrowserUtils.getApiOptions(MinifluxSettings)
     
     -- Apply context-aware filtering using global navigation context
@@ -197,8 +203,6 @@ function NavigationUtils.navigateToNextEntry(entry_info)
     end
     
     -- Get API instance with stored settings
-    local MinifluxAPI = require("api/api_client")
-    local MinifluxSettingsManager = require("settings/settings_manager")
     local MinifluxSettings = MinifluxSettingsManager
     MinifluxSettings:init()  -- Create and initialize instance
     
@@ -213,7 +217,6 @@ function NavigationUtils.navigateToNextEntry(entry_info)
     UIManager:forceRePaint()
     
     -- Get current entry information from global navigation context
-    local NavigationContext = require("browser/utils/navigation_context")
     if not NavigationContext.hasValidContext() then
         UIManager:close(loading_info)
         UIManager:show(InfoMessage:new{
@@ -236,7 +239,7 @@ function NavigationUtils.navigateToNextEntry(entry_info)
     
     -- Convert published_at to Unix timestamp
     local published_unix
-    local ok, _ = pcall(function()
+    local ok = pcall(function()
         published_unix = iso8601_to_unix(metadata.published_at)
     end)
     
@@ -250,7 +253,6 @@ function NavigationUtils.navigateToNextEntry(entry_info)
     end
     
     -- Get filter options from current settings and global navigation context
-    local BrowserUtils = require("browser/utils/browser_utils")
     local base_options = BrowserUtils.getApiOptions(MinifluxSettings)
     
     -- Apply context-aware filtering using global navigation context
@@ -346,17 +348,13 @@ end
 ---@return nil
 function NavigationUtils.downloadAndShowEntry(entry)
     -- Update global navigation context with the new entry
-    local NavigationContext = require("browser/utils/navigation_context")
     NavigationContext.updateCurrentEntry(entry.id)
     
     -- Create download directory
-    local DataStorage = require("datastorage")
     local download_dir = ("%s/%s/"):format(DataStorage:getFullDataDir(), "miniflux")
     
     -- Download and show the entry (no context needed - it's now global)
     local EntryUtils = require("browser/utils/entry_utils")
-    local MinifluxAPI = require("api/api_client")
-    local MinifluxSettingsManager = require("settings/settings_manager")
     local MinifluxSettings = MinifluxSettingsManager
     MinifluxSettings:init()
     
@@ -390,8 +388,6 @@ function NavigationUtils.markEntryAsRead(entry_info)
     
     -- Get API instance (we'll need to figure out how to access this)
     -- For now, we'll create a new instance with stored settings
-    local MinifluxAPI = require("api/api_client")
-    local MinifluxSettingsManager = require("settings/settings_manager")
     local MinifluxSettings = MinifluxSettingsManager
     MinifluxSettings:init()  -- Create and initialize instance
     
@@ -442,8 +438,6 @@ function NavigationUtils.markEntryAsUnread(entry_info)
     UIManager:forceRePaint()
     
     -- Get API instance with stored settings
-    local MinifluxAPI = require("api/api_client")
-    local MinifluxSettingsManager = require("settings/settings_manager")
     local MinifluxSettings = MinifluxSettingsManager
     MinifluxSettings:init()  -- Create and initialize instance
     
@@ -510,7 +504,6 @@ function NavigationUtils.updateLocalEntryStatus(entry_info, new_status)
     metadata.status = new_status
     
     -- Save the updated metadata
-    local BrowserUtils = require("browser/utils/browser_utils")
     local metadata_content = "return " .. BrowserUtils.tableToString(metadata)
     
     local file = io.open(metadata_file, "w")
@@ -542,14 +535,11 @@ function NavigationUtils.deleteLocalEntry(entry_info)
     local entry_dir = miniflux_dir .. "/miniflux/" .. entry_id .. "/"
     
     -- Close the current document first
-    local ReaderUI = require("apps/reader/readerui")
     if ReaderUI.instance then
         ReaderUI.instance:onClose()
     end
     
     -- Delete the directory
-    local FFIUtil = require("ffi/util")
-    
     local success = pcall(function()
         FFIUtil.purgeDir(entry_dir)
     end)
@@ -583,13 +573,11 @@ function NavigationUtils.openMinifluxFolder(entry_info)
     local full_miniflux_dir = miniflux_dir .. "/miniflux/"
     
     -- Close the current document first
-    local ReaderUI = require("apps/reader/readerui")
     if ReaderUI.instance then
         ReaderUI.instance:onClose()
     end
     
     -- Open file manager to miniflux folder
-    local FileManager = require("apps/filemanager/filemanager")
     if FileManager.instance then
         FileManager.instance:reinit(full_miniflux_dir)
     else
@@ -609,8 +597,6 @@ function NavigationUtils.fetchAndShowEntry(entry_id)
     UIManager:forceRePaint()
     
     -- Get API instance with stored settings
-    local MinifluxAPI = require("api/api_client")
-    local MinifluxSettingsManager = require("settings/settings_manager")
     local MinifluxSettings = MinifluxSettingsManager
     MinifluxSettings:init()  -- Create and initialize instance
     

@@ -24,7 +24,6 @@ local _ = require("gettext")
 ---@field cached_feeds? MinifluxFeed[] Cached feeds data
 ---@field cached_counters? FeedCounters Cached feed counters
 ---@field cached_entry_counts? table<string, number> Cached accurate entry counts per feed
----@field restore_page_info? table Page restoration info
 local FeedsScreen = {}
 
 ---Create a new feeds screen instance
@@ -48,11 +47,6 @@ end
 ---@param page_info? table Page information for restoration
 ---@return nil
 function FeedsScreen:show(paths_updated, page_info)
-    if page_info then
-        -- Store page_info to use during updateBrowser
-        self.restore_page_info = page_info
-    end
-    
     -- Get cached feeds or fetch new ones
     local feeds = self:getCachedFeeds()
     local feed_counters = self:getCachedCounters()

@@ -13,7 +13,6 @@ local PageStateManager = require("browser/features/page_state_manager")
 local MainScreen = require("browser/screens/main_screen")
 local FeedsScreen = require("browser/screens/feeds_screen")
 local CategoriesScreen = require("browser/screens/categories_screen")
-local BrowserUtils = require("browser/utils/browser_utils")
 local EntryUtils = require("browser/utils/entry_utils")
 local _ = require("gettext")
 

@@ -7,6 +7,8 @@ and common browser operations.
 @module miniflux.browser.utils.browser_utils
 --]]--
 
+local _ = require("gettext")
+
 local BrowserUtils = {}
 
 ---Get API options based on current settings
@@ -63,7 +65,6 @@ end
 ---@param hide_read_entries boolean Whether read entries are hidden
 ---@return BrowserMenuItem No entries message item
 function BrowserUtils.createNoEntriesItem(hide_read_entries)
-    local _ = require("gettext")
     return {
         text = hide_read_entries and _("There are no unread entries.") or _("There are no entries."),
         mandatory = "",
@@ -78,8 +79,6 @@ end
 ---@param is_unread_view? boolean Whether this is specifically an unread entries view
 ---@return string Formatted subtitle
 function BrowserUtils.buildSubtitle(hide_read_entries, count, item_type, is_unread_view)
-    local _ = require("gettext")
-    
     -- For unread entries view, always show the "show only unread" icon (⊘)
     if is_unread_view then
         return "⊘ " .. count .. " " .. _("unread entries")
@@ -104,7 +103,6 @@ end
 ---@param include_feed_name? boolean Whether to include feed name
 ---@return string Formatted entry title with status indicator
 function BrowserUtils.formatEntryTitle(entry, include_feed_name)
-    local _ = require("gettext")
     local entry_title = entry.title or _("Untitled Entry")
     
     -- Add read/unread status indicator
