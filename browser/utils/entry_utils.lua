@@ -126,8 +126,7 @@ function EntryUtils.downloadEntry(params)
     
     -- Download images if enabled with proper progress reporting
     if include_images and #images > 0 then
-        local before_images_time = time.now()
-        local time_prev = before_images_time
+        local time_prev = time.now()
         
         for i, img in ipairs(images) do
             -- Update progress for each image

@@ -148,36 +148,11 @@ function FeedsScreen:show(paths_updated, page_info)
     self.browser:updateBrowser(_("Feeds"), menu_items, subtitle, navigation_data)
 end
 
--- Build menu items for feeds
-function FeedsScreen:buildFeedMenuItems(feeds, unread_counts)
-    local menu_items = {}
-    
-    for i, feed in ipairs(feeds) do
-        local feed_title = feed.title or _("Untitled Feed")
-        local feed_id_str = tostring(feed.id)
-        local unread_count = unread_counts[feed_id_str] or 0
-        
-        local menu_item = {
-            text = feed_title,
-            action_type = "feed_entries",
-            feed_data = {
-                id = feed.id,
-                title = feed_title,
-                unread_count = unread_count,
-            }
-        }
-        
-        if unread_count > 0 then
-            menu_item.mandatory = tostring(unread_count)
-        end
-        
-        table.insert(menu_items, menu_item)
-    end
-    
-    return menu_items
-end
-
--- Show entries for a specific feed
+---Show entries for a specific feed
+---@param feed_id number The feed ID
+---@param feed_title string The feed title
+---@param paths_updated? boolean Whether navigation paths were updated
+---@return nil
 function FeedsScreen:showFeedEntries(feed_id, feed_title, paths_updated)
     local options = BrowserUtils.getApiOptions(self.browser.settings)
     
@@ -247,23 +222,32 @@ function FeedsScreen:showFeedEntries(feed_id, feed_title, paths_updated)
     self.browser:showEntriesList(entries, feed_title, false, navigation_data)
 end
 
--- Handle feed screen content restoration from navigation
+---Handle feed screen content restoration from navigation
+---@param paths_updated? boolean Whether navigation paths were updated
+---@param page_info? table Page information for restoration
+---@return nil
 function FeedsScreen:showContent(paths_updated, page_info)
     -- Show feeds but prevent adding to navigation history and include page restoration
     self:show(paths_updated or true, page_info)
 end
 
--- Cache management methods
+---Get cached feeds
+---@return MinifluxFeed[]|nil Cached feeds data or nil if not cached
 function FeedsScreen:getCachedFeeds()
     -- Simple in-memory cache for feeds data
     return self.cached_feeds
 end
 
+---Cache feeds data
+---@param feeds MinifluxFeed[] Feeds data to cache
+---@return nil
 function FeedsScreen:cacheFeeds(feeds)
     -- Simple in-memory cache for feeds data
     self.cached_feeds = feeds
 end
 
+---Invalidate all cached data
+---@return nil
 function FeedsScreen:invalidateCache()
     -- Clear the in-memory cache
     self.cached_feeds = nil
@@ -271,17 +255,24 @@ function FeedsScreen:invalidateCache()
     self.cached_entry_counts = nil
 end
 
+---Get cached feed counters
+---@return FeedCounters|nil Cached feed counters or nil if not cached
 function FeedsScreen:getCachedCounters()
     -- Simple in-memory cache for counters data
     return self.cached_counters
 end
 
+---Cache feed counters data
+---@param counters FeedCounters Feed counters to cache
+---@return nil
 function FeedsScreen:cacheCounters(counters)
     -- Simple in-memory cache for counters data
     self.cached_counters = counters
 end
 
--- Get accurate entry count for a feed (cached)
+---Get accurate entry count for a feed (cached)
+---@param feed_id number The feed ID
+---@return number|nil Cached entry count or nil if not cached
 function FeedsScreen:getAccurateEntryCount(feed_id)
     -- Try to get from cache first
     local cache_key = "feed_" .. tostring(feed_id) .. "_count"
@@ -293,7 +284,10 @@ function FeedsScreen:getAccurateEntryCount(feed_id)
     return nil
 end
 
--- Cache the accurate entry count when we fetch entries
+---Cache the accurate entry count when we fetch entries
+---@param feed_id number The feed ID
+---@param total_count number The total entry count
+---@return nil
 function FeedsScreen:cacheAccurateEntryCount(feed_id, total_count)
     if not self.cached_entry_counts then
         self.cached_entry_counts = {}

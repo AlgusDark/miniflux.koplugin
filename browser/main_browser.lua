@@ -171,6 +171,7 @@ function MainBrowser:updateBrowser(title, items, subtitle, nav_data)
 end
 
 -- Override refreshCurrentView to refresh the current screen
+---@return nil
 function MainBrowser:refreshCurrentView()
     local context = self.current_context
     if not context or not context.type then
@@ -280,7 +281,7 @@ function MainBrowser:showEntriesList(entries, title_prefix, is_category, navigat
     local menu_items = {}
     local has_no_entries_message = false
     
-    for i, entry in ipairs(entries) do
+    for _, entry in ipairs(entries) do
         if entry.action_type == "no_action" then
             local menu_item = {
                 text = entry.text,
@@ -349,7 +350,11 @@ function MainBrowser:showEntriesList(entries, title_prefix, is_category, navigat
     self:updateBrowser(title_prefix, menu_items, subtitle, navigation_data)
 end
 
--- Initialize browser with counts
+---Initialize browser with counts
+---@param unread_count number Number of unread entries
+---@param feeds_count number Total number of feeds
+---@param categories_count number Total number of categories
+---@return nil
 function MainBrowser:initWithCounts(unread_count, feeds_count, categories_count)
     self.unread_count = unread_count or 0
     self.feeds_count = feeds_count or 0 
@@ -361,7 +366,8 @@ function MainBrowser:initWithCounts(unread_count, feeds_count, categories_count)
     end
 end
 
--- Content restoration methods (called by navigation manager)
+---Show main content (called by navigation manager)
+---@return nil
 function MainBrowser:showMainContent()
     -- Update current context
     self.current_context = { type = "main" }
@@ -369,6 +375,10 @@ function MainBrowser:showMainContent()
     self.main_screen:show()
 end
 
+---Show feeds content (called by navigation manager)
+---@param paths_updated? boolean Whether navigation paths were updated
+---@param page_info? table Page information for restoration
+---@return nil
 function MainBrowser:showFeedsContent(paths_updated, page_info)
     -- Update current context
     self.current_context = { type = "feeds" }
@@ -376,6 +386,10 @@ function MainBrowser:showFeedsContent(paths_updated, page_info)
     self.feeds_screen:showContent(paths_updated, page_info)
 end
 
+---Show categories content (called by navigation manager)
+---@param paths_updated? boolean Whether navigation paths were updated
+---@param page_info? table Page information for restoration
+---@return nil
 function MainBrowser:showCategoriesContent(paths_updated, page_info)
     -- Update current context  
     self.current_context = { type = "categories" }
@@ -383,7 +397,11 @@ function MainBrowser:showCategoriesContent(paths_updated, page_info)
     self.categories_screen:showContent(paths_updated, page_info)
 end
 
--- Methods called by BaseBrowser:goBack() for direct navigation
+---Show feed entries (called by BaseBrowser for direct navigation)
+---@param feed_id number The feed ID
+---@param feed_title string The feed title
+---@param paths_updated? boolean Whether navigation paths were updated
+---@return nil
 function MainBrowser:showFeedEntries(feed_id, feed_title, paths_updated)
     -- Update current context
     self.current_context = { type = "feed_entries", data = { feed_id = feed_id, feed_title = feed_title } }
@@ -391,6 +409,11 @@ function MainBrowser:showFeedEntries(feed_id, feed_title, paths_updated)
     self.feeds_screen:showFeedEntries(feed_id, feed_title, paths_updated)
 end
 
+---Show category entries (called by BaseBrowser for direct navigation)
+---@param category_id number The category ID
+---@param category_title string The category title
+---@param paths_updated? boolean Whether navigation paths were updated
+---@return nil
 function MainBrowser:showCategoryEntries(category_id, category_title, paths_updated)
     -- Update current context
     self.current_context = { type = "category_entries", data = { category_id = category_id, category_title = category_title } }
@@ -404,7 +427,8 @@ function MainBrowser:onSettingsChanged(setting_name, new_value)
     BaseBrowser.onSettingsChanged(self, setting_name, new_value)
 end
 
--- Override invalidateEntryCaches to actually invalidate relevant caches
+---Override invalidateEntryCaches to actually invalidate relevant caches
+---@return nil
 function MainBrowser:invalidateEntryCaches()
     -- Invalidate feeds cache (contains entry counts per feed)
     if self.feeds_screen and self.feeds_screen.invalidateCache then

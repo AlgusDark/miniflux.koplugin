@@ -14,6 +14,51 @@ local _ = require("gettext")
 
 local NavigationUtils = {}
 
+--- Pure-Lua ISO-8601 → Unix timestamp (UTC)
+-- Handles "YYYY-MM-DDTHH:MM:SS±HH:MM"
+local function iso8601_to_unix(s)
+    -- 1) Parse all the pieces in one go
+    local Y, M, D, h, m, sec, sign, tzh, tzm = s:match(
+      "(%d+)%-(%d+)%-(%d+)T"..
+      "(%d+):(%d+):(%d+)"..
+      "([%+%-])(%d%d):(%d%d)$"
+    )
+    if not Y then
+      error("Bad ISO-8601 string: "..tostring(s))
+    end
+    Y, M, D = tonumber(Y), tonumber(M), tonumber(D)
+    h, m, sec = tonumber(h), tonumber(m), tonumber(sec)
+    tzh, tzm = tonumber(tzh), tonumber(tzm)
+  
+    -- 2) Convert date to days since Unix epoch via
+    --    the "civil to days" algorithm (Howard Hinnant)
+    local y = Y
+    local mo = M
+    if mo <= 2 then
+      y = y - 1
+      mo = mo + 12
+    end
+    local era = math.floor(y / 400)
+    local yoe = y - era * 400                            -- [0, 399]
+    local doy = math.floor((153 * (mo - 3) + 2) / 5) + D - 1  -- [0, 365]
+    local doe = yoe * 365 + math.floor(yoe / 4)
+              - math.floor(yoe / 100) + doy               -- [0, 146096]
+    local days = era * 146097 + doe - 719468             -- days since 1970-01-01
+  
+    -- 3) Build a UTC-based seconds count
+    local utc_secs = days * 86400 + h * 3600 + m * 60 + sec
+  
+    -- 4) Subtract the timezone offset to get back to UTC
+    local offs = tzh * 3600 + tzm * 60
+    if sign == "+" then
+      utc_secs = utc_secs - offs
+    else
+      utc_secs = utc_secs + offs
+    end
+  
+    return utc_secs
+  end
+
 ---Navigate to the previous entry
 ---@param entry_info table Current entry information
 ---@return nil
@@ -39,21 +84,47 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
     UIManager:show(loading_info)
     UIManager:forceRePaint()
     
+    -- Load current entry metadata to get published_at timestamp
+    local metadata = NavigationUtils.loadCurrentEntryMetadata(entry_info)
+    if not metadata or not metadata.published_at then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: missing timestamp information"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    -- Convert published_at to Unix timestamp
+    local published_unix
+    local ok, _ = pcall(function()
+        published_unix = iso8601_to_unix(metadata.published_at)
+    end)
+    
+    if not ok or not published_unix then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: invalid timestamp format"),
+            timeout = 3,
+        })
+        return
+    end
+    
     -- Get filter options from current settings
     local BrowserUtils = require("browser/utils/browser_utils")
     local base_options = BrowserUtils.getApiOptions(MinifluxSettings)
     
-    -- Apply context-aware filtering (like Miniflux's EntryQueryBuilder)
-    local metadata = NavigationUtils.loadCurrentEntryMetadata(entry_info)
+    -- Apply context-aware filtering
     local options = NavigationUtils.buildContextAwareOptions(base_options, metadata)
-    options.limit = 1  -- We only want the immediate previous entry
     
-    -- Get the correct API method based on sort direction  
-    local direction = options.direction or MinifluxSettings:getDirection() or "desc"
-    local api_method = NavigationUtils.getPreviousApiMethod(direction)
+    -- For Previous: direction=asc&published_after=${unix_timestamp}
+    options.direction = "asc"
+    options.published_after = published_unix
+    options.limit = 1
+    options.order = MinifluxSettings:getOrder()
     
-    -- Fetch previous entry using direction-aware API method
-    local success, result = api[api_method](api, current_entry_id, options)
+    -- Fetch previous entry using regular getEntries API
+    local success, result = api:getEntries(options)
     
     UIManager:close(loading_info)
     
@@ -81,8 +152,14 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
         if metadata and (metadata.browsing_feed_id or metadata.browsing_category_id) then
             -- Build global options (no feed/category filter for global search)
             local global_options = NavigationUtils.buildContextAwareOptions(base_options, nil)
+            global_options.direction = "asc"
+            global_options.published_after = published_unix
             global_options.limit = 1
-            success, result = api[api_method](api, current_entry_id, global_options)
+            global_options.order = MinifluxSettings:getOrder()
+            
+            -- Global fallback for previous entry
+            
+            success, result = api:getEntries(global_options)
             
             if success and result and result.entries and #result.entries > 0 then
                 local prev_entry = result.entries[1]
@@ -123,21 +200,47 @@ function NavigationUtils.navigateToNextEntry(entry_info)
     UIManager:show(loading_info)
     UIManager:forceRePaint()
     
+    -- Load current entry metadata to get published_at timestamp
+    local metadata = NavigationUtils.loadCurrentEntryMetadata(entry_info)
+    if not metadata or not metadata.published_at then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: missing timestamp information"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    -- Convert published_at to Unix timestamp
+    local published_unix
+    local ok, _ = pcall(function()
+        published_unix = iso8601_to_unix(metadata.published_at)
+    end)
+    
+    if not ok or not published_unix then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: invalid timestamp format"),
+            timeout = 3,
+        })
+        return
+    end
+    
     -- Get filter options from current settings
     local BrowserUtils = require("browser/utils/browser_utils")
     local base_options = BrowserUtils.getApiOptions(MinifluxSettings)
     
-    -- Apply context-aware filtering (like Miniflux's EntryQueryBuilder)
-    local metadata = NavigationUtils.loadCurrentEntryMetadata(entry_info)
+    -- Apply context-aware filtering
     local options = NavigationUtils.buildContextAwareOptions(base_options, metadata)
-    options.limit = 1  -- We only want the immediate next entry
     
-    -- Get the correct API method based on sort direction
-    local direction = options.direction or MinifluxSettings:getDirection() or "desc"
-    local api_method = NavigationUtils.getNextApiMethod(direction)
+    -- For Next: direction=desc&published_before=${unix_timestamp}
+    options.direction = "desc"
+    options.published_before = published_unix
+    options.limit = 1
+    options.order = MinifluxSettings:getOrder()
     
-    -- Fetch next entry using direction-aware API method
-    local success, result = api[api_method](api, current_entry_id, options)
+    -- Fetch next entry using regular getEntries API
+    local success, result = api:getEntries(options)
     
     UIManager:close(loading_info)
     
@@ -165,8 +268,14 @@ function NavigationUtils.navigateToNextEntry(entry_info)
         if metadata and (metadata.browsing_feed_id or metadata.browsing_category_id) then
             -- Build global options (no feed/category filter for global search)
             local global_options = NavigationUtils.buildContextAwareOptions(base_options, nil)
+            global_options.direction = "desc"
+            global_options.published_before = published_unix
             global_options.limit = 1
-            success, result = api[api_method](api, current_entry_id, global_options)
+            global_options.order = MinifluxSettings:getOrder()
+            
+            -- Global fallback for next entry
+            
+            success, result = api:getEntries(global_options)
             
             if success and result and result.entries and #result.entries > 0 then
                 local next_entry = result.entries[1]
@@ -179,41 +288,6 @@ function NavigationUtils.navigateToNextEntry(entry_info)
             text = _("No next entry available"),
             timeout = 3,
         })
-    end
-end
-
----Get API method for previous entry based on sort direction
----
---- Navigation Logic Explanation:
---- - "Previous" = go UP visually in the list (towards index 1)
---- - "Next" = go DOWN visually in the list (towards higher index)
----
---- Sort Direction Impact:
---- - DESC (newest first): previous=newer entry, next=older entry
---- - ASC (oldest first): previous=older entry, next=newer entry  
----
----@param direction string Sort direction ("asc" or "desc")
----@return string API method name ("getNextEntry" or "getPreviousEntry")
-function NavigationUtils.getPreviousApiMethod(direction)
-    if direction == "desc" then
-        -- DESC: previous = go up = chronologically newer = use getNextEntry (after_entry_id)
-        return "getNextEntry"
-    else
-        -- ASC: previous = go up = chronologically older = use getPreviousEntry (before_entry_id)
-        return "getPreviousEntry"
-    end
-end
-
----Get API method for next entry based on sort direction
----@param direction string Sort direction ("asc" or "desc")
----@return string API method name ("getNextEntry" or "getPreviousEntry")
-function NavigationUtils.getNextApiMethod(direction)
-    if direction == "desc" then
-        -- DESC: next = go down = chronologically older = use getPreviousEntry (before_entry_id)
-        return "getPreviousEntry"
-    else
-        -- ASC: next = go down = chronologically newer = use getNextEntry (after_entry_id)
-        return "getNextEntry"  
     end
 end
 

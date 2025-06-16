@@ -31,11 +31,17 @@ function CategoriesScreen:new()
     return obj
 end
 
+---Initialize the categories screen
+---@param browser BaseBrowser Browser instance to manage
+---@return nil
 function CategoriesScreen:init(browser)
     self.browser = browser
 end
 
--- Show categories list screen
+---Show categories list screen
+---@param paths_updated? boolean Whether navigation paths were updated
+---@param page_info? table Page information for restoration
+---@return nil
 function CategoriesScreen:show(paths_updated, page_info)
     local loading_info = self.browser:showLoadingMessage(_("Fetching categories..."))
     
@@ -87,11 +93,13 @@ function CategoriesScreen:show(paths_updated, page_info)
     self.browser:updateBrowser(_("Categories"), menu_items, subtitle, navigation_data)
 end
 
--- Build menu items for categories
+---Build menu items for categories
+---@param categories MinifluxCategory[] List of categories
+---@return CategoryMenuItem[] Array of category menu items
 function CategoriesScreen:buildCategoryMenuItems(categories)
     local menu_items = {}
     
-    for i, category in ipairs(categories) do
+    for _, category in ipairs(categories) do
         local category_title = category.title or _("Untitled Category")
         local unread_count = category.total_unread or 0
         
@@ -114,7 +122,11 @@ function CategoriesScreen:buildCategoryMenuItems(categories)
     return menu_items
 end
 
--- Show entries for a specific category
+---Show entries for a specific category
+---@param category_id number The category ID
+---@param category_title string The category title
+---@param paths_updated? boolean Whether navigation paths were updated
+---@return nil
 function CategoriesScreen:showCategoryEntries(category_id, category_title, paths_updated)
     local loading_info = self.browser:showLoadingMessage(_("Fetching entries for category..."))
     
@@ -179,29 +191,41 @@ function CategoriesScreen:showCategoryEntries(category_id, category_title, paths
     self.browser:showEntriesList(entries, category_title, true, navigation_data)
 end
 
--- Show entries for a specific category (refresh version - no navigation context)
+---Show entries for a specific category (refresh version - no navigation context)
+---@param category_id number The category ID
+---@param category_title string The category title
+---@return nil
 function CategoriesScreen:showCategoryEntriesRefresh(category_id, category_title)
     -- Call the regular method but indicate this is a refresh (paths_updated = true)
     self:showCategoryEntries(category_id, category_title, true)
 end
 
--- Handle category screen content restoration from navigation
+---Handle category screen content restoration from navigation
+---@param paths_updated? boolean Whether navigation paths were updated
+---@param page_info? table Page information for restoration
+---@return nil
 function CategoriesScreen:showContent(paths_updated, page_info)
     -- Show categories but prevent adding to navigation history and include page restoration
     self:show(paths_updated or true, page_info)
 end
 
--- Cache management methods
+---Get cached categories
+---@return MinifluxCategory[]|nil Cached categories data or nil if not cached
 function CategoriesScreen:getCachedCategories()
     -- Simple in-memory cache for categories data
     return self.cached_categories
 end
 
+---Cache categories data
+---@param categories MinifluxCategory[] Categories data to cache
+---@return nil
 function CategoriesScreen:cacheCategories(categories)
     -- Simple in-memory cache for categories data
     self.cached_categories = categories
 end
 
+---Invalidate cached data
+---@return nil
 function CategoriesScreen:invalidateCache()
     -- Clear the in-memory cache
     self.cached_categories = nil

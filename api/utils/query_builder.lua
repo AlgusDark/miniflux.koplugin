@@ -53,6 +53,16 @@ function QueryBuilder.buildParams(options)
     if options.starred then
         table.insert(params, "starred=true")
     end
+    
+    -- Add published_before filter if provided
+    if options.published_before then
+        table.insert(params, "published_before=" .. tostring(options.published_before))
+    end
+    
+    -- Add published_after filter if provided  
+    if options.published_after then
+        table.insert(params, "published_after=" .. tostring(options.published_after))
+    end
 
     return params
 end
