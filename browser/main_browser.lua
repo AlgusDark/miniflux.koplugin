@@ -2,7 +2,7 @@
 Main Browser for Miniflux Plugin
 
 This is the main browser coordinator that manages navigation between different screens.
-It delegates specific functionality to specialized screen and feature modules.
+It delegates specific functionality to specialized coordinator modules.
 
 @module miniflux.browser.main_browser
 --]]--
@@ -10,10 +10,9 @@ It delegates specific functionality to specialized screen and feature modules.
 local BaseBrowser = require("browser/lib/base_browser")
 local NavigationManager = require("browser/features/navigation_manager")
 local PageStateManager = require("browser/features/page_state_manager")
-local MainScreen = require("browser/screens/main_screen")
-local FeedsScreen = require("browser/screens/feeds_screen")
-local CategoriesScreen = require("browser/screens/categories_screen")
-local EntryUtils = require("browser/utils/entry_utils")
+local ScreenCoordinator = require("browser/coordinators/screen_coordinator")
+local ContextManager = require("browser/coordinators/context_manager")
+local MenuRouter = require("browser/coordinators/menu_router")
 local _ = require("gettext")
 
 ---@class BrowserMenuItem
@@ -28,9 +27,9 @@ local _ = require("gettext")
 ---@field browser_type string Browser type identifier
 ---@field navigation_manager NavigationManager Navigation state manager
 ---@field page_state_manager PageStateManager Page state manager
----@field main_screen MainScreen Main screen handler
----@field feeds_screen FeedsScreen Feeds screen handler
----@field categories_screen CategoriesScreen Categories screen handler
+---@field screen_coordinator ScreenCoordinator Screen management coordinator
+---@field context_manager ContextManager Context tracking coordinator
+---@field menu_router MenuRouter Menu routing coordinator
 ---@field unread_count number Unread entries count
 ---@field feeds_count number Total feeds count
 ---@field categories_count number Total categories count
@@ -45,23 +44,23 @@ function MainBrowser:init()
     self.api = self.api or {}
     self.download_dir = self.download_dir
     
-    -- Initialize screens first (before BaseBrowser.init)
-    self.main_screen = MainScreen:new()
-    self.main_screen:init(self)
+    -- Initialize coordinators
+    self.screen_coordinator = ScreenCoordinator:new()
+    self.screen_coordinator:init(self)
     
-    self.feeds_screen = FeedsScreen:new()
-    self.feeds_screen:init(self)
+    self.context_manager = ContextManager:new()
+    self.context_manager:init(self)
     
-    self.categories_screen = CategoriesScreen:new()
-    self.categories_screen:init(self)
+    self.menu_router = MenuRouter:new()
+    self.menu_router:init(self, self.screen_coordinator, self.context_manager)
     
     -- Initialize with counts if available and set initial items
     if self.unread_count or self.feeds_count or self.categories_count then
-        self:initWithCounts(self.unread_count, self.feeds_count, self.categories_count)
+        self.item_table = self.screen_coordinator:initWithCounts(self.unread_count, self.feeds_count, self.categories_count)
+    else
+        -- Generate initial item table from main screen
+        self.item_table = self.screen_coordinator:getMainScreen():genItemTable()
     end
-    
-    -- Generate the initial item table
-    self.item_table = self.main_screen:genItemTable()
     
     -- Now call the parent init with the proper item_table set
     BaseBrowser.init(self)
@@ -80,89 +79,13 @@ function MainBrowser:init()
     self.onReturn = function()
         return self.navigation_manager:goBack()
     end
-    
-    -- Store current context for refresh functionality
-    self.current_context = {
-        type = "main",
-        data = nil
-    }
 end
 
----Handle menu selection by delegating to appropriate screens
+---Handle menu selection by delegating to menu router
 ---@param item BrowserMenuItem Menu item that was selected
 ---@return nil
 function MainBrowser:onMenuSelect(item)
-    if not item or not item.action_type then
-        return
-    end
-    
-    if item.action_type == "unread" then
-        if self.main_screen and self.main_screen.showUnreadEntries then
-            self.main_screen:showUnreadEntries()
-        end
-        
-    elseif item.action_type == "feeds" then
-        if self.feeds_screen and self.feeds_screen.show then
-            self.feeds_screen:show()
-        end
-        
-    elseif item.action_type == "categories" then
-        if self.categories_screen and self.categories_screen.show then
-            self.categories_screen:show()
-        end
-        
-    elseif item.action_type == "feed_entries" then
-        local feed_data = item.feed_data
-        if feed_data and feed_data.id and feed_data.title then
-            if self.feeds_screen and self.feeds_screen.showFeedEntries then
-                self.feeds_screen:showFeedEntries(feed_data.id, feed_data.title)
-            end
-        end
-        
-    elseif item.action_type == "category_entries" then
-        local category_data = item.category_data
-        if category_data and category_data.id and category_data.title then
-            if self.categories_screen and self.categories_screen.showCategoryEntries then
-                self.categories_screen:showCategoryEntries(category_data.id, category_data.title)
-            end
-        end
-        
-    elseif item.action_type == "read_entry" then
-        local entry_data = item.entry_data
-        if entry_data and self.api then
-            -- Set global navigation context based on current browsing context
-            local NavigationContext = require("browser/utils/navigation_context")
-            
-            if self.current_context and self.current_context.type == "feed_entries" then
-                local feed_data = self.current_context.data
-                local feed_id = feed_data and (feed_data.feed_id or feed_data.id)
-                if feed_id then
-                    NavigationContext.setFeedContext(feed_id, entry_data.id)
-                else
-                    NavigationContext.setGlobalContext(entry_data.id)
-                end
-            elseif self.current_context and self.current_context.type == "category_entries" then
-                local category_data = self.current_context.data
-                local category_id = category_data and (category_data.category_id or category_data.id)
-                if category_id then
-                    NavigationContext.setCategoryContext(category_id, entry_data.id)
-                else
-                    NavigationContext.setGlobalContext(entry_data.id)
-                end
-            else
-                -- Global context (unread entries or unknown context)
-                NavigationContext.setGlobalContext(entry_data.id)
-            end
-            
-            EntryUtils.showEntry({
-                entry = entry_data,
-                api = self.api,
-                download_dir = self.download_dir,
-                browser = self
-                -- No need to pass context anymore - it's now global
-            })
-        end
-    end
+    self.menu_router:routeMenuSelection(item)
 end
 
 ---Back navigation handler
@@ -190,71 +113,7 @@ end
 -- Override refreshCurrentView to refresh the current screen
 ---@return nil
 function MainBrowser:refreshCurrentView()
-    local context = self.current_context
-    if not context or not context.type then
-        -- Default to main screen if no context
-        if self.main_screen and self.main_screen.show then
-            self.main_screen:show()
-        end
-        return
-    end
-    
-    -- Always make fresh API calls for consistency and simplicity
-    if context.type == "main" then
-        if self.main_screen and self.main_screen.show then
-            self.main_screen:show()
-        end
-    elseif context.type == "feeds" then
-        if self.feeds_screen and self.feeds_screen.show then
-            self.feeds_screen:show()
-        end
-    elseif context.type == "categories" then
-        if self.categories_screen and self.categories_screen.show then
-            self.categories_screen:show()
-        end
-    elseif context.type == "feed_entries" then
-        local data = context.data
-        local feed_id = data and (data.feed_id or data.id)
-        local feed_title = data and (data.feed_title or data.title)
-        
-        if feed_id and feed_title then
-            -- Use regular method that makes fresh API call with current settings
-            if self.feeds_screen and self.feeds_screen.showFeedEntries then
-                self.feeds_screen:showFeedEntries(feed_id, feed_title, true) -- paths_updated = true for refresh
-            end
-        else
-            -- Fallback to feeds screen
-            if self.feeds_screen and self.feeds_screen.show then
-                self.feeds_screen:show()
-            end
-        end
-    elseif context.type == "category_entries" then
-        local data = context.data
-        local category_id = data and (data.category_id or data.id)
-        local category_title = data and (data.category_title or data.title)
-        
-        if category_id and category_title then
-            -- Use regular method that makes fresh API call with current settings
-            if self.categories_screen and self.categories_screen.showCategoryEntries then
-                self.categories_screen:showCategoryEntries(category_id, category_title, true) -- paths_updated = true for refresh
-            end
-        else
-            -- Fallback to categories screen
-            if self.categories_screen and self.categories_screen.show then
-                self.categories_screen:show()
-            end
-        end
-    elseif context.type == "unread_entries" then
-        -- Use regular method that makes fresh API call with current settings
-        if self.main_screen and self.main_screen.showUnreadEntries then
-            self.main_screen:showUnreadEntries(true) -- is_refresh = true
-        end
-    else
-        -- Fallback to main screen for unknown context types
-        if self.main_screen and self.main_screen.show then
-            self.main_screen:show()
-        end
-    end
+    self.context_manager:refreshCurrentView(self.screen_coordinator)
 end
 
 ---Show entries list with navigation data (overrides BaseBrowser)
@@ -264,36 +123,8 @@ end
 ---@param navigation_data table Navigation context data
 ---@return nil
 function MainBrowser:showEntriesList(entries, title_prefix, is_category, navigation_data)
-    -- Update current context with proper field names
-    if title_prefix:find(_("Unread")) then
-        self.current_context = { type = "unread_entries" }
-    elseif is_category then
-        local category_data = navigation_data and navigation_data.current_data
-        if category_data and (category_data.category_id or category_data.id) and (category_data.category_title or category_data.title) then
-            self.current_context = { 
-                type = "category_entries", 
-                data = { 
-                    category_id = category_data.category_id or category_data.id,
-                    category_title = category_data.category_title or category_data.title
-                }
-            }
-        else
-            self.current_context = { type = "category_entries" }
-        end
-    else
-        local feed_data = navigation_data and navigation_data.current_data
-        if feed_data and (feed_data.feed_id or feed_data.id) and (feed_data.feed_title or feed_data.title) then
-            self.current_context = { 
-                type = "feed_entries", 
-                data = { 
-                    feed_id = feed_data.feed_id or feed_data.id,
-                    feed_title = feed_data.feed_title or feed_data.title
-                }
-            }
-        else
-            self.current_context = { type = "feed_entries" }
-        end
-    end
+    -- Update context via context manager
+    self.context_manager:updateContextFromEntriesList(title_prefix, is_category, navigation_data)
     
     local menu_items = {}
     local has_no_entries_message = false
@@ -343,7 +174,8 @@ function MainBrowser:showEntriesList(entries, title_prefix, is_category, navigat
     -- Build subtitle with enhanced logic for different view types
     local subtitle = ""
     local hide_read_entries = self.settings and self.settings:getHideReadEntries()
-    local is_unread_entries_view = self.current_context and self.current_context.type == "unread_entries"
+    local current_context = self.context_manager:getCurrentContext()
+    local is_unread_entries_view = current_context and current_context.type == "unread_entries"
     
     if is_unread_entries_view then
         if has_no_entries_message then
@@ -373,23 +205,14 @@ end
 ---@param categories_count number Total number of categories
 ---@return nil
 function MainBrowser:initWithCounts(unread_count, feeds_count, categories_count)
-    self.unread_count = unread_count or 0
-    self.feeds_count = feeds_count or 0 
-    self.categories_count = categories_count or 0
-    
-    -- Regenerate main menu with updated counts
-    if self.main_screen then
-        self.item_table = self.main_screen:genItemTable()
-    end
+    self.item_table = self.screen_coordinator:initWithCounts(unread_count, feeds_count, categories_count)
 end
 
 ---Show main content (called by navigation manager)
 ---@return nil
 function MainBrowser:showMainContent()
-    -- Update current context
-    self.current_context = { type = "main" }
-    
-    self.main_screen:show()
+    self.context_manager:setMainContext()
+    self.screen_coordinator:showMainContent()
 end
 
 ---Show feeds content (called by navigation manager)
@@ -397,10 +220,8 @@ end
 ---@param page_info? table Page information for restoration
 ---@return nil
 function MainBrowser:showFeedsContent(paths_updated, page_info)
-    -- Update current context
-    self.current_context = { type = "feeds" }
-    
-    self.feeds_screen:showContent(paths_updated, page_info)
+    self.context_manager:setFeedsContext()
+    self.screen_coordinator:showFeedsContent(paths_updated, page_info)
 end
 
 ---Show categories content (called by navigation manager)
@@ -408,10 +229,8 @@ end
 ---@param page_info? table Page information for restoration
 ---@return nil
 function MainBrowser:showCategoriesContent(paths_updated, page_info)
-    -- Update current context  
-    self.current_context = { type = "categories" }
-    
-    self.categories_screen:showContent(paths_updated, page_info)
+    self.context_manager:setCategoriesContext()
+    self.screen_coordinator:showCategoriesContent(paths_updated, page_info)
 end
 
 ---Show feed entries (called by BaseBrowser for direct navigation)
@@ -420,10 +239,8 @@ end
 ---@param paths_updated? boolean Whether navigation paths were updated
 ---@return nil
 function MainBrowser:showFeedEntries(feed_id, feed_title, paths_updated)
-    -- Update current context
-    self.current_context = { type = "feed_entries", data = { feed_id = feed_id, feed_title = feed_title } }
-    
-    self.feeds_screen:showFeedEntries(feed_id, feed_title, paths_updated)
+    self.context_manager:setFeedEntriesContext(feed_id, feed_title)
+    self.screen_coordinator:showFeedEntries(feed_id, feed_title, paths_updated)
 end
 
 ---Show category entries (called by BaseBrowser for direct navigation)
@@ -432,10 +249,8 @@ end
 ---@param paths_updated? boolean Whether navigation paths were updated
 ---@return nil
 function MainBrowser:showCategoryEntries(category_id, category_title, paths_updated)
-    -- Update current context
-    self.current_context = { type = "category_entries", data = { category_id = category_id, category_title = category_title } }
-    
-    self.categories_screen:showCategoryEntries(category_id, category_title, paths_updated)
+    self.context_manager:setCategoryEntriesContext(category_id, category_title)
+    self.screen_coordinator:showCategoryEntries(category_id, category_title, paths_updated)
 end
 
 -- Override onSettingsChanged to handle specific settings changes
@@ -447,20 +262,7 @@ end
 ---Override invalidateEntryCaches to actually invalidate relevant caches
 ---@return nil
 function MainBrowser:invalidateEntryCaches()
-    -- Invalidate feeds cache (contains entry counts per feed)
-    if self.feeds_screen and self.feeds_screen.invalidateCache then
-        self.feeds_screen:invalidateCache()
-    end
-    
-    -- Invalidate categories cache (contains entry counts per category)  
-    if self.categories_screen and self.categories_screen.invalidateCache then
-        self.categories_screen:invalidateCache()
-    end
-    
-    -- Invalidate main screen cache (contains unread count)
-    if self.main_screen and self.main_screen.invalidateCache then
-        self.main_screen:invalidateCache()
-    end
+    self.screen_coordinator:invalidateEntryCaches()
 end
 
 return MainBrowser 
