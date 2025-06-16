@@ -84,7 +84,18 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
     UIManager:show(loading_info)
     UIManager:forceRePaint()
     
-    -- Load current entry metadata to get published_at timestamp
+    -- Get current entry information from global navigation context
+    local NavigationContext = require("browser/utils/navigation_context")
+    if not NavigationContext.hasValidContext() then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: no browsing context available"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    -- Load current entry metadata to get published_at timestamp (still needed for timestamp-based navigation)
     local metadata = NavigationUtils.loadCurrentEntryMetadata(entry_info)
     if not metadata or not metadata.published_at then
         UIManager:close(loading_info)
@@ -110,12 +121,12 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
         return
     end
     
-    -- Get filter options from current settings
+    -- Get filter options from current settings and global navigation context
     local BrowserUtils = require("browser/utils/browser_utils")
     local base_options = BrowserUtils.getApiOptions(MinifluxSettings)
     
-    -- Apply context-aware filtering
-    local options = NavigationUtils.buildContextAwareOptions(base_options, metadata)
+    -- Apply context-aware filtering using global navigation context
+    local options = NavigationContext.getContextAwareOptions(base_options)
     
     -- For Previous: direction=asc&published_after=${unix_timestamp}
     options.direction = "asc"
@@ -146,12 +157,13 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
         end
         
         -- Entry not downloaded locally, download and show it
-        NavigationUtils.downloadAndShowEntry(prev_entry, metadata)
+        NavigationUtils.downloadAndShowEntry(prev_entry)
     else
-        -- If no previous entry found with browsing context, try global navigation
-        if metadata and (metadata.browsing_feed_id or metadata.browsing_category_id) then
+        -- If no previous entry found with current context, try global navigation
+        local current_context = NavigationContext.getCurrentContext()
+        if current_context.type and current_context.type ~= "global" then
             -- Build global options (no feed/category filter for global search)
-            local global_options = NavigationUtils.buildContextAwareOptions(base_options, nil)
+            local global_options = BrowserUtils.getApiOptions(MinifluxSettings)
             global_options.direction = "asc"
             global_options.published_after = published_unix
             global_options.limit = 1
@@ -163,7 +175,7 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
             
             if success and result and result.entries and #result.entries > 0 then
                 local prev_entry = result.entries[1]
-                NavigationUtils.downloadAndShowEntry(prev_entry, metadata)
+                NavigationUtils.downloadAndShowEntry(prev_entry)
                 return
             end
         end
@@ -200,7 +212,18 @@ function NavigationUtils.navigateToNextEntry(entry_info)
     UIManager:show(loading_info)
     UIManager:forceRePaint()
     
-    -- Load current entry metadata to get published_at timestamp
+    -- Get current entry information from global navigation context
+    local NavigationContext = require("browser/utils/navigation_context")
+    if not NavigationContext.hasValidContext() then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: no browsing context available"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    -- Load current entry metadata to get published_at timestamp (still needed for timestamp-based navigation)
     local metadata = NavigationUtils.loadCurrentEntryMetadata(entry_info)
     if not metadata or not metadata.published_at then
         UIManager:close(loading_info)
@@ -226,12 +249,12 @@ function NavigationUtils.navigateToNextEntry(entry_info)
         return
     end
     
-    -- Get filter options from current settings
+    -- Get filter options from current settings and global navigation context
     local BrowserUtils = require("browser/utils/browser_utils")
     local base_options = BrowserUtils.getApiOptions(MinifluxSettings)
     
-    -- Apply context-aware filtering
-    local options = NavigationUtils.buildContextAwareOptions(base_options, metadata)
+    -- Apply context-aware filtering using global navigation context
+    local options = NavigationContext.getContextAwareOptions(base_options)
     
     -- For Next: direction=desc&published_before=${unix_timestamp}
     options.direction = "desc"
@@ -262,12 +285,13 @@ function NavigationUtils.navigateToNextEntry(entry_info)
         end
         
         -- Entry not downloaded locally, download and show it
-        NavigationUtils.downloadAndShowEntry(next_entry, metadata)
+        NavigationUtils.downloadAndShowEntry(next_entry)
     else
-        -- If no next entry found with browsing context, try global navigation
-        if metadata and (metadata.browsing_feed_id or metadata.browsing_category_id) then
+        -- If no next entry found with current context, try global navigation
+        local current_context = NavigationContext.getCurrentContext()
+        if current_context.type and current_context.type ~= "global" then
             -- Build global options (no feed/category filter for global search)
-            local global_options = NavigationUtils.buildContextAwareOptions(base_options, nil)
+            local global_options = BrowserUtils.getApiOptions(MinifluxSettings)
             global_options.direction = "desc"
             global_options.published_before = published_unix
             global_options.limit = 1
@@ -279,7 +303,7 @@ function NavigationUtils.navigateToNextEntry(entry_info)
             
             if success and result and result.entries and #result.entries > 0 then
                 local next_entry = result.entries[1]
-                NavigationUtils.downloadAndShowEntry(next_entry, metadata)
+                NavigationUtils.downloadAndShowEntry(next_entry)
                 return
             end
         end
@@ -319,26 +343,17 @@ end
 
 ---Download and show an entry
 ---@param entry MinifluxEntry Entry to download and show
----@param source_metadata? table Optional source entry metadata for context inheritance
 ---@return nil
-function NavigationUtils.downloadAndShowEntry(entry, source_metadata)
+function NavigationUtils.downloadAndShowEntry(entry)
+    -- Update global navigation context with the new entry
+    local NavigationContext = require("browser/utils/navigation_context")
+    NavigationContext.updateCurrentEntry(entry.id)
+    
     -- Create download directory
     local DataStorage = require("datastorage")
     local download_dir = ("%s/%s/"):format(DataStorage:getFullDataDir(), "miniflux")
     
-    -- Build context to pass to new entry (inherit from source)
-    local context = nil
-    if source_metadata then
-        context = {}
-        if source_metadata.browsing_feed_id then
-            context.feed_id = source_metadata.browsing_feed_id
-        elseif source_metadata.browsing_category_id then
-            context.category_id = source_metadata.browsing_category_id
-        end
-        -- If no browsing context in source → context remains nil (global navigation)
-    end
-    
-    -- Download and show the entry
+    -- Download and show the entry (no context needed - it's now global)
     local EntryUtils = require("browser/utils/entry_utils")
     local MinifluxAPI = require("api/api_client")
     local MinifluxSettingsManager = require("settings/settings_manager")
@@ -351,8 +366,8 @@ function NavigationUtils.downloadAndShowEntry(entry, source_metadata)
     EntryUtils.downloadEntry({
         entry = entry,
         api = api,
-        download_dir = download_dir,
-        context = context  -- Pass inherited browsing context
+        download_dir = download_dir
+        -- No context parameter needed anymore
     })
 end
 
@@ -615,33 +630,6 @@ function NavigationUtils.fetchAndShowEntry(entry_id)
             timeout = 5,
         })
     end
-end
-
----Build context-aware API options (similar to Miniflux's EntryQueryBuilder)
----@param base_options ApiOptions Base API options from settings  
----@param metadata table|nil Entry metadata containing browsing context
----@return ApiOptions Context-aware options with WithFeedID/WithCategoryID equivalent
-function NavigationUtils.buildContextAwareOptions(base_options, metadata)
-    local options = {}
-    
-    -- Copy base options
-    for k, v in pairs(base_options) do
-        options[k] = v
-    end
-    
-    -- Add context-aware filtering (like Miniflux's WithFeedID/WithCategoryID)
-    if metadata then
-        if metadata.browsing_feed_id then
-            -- WithFeedID equivalent - filter by the feed the user was browsing
-            options.feed_id = metadata.browsing_feed_id
-        elseif metadata.browsing_category_id then
-            -- WithCategoryID equivalent - filter by the category the user was browsing  
-            options.category_id = metadata.browsing_category_id
-        end
-        -- No browsing context = global navigation (unread entries view)
-    end
-    
-    return options
 end
 
 return NavigationUtils 

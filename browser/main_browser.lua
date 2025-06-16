@@ -131,18 +131,36 @@ function MainBrowser:onMenuSelect(item)
     elseif item.action_type == "read_entry" then
         local entry_data = item.entry_data
         if entry_data and self.api then
-            -- Pass current context for proper metadata storage
-            local context_data = nil
-            if self.current_context and self.current_context.data then
-                context_data = self.current_context.data
+            -- Set global navigation context based on current browsing context
+            local NavigationContext = require("browser/utils/navigation_context")
+            
+            if self.current_context and self.current_context.type == "feed_entries" then
+                local feed_data = self.current_context.data
+                local feed_id = feed_data and (feed_data.feed_id or feed_data.id)
+                if feed_id then
+                    NavigationContext.setFeedContext(feed_id, entry_data.id)
+                else
+                    NavigationContext.setGlobalContext(entry_data.id)
+                end
+            elseif self.current_context and self.current_context.type == "category_entries" then
+                local category_data = self.current_context.data
+                local category_id = category_data and (category_data.category_id or category_data.id)
+                if category_id then
+                    NavigationContext.setCategoryContext(category_id, entry_data.id)
+                else
+                    NavigationContext.setGlobalContext(entry_data.id)
+                end
+            else
+                -- Global context (unread entries or unknown context)
+                NavigationContext.setGlobalContext(entry_data.id)
             end
             
             EntryUtils.showEntry({
                 entry = entry_data,
                 api = self.api,
                 download_dir = self.download_dir,
-                browser = self,
-                context = context_data  -- Pass category/feed context
+                browser = self
+                -- No need to pass context anymore - it's now global
             })
         end
     end

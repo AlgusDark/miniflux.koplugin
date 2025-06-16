@@ -30,13 +30,12 @@ local HtmlUtils = require("browser/utils/html_utils")
 local EntryUtils = {}
 
 ---Show an entry by downloading and opening it
----@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, browser?: BaseBrowser, context?: table}
+---@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, browser?: BaseBrowser}
 function EntryUtils.showEntry(params)
     local entry = params.entry
     local api = params.api
     local download_dir = params.download_dir
     local browser = params.browser
-    local context = params.context
     
     if not download_dir then
         UIManager:show(InfoMessage:new{
@@ -51,19 +50,17 @@ function EntryUtils.showEntry(params)
         entry = entry,
         api = api,
         download_dir = download_dir,
-        browser = browser,
-        context = context
+        browser = browser
     })
 end
 
 ---Download and process an entry with images
----@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, browser?: BaseBrowser, context?: table, progress_callback?: function, include_images?: boolean}
+---@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, browser?: BaseBrowser, progress_callback?: function, include_images?: boolean}
 function EntryUtils.downloadEntry(params)
     local entry = params.entry
     local api = params.api
     local download_dir = params.download_dir
     local browser = params.browser
-    local context = params.context
     
     local MinifluxSettings = MinifluxSettingsManager
     MinifluxSettings:init()  -- Create and initialize instance
@@ -199,8 +196,7 @@ function EntryUtils.downloadEntry(params)
     local metadata = EntryUtils.createEntryMetadata({
         entry = entry,
         include_images = include_images,
-        images = images,
-        context = context
+        images = images
     })
     
     -- Save metadata file
@@ -233,15 +229,14 @@ function EntryUtils.downloadEntry(params)
 end
 
 ---Create entry metadata
----@param params {entry: MinifluxEntry, include_images: boolean, images: ImageInfo[], context?: table}
+---@param params {entry: MinifluxEntry, include_images: boolean, images: ImageInfo[]}
 ---@return EntryMetadata
 function EntryUtils.createEntryMetadata(params)
     local entry = params.entry
     local include_images = params.include_images
     local images = params.images
-    local context = params.context
     
-    -- Essential metadata for navigation and status tracking
+    -- Essential metadata for entry display and status tracking
     local metadata = {
         -- Entry identification
         id = entry.id,
@@ -258,19 +253,8 @@ function EntryUtils.createEntryMetadata(params)
         images_count = include_images and #images or 0
     }
     
-    -- Context-Aware Navigation (like Miniflux frontend)
-    -- Only store the context the user was actually browsing when they downloaded this entry
-    if context then
-        if context.feed_id then
-            -- User was browsing a specific feed → WithFeedID equivalent
-            metadata.browsing_feed_id = context.feed_id
-        elseif context.category_id then
-            -- User was browsing a specific category → WithCategoryID equivalent  
-            metadata.browsing_category_id = context.category_id
-        end
-        -- If neither feed_id nor category_id in context → user was browsing "Unread" (global)
-        -- In this case, we store no browsing context (navigate globally)
-    end
+    -- Note: Navigation context is now handled globally in memory,
+    -- not stored in metadata files anymore
     
     return metadata
 end
@@ -285,6 +269,20 @@ function EntryUtils.openEntryFile(html_file)
     if is_miniflux_entry then
         -- Extract entry ID from path for later use
         local entry_id = html_file:match("/miniflux/(%d+)/")
+        
+        if entry_id then
+            -- Update global navigation context with this entry
+            -- Note: We don't have browsing context when opening existing files,
+            -- so navigation will be global unless the user came from a browser session
+            local NavigationContext = require("browser/utils/navigation_context")
+            if not NavigationContext.hasValidContext() then
+                -- Set global context if no context exists
+                NavigationContext.setGlobalContext(tonumber(entry_id))
+            else
+                -- Update current entry in existing context
+                NavigationContext.updateCurrentEntry(tonumber(entry_id))
+            end
+        end
         
         -- Store the entry info for the EndOfBook event handler
         EntryUtils._current_miniflux_entry = {
