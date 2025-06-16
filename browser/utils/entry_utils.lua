@@ -83,6 +83,12 @@ function EntryUtils.downloadEntry(params)
     -- Check if already downloaded
     if lfs.attributes(html_file, "mode") == "file" then
         progress:close()
+        
+        -- Close browser FIRST even for already downloaded entries (OPDS pattern)
+        if browser and browser.closeAll then
+            browser:closeAll()
+        end
+        
         EntryUtils.openEntryFile(html_file)
         return
     end
@@ -207,25 +213,23 @@ function EntryUtils.downloadEntry(params)
         file:close()
     end
     
+    -- Close progress immediately and show final message
+    progress:close()
+    
     -- Show completion summary using ImageUtils
     local image_summary = ImageUtils.createDownloadSummary(include_images, images)
-    local complete_summary = _("Download completed!") .. "\n\n" .. image_summary .. "\n\n" .. _("Opening entry…")
-    progress:showCompletion(complete_summary)
+    UIManager:show(InfoMessage:new{
+        text = _("Download completed!") .. "\n\n" .. image_summary,
+        timeout = 1,
+    })
     
-    -- Close browser if provided before opening the entry
+    -- Close browser FIRST, then immediately open the entry (OPDS pattern - no delays)
     if browser and browser.closeAll then
-        -- Schedule browser close after UI operations complete
-        UIManager:scheduleIn(0.1, function()
-            browser:closeAll()
-        end)
+        browser:closeAll()
     end
     
-    -- Open the file after a brief delay
-    UIManager:scheduleIn(0.3, function()
-        -- Close the completion dialog immediately before opening the entry
-        progress:closeCompletion()
-        EntryUtils.openEntryFile(html_file)
-    end)
+    -- Open entry immediately after browser close
+    EntryUtils.openEntryFile(html_file)
 end
 
 ---Create entry metadata
@@ -263,6 +267,9 @@ end
 ---@param html_file string Path to HTML file to open
 ---@return nil
 function EntryUtils.openEntryFile(html_file)
+    -- Close any existing EndOfBook dialog first (prevent stacking like OPDS pattern)
+    EntryUtils.closeEndOfEntryDialog()
+    
     -- Check if this is a miniflux entry by looking at the path
     local is_miniflux_entry = html_file:match("/miniflux/") ~= nil
     
@@ -303,6 +310,9 @@ function EntryUtils.showEndOfEntryDialog()
         return
     end
     
+    -- Close any existing EndOfBook dialog first (prevent stacking)
+    EntryUtils.closeEndOfEntryDialog()
+    
     -- Load entry metadata to check current status
     local metadata = NavigationUtils.loadCurrentEntryMetadata(current_entry)
     local entry_status = metadata and metadata.status or "unread"
@@ -321,9 +331,8 @@ function EntryUtils.showEndOfEntryDialog()
         end
     end
     
-    -- Create dialog with proper variable scope
-    local dialog
-    dialog = ButtonDialogTitle:new{
+    -- Create dialog and store reference for later cleanup
+    EntryUtils._current_end_dialog = ButtonDialogTitle:new{
         title = _("You've reached the end of the entry."),
         title_align = "center",
         buttons = {
@@ -331,14 +340,14 @@ function EntryUtils.showEndOfEntryDialog()
                 {
                     text = _("← Previous"),
                     callback = function()
-                        UIManager:close(dialog)
+                        EntryUtils.closeEndOfEntryDialog()
                         EntryUtils.navigateToPreviousEntry(current_entry)
                     end,
                 },
                 {
                     text = _("Next →"),
                     callback = function()
-                        UIManager:close(dialog)
+                        EntryUtils.closeEndOfEntryDialog()
                         EntryUtils.navigateToNextEntry(current_entry)
                     end,
                 },
@@ -347,14 +356,14 @@ function EntryUtils.showEndOfEntryDialog()
                 {
                     text = _("⚠ Delete local entry"),
                     callback = function()
-                        UIManager:close(dialog)
+                        EntryUtils.closeEndOfEntryDialog()
                         EntryUtils.deleteLocalEntry(current_entry)
                     end,
                 },
                 {
                     text = mark_button_text,
                     callback = function()
-                        UIManager:close(dialog)
+                        EntryUtils.closeEndOfEntryDialog()
                         mark_callback()
                     end,
                 },
@@ -363,21 +372,30 @@ function EntryUtils.showEndOfEntryDialog()
                 {
                     text = _("⌂ Miniflux folder"),
                     callback = function()
-                        UIManager:close(dialog)
+                        EntryUtils.closeEndOfEntryDialog()
                         EntryUtils.openMinifluxFolder(current_entry)
                     end,
                 },
                 {
                     text = _("Cancel"),
                     callback = function()
-                        UIManager:close(dialog)
+                        EntryUtils.closeEndOfEntryDialog()
                     end,
                 },
             },
         },
     }
     
-    UIManager:show(dialog)
+    UIManager:show(EntryUtils._current_end_dialog)
+end
+
+---Close any existing EndOfEntry dialog
+---@return nil
+function EntryUtils.closeEndOfEntryDialog()
+    if EntryUtils._current_end_dialog then
+        UIManager:close(EntryUtils._current_end_dialog)
+        EntryUtils._current_end_dialog = nil
+    end
 end
 
 -- Delegate navigation functions to NavigationUtils
