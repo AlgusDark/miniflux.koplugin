@@ -8,6 +8,7 @@ It manages the initial screen presentation and navigation to other screens.
 --]]--
 
 local BaseScreen = require("browser/screens/base_screen")
+local ScreenUI = require("browser/screens/ui_components")
 local _ = require("gettext")
 
 ---@class MainMenuItem
@@ -28,21 +29,9 @@ function MainScreen:genItemTable()
     local categories_count = self.browser.categories_count or 0
     
     return {
-        {
-            text = _("Unread"),
-            mandatory = tostring(unread_count),
-            action_type = "unread",
-        },
-        {
-            text = _("Feeds"),
-            mandatory = tostring(feeds_count),
-            action_type = "feeds",
-        },
-        {
-            text = _("Categories"),
-            mandatory = tostring(categories_count),
-            action_type = "categories",
-        },
+        ScreenUI.createMainMenuItem(_("Unread"), unread_count, "unread"),
+        ScreenUI.createMainMenuItem(_("Feeds"), feeds_count, "feeds"),
+        ScreenUI.createMainMenuItem(_("Categories"), categories_count, "categories"),
     }
 end
 
@@ -86,8 +75,8 @@ function MainScreen:showUnreadEntries(is_refresh)
     -- Check if we have no entries and show appropriate message
     local entries = result.entries or {}
     if #entries == 0 then
-        -- Create no entries item for unread-only view
-        local no_entries_items = { self:createNoEntriesItem(true) }
+        -- Create no entries item for unread-only view using ScreenUI
+        local no_entries_items = { ScreenUI.createNoEntriesItem(true) }
         
         -- Create navigation data
         local navigation_data = self:createNavigationData(

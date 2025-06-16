@@ -8,6 +8,7 @@ It manages feed data presentation and user interactions.
 --]]--
 
 local BaseScreen = require("browser/screens/base_screen")
+local ScreenUI = require("browser/screens/ui_components")
 local SortingUtils = require("browser/utils/sorting_utils")
 local _ = require("gettext")
 
@@ -72,34 +73,8 @@ function FeedsScreen:show(paths_updated, page_info)
         end
     end
     
-    local menu_items = {}
-    for _, feed in ipairs(feeds) do
-        local feed_id_str = tostring(feed.id)
-        local read_count = feed_counters.reads and feed_counters.reads[feed_id_str] or 0
-        local unread_count = feed_counters.unreads and feed_counters.unreads[feed_id_str] or 0
-        
-        local feed_title = feed.title or _("Untitled Feed")
-        
-        -- Try to get accurate total count from cache, fall back to read+unread
-        local total_count = self:getAccurateEntryCount(feed.id)
-        if not total_count then
-            total_count = read_count + unread_count
-        end
-        
-        -- Always show unread/total format for feeds (categories only show unread)
-        local count_info = string.format("(%d/%d)", unread_count, total_count)
-        
-        local menu_item = {
-            text = feed_title,
-            mandatory = count_info,
-            feed_data = feed,
-            action_type = "feed_entries",
-            -- Add unread count for sorting
-            unread_count = unread_count,
-        }
-        
-        table.insert(menu_items, menu_item)
-    end
+    -- Convert feeds to menu items using ScreenUI
+    local menu_items = ScreenUI.feedsToMenuItems(feeds, feed_counters, self.cached_entry_counts)
     
     -- Sort feeds by unread count (descending) like in Miniflux web interface
     -- This respects the "Categories sorting: Unread count" setting from the server
@@ -114,8 +89,9 @@ function FeedsScreen:show(paths_updated, page_info)
         page_info  -- Pass page_info for restoration if provided
     )
     
-    -- Build subtitle with status icon
-    local subtitle = self:buildSubtitle(#feeds, "feeds")
+    -- Build subtitle using ScreenUI
+    local hide_read_entries = self.browser.settings and self.browser.settings:getHideReadEntries()
+    local subtitle = ScreenUI.buildSubtitle(#feeds, "feeds", hide_read_entries)
     
     self:updateBrowser(_("Feeds"), menu_items, subtitle, navigation_data)
 end
@@ -152,8 +128,9 @@ function FeedsScreen:showFeedEntries(feed_id, feed_title, paths_updated)
 
     -- Check if we have no entries and show appropriate message
     if #entries == 0 then
-        -- Create no entries item
-        local no_entries_items = { self:createNoEntriesItem() }
+        -- Create no entries item using ScreenUI
+        local hide_read_entries = self.browser.settings and self.browser.settings:getHideReadEntries()
+        local no_entries_items = { ScreenUI.createNoEntriesItem(false) }
         
         -- Create navigation data
         local navigation_data = self:createNavigationData(

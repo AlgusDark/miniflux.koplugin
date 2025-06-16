@@ -7,8 +7,7 @@ and other operations, eliminating code duplication across the browser modules.
 @module miniflux.browser.utils.error_utils
 --]]--
 
-local InfoMessage = require("ui/widget/infomessage")
-local UIManager = require("ui/uimanager")
+local UIComponents = require("browser/lib/ui_components")
 local _ = require("gettext")
 
 local ErrorUtils = {}
@@ -25,7 +24,7 @@ function ErrorUtils.handleApiCall(params)
     local skip_validation = params.skip_validation or false
     
     -- Show loading message
-    local loading_info = browser:showLoadingMessage(loading_message)
+    local loading_info = UIComponents.showLoadingMessage(loading_message)
     
     -- Execute API call with error protection
     local success, result
@@ -34,11 +33,11 @@ function ErrorUtils.handleApiCall(params)
     end)
     
     -- Close loading message
-    browser:closeLoadingMessage(loading_info)
+    UIComponents.closeLoadingMessage(loading_info)
     
     -- Handle network/execution errors
     if not ok then
-        browser:showErrorMessage(_("Failed to ") .. operation_name .. ": " .. tostring(err))
+        UIComponents.showApiError(operation_name, err)
         return nil
     end
     
@@ -69,24 +68,22 @@ function ErrorUtils.simpleApiCall(browser, operation_name, api_call_func)
 end
 
 ---Show standardized error message
----@param browser BaseBrowser Browser instance
+---@param browser BaseBrowser Browser instance (not used anymore, kept for compatibility)
 ---@param operation_name string Operation that failed
 ---@param error_message string Specific error message
 ---@param timeout? number Message timeout in seconds
 ---@return nil
 function ErrorUtils.showError(browser, operation_name, error_message, timeout)
-    local message = _("Failed to ") .. operation_name .. ": " .. tostring(error_message)
-    browser:showErrorMessage(message, timeout)
+    UIComponents.showApiError(operation_name, error_message, timeout)
 end
 
 ---Show standardized success message
----@param browser BaseBrowser Browser instance
+---@param browser BaseBrowser Browser instance (not used anymore, kept for compatibility)
 ---@param operation_name string Operation that succeeded
 ---@param timeout? number Message timeout in seconds
 ---@return nil
 function ErrorUtils.showSuccess(browser, operation_name, timeout)
-    local message = operation_name .. _(" completed successfully")
-    browser:showInfoMessage(message, timeout or 2)
+    UIComponents.showOperationSuccess(operation_name, timeout or 2)
 end
 
 ---Wrap a function call with error handling

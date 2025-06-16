@@ -8,6 +8,7 @@ It manages category data presentation and user interactions.
 --]]--
 
 local BaseScreen = require("browser/screens/base_screen")
+local ScreenUI = require("browser/screens/ui_components")
 local SortingUtils = require("browser/utils/sorting_utils")
 local _ = require("gettext")
 
@@ -40,8 +41,8 @@ function CategoriesScreen:show(paths_updated, page_info)
         return
     end
     
-    -- Build menu items
-    local menu_items = self:buildCategoryMenuItems(result)
+    -- Build menu items using ScreenUI
+    local menu_items = ScreenUI.categoriesToMenuItems(result)
     
     -- Sort by unread count
     SortingUtils.sortByUnreadCount(menu_items)
@@ -59,8 +60,9 @@ function CategoriesScreen:show(paths_updated, page_info)
         navigation_data.restore_page_info = page_info
     end
     
-    -- Build subtitle with status icon
-    local subtitle = self:buildSubtitle(#result, "categories")
+    -- Build subtitle using ScreenUI
+    local hide_read_entries = self.browser.settings and self.browser.settings:getHideReadEntries()
+    local subtitle = ScreenUI.buildSubtitle(#result, "categories", hide_read_entries)
     
     self:updateBrowser(_("Categories"), menu_items, subtitle, navigation_data)
 end
@@ -119,8 +121,8 @@ function CategoriesScreen:showCategoryEntries(category_id, category_title, paths
     -- Check if we have no entries and show appropriate message
     local entries = result.entries or {}
     if #entries == 0 then
-        -- Create no entries item
-        local no_entries_items = { self:createNoEntriesItem() }
+        -- Create no entries item using ScreenUI
+        local no_entries_items = { ScreenUI.createNoEntriesItem(false) }
         
         -- Create navigation data
         local navigation_data = self:createNavigationData(

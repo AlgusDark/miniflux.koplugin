@@ -4,6 +4,8 @@ Base browser class for Miniflux browsers
 @module koplugin.miniflux.browser.base_browser
 --]]--
 
+local UIComponents = require("browser/lib/ui_components")
+local ScreenUI = require("browser/screens/ui_components")
 local Menu = require("ui/widget/menu")
 local UIManager = require("ui/uimanager")
 local InfoMessage = require("ui/widget/infomessage")
@@ -332,21 +334,14 @@ end
 ---@param text? string Loading message text
 ---@return InfoMessage Loading message widget
 function BaseBrowser:showLoadingMessage(text)
-    local loading_info = InfoMessage:new{
-        text = text or _("Loading..."),
-    }
-    UIManager:show(loading_info)
-    UIManager:forceRePaint() -- Force immediate display before API call blocks
-    return loading_info
+    return UIComponents.showLoadingMessage(text)
 end
 
 ---Close loading message
 ---@param loading_info InfoMessage Loading message widget to close
 ---@return nil
 function BaseBrowser:closeLoadingMessage(loading_info)
-    if loading_info then
-        UIManager:close(loading_info)
-    end
+    UIComponents.closeLoadingMessage(loading_info)
 end
 
 ---Show error message
@@ -354,10 +349,7 @@ end
 ---@param timeout? number Message timeout in seconds
 ---@return nil
 function BaseBrowser:showErrorMessage(message, timeout)
-    UIManager:show(InfoMessage:new{
-        text = message,
-        timeout = timeout or 5,
-    })
+    UIComponents.showErrorMessage(message, timeout)
 end
 
 ---Show info message
@@ -365,10 +357,7 @@ end
 ---@param timeout? number Message timeout in seconds
 ---@return nil
 function BaseBrowser:showInfoMessage(message, timeout)
-    UIManager:show(InfoMessage:new{
-        text = message,
-        timeout = timeout or 3,
-    })
+    UIComponents.showInfoMessage(message, timeout)
 end
 
 ---Handle API errors with user feedback
@@ -409,52 +398,25 @@ function BaseBrowser:showEntriesList(entries, title_prefix, is_category, navigat
     for i, entry in ipairs(entries) do
         -- Check if this is a special non-entry item (like "no entries" message)
         if entry.action_type == "no_action" then
-            local menu_item = {
+            table.insert(menu_items, ScreenUI.createMenuItem({
                 text = entry.text,
                 mandatory = entry.mandatory or "",
-                action_type = entry.action_type,
-            }
-            table.insert(menu_items, menu_item)
+                action_type = entry.action_type
+            }))
             has_no_entries_message = true
         else
-            -- This is a regular entry, process it normally
-            local entry_title = entry.title or _("Untitled Entry")
-            local feed_title = entry.feed and entry.feed.title or _("Unknown Feed")
-            
-            -- Add read/unread status indicator
-            local status_indicator = ""
-            if entry.status == "read" then
-                status_indicator = "○ "  -- Open circle for read entries
-            else
-                status_indicator = "● "  -- Filled circle for unread entries
-            end
-            
-            local display_text = status_indicator .. entry_title
-            if is_category then
-                display_text = status_indicator .. entry_title .. " (" .. feed_title .. ")"
-            end
-            
-            local menu_item = {
-                text = display_text,
-                entry_data = entry,
-                action_type = "read_entry",
-            }
-            
-            table.insert(menu_items, menu_item)
+            -- This is a regular entry, use ScreenUI to create the menu item
+            table.insert(menu_items, ScreenUI.createEntryMenuItem(entry, is_category))
         end
     end
     
     if #menu_items == 0 then
-        menu_items = {{
-            text = _("No entries found"),
-            action_type = "none",
-        }}
+        menu_items = ScreenUI.createFallbackItems(_("No entries found"))
     end
     
-    -- Build subtitle with appropriate icon and count
+    -- Build subtitle using ScreenUI
     local hide_read_entries = self.settings and self.settings:getHideReadEntries()
-    local eye_icon = hide_read_entries and "⊘ " or "◯ "
-    local subtitle = eye_icon .. #entries .. _(" entries")
+    local subtitle = ScreenUI.buildEntriesSubtitle(#entries, hide_read_entries)
     
     self:updateBrowser(title_prefix, menu_items, subtitle, navigation_data)
 end
