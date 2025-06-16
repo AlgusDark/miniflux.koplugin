@@ -25,6 +25,16 @@ local _ = require("gettext")
 ---@field cached_entry_counts? table<string, number> Cached accurate entry counts per feed
 local FeedsScreen = BaseScreen:extend{}
 
+---Create a new FeedsScreen instance
+---@return FeedsScreen
+function FeedsScreen:new()
+    local obj = BaseScreen.new(self)
+    setmetatable(obj, self)
+    self.__index = self
+    ---@cast obj FeedsScreen
+    return obj
+end
+
 ---Show feeds list screen
 ---@param paths_updated? boolean Whether navigation paths were updated
 ---@param page_info? table Page information for restoration

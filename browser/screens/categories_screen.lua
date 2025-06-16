@@ -22,6 +22,16 @@ local _ = require("gettext")
 ---@field cached_categories? MinifluxCategory[] Cached categories data
 local CategoriesScreen = BaseScreen:extend{}
 
+---Create a new CategoriesScreen instance
+---@return CategoriesScreen
+function CategoriesScreen:new()
+    local obj = BaseScreen.new(self)
+    setmetatable(obj, self)
+    self.__index = self
+    ---@cast obj CategoriesScreen
+    return obj
+end
+
 ---Show categories list screen
 ---@param paths_updated? boolean Whether navigation paths were updated
 ---@param page_info? table Page information for restoration

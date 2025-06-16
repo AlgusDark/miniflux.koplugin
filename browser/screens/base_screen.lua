@@ -13,7 +13,7 @@ local ErrorUtils = require("browser/utils/error_utils")
 local _ = require("gettext")
 
 ---@class BaseScreen
----@field browser BaseBrowser Reference to the browser instance
+---@field browser MainBrowser Reference to the browser instance
 local BaseScreen = {}
 
 ---Create a new base screen instance

@@ -20,6 +20,16 @@ local _ = require("gettext")
 ---@field cached_unread_count? number Cached unread count
 local MainScreen = BaseScreen:extend{}
 
+---Create a new MainScreen instance
+---@return MainScreen
+function MainScreen:new()
+    local obj = BaseScreen.new(self)
+    setmetatable(obj, self)
+    self.__index = self
+    ---@cast obj MainScreen
+    return obj
+end
+
 ---Generate main menu items table
 ---@return MainMenuItem[] Array of main menu items
 function MainScreen:genItemTable()
