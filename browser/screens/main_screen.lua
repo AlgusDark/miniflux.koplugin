@@ -7,7 +7,7 @@ It manages the initial screen presentation and navigation to other screens.
 @module miniflux.browser.screens.main_screen
 --]]--
 
-local BrowserUtils = require("browser/utils/browser_utils")
+local BaseScreen = require("browser/screens/base_screen")
 local _ = require("gettext")
 
 ---@class MainMenuItem
@@ -15,26 +15,9 @@ local _ = require("gettext")
 ---@field mandatory string Menu item count or status
 ---@field action_type string Action type identifier
 
----@class MainScreen
----@field browser BaseBrowser Reference to the browser instance
+---@class MainScreen : BaseScreen
 ---@field cached_unread_count? number Cached unread count
-local MainScreen = {}
-
----Create a new main screen instance
----@return MainScreen
-function MainScreen:new()
-    local obj = {}
-    setmetatable(obj, self)
-    self.__index = self
-    return obj
-end
-
----Initialize the main screen
----@param browser BaseBrowser Browser instance to manage
----@return nil
-function MainScreen:init(browser)
-    self.browser = browser
-end
+local MainScreen = BaseScreen:extend{}
 
 ---Generate main menu items table
 ---@return MainMenuItem[] Array of main menu items
@@ -68,20 +51,16 @@ end
 function MainScreen:show()
     local main_items = self:genItemTable()
     
-    -- Build subtitle with status icon
-    local hide_read_entries = self.browser.settings and self.browser.settings:getHideReadEntries()
-    local eye_icon = hide_read_entries and "⊘ " or "◯ "
-    local subtitle = eye_icon .. ""  -- Just the icon for main screen
+    -- Build subtitle with status icon (just the icon for main screen)
+    local subtitle = self:getStatusIcon()
     
-    self.browser:updateBrowser(_("Miniflux"), main_items, subtitle, {paths_updated = true})
+    self:updateBrowser(_("Miniflux"), main_items, subtitle, {paths_updated = true})
 end
 
 ---Show unread entries screen
 ---@param is_refresh? boolean Whether this is a refresh operation
 ---@return nil
 function MainScreen:showUnreadEntries(is_refresh)
-    local loading_info = self.browser:showLoadingMessage(_("Fetching entries..."))
-    
     -- HARDCODE: Always fetch only unread entries for this view, regardless of user settings
     local options = {
         status = {"unread"},  -- Always unread only
@@ -90,59 +69,51 @@ function MainScreen:showUnreadEntries(is_refresh)
         limit = self.browser.settings:getLimit(),
     }
     
-    local success, result
-    local ok, err = pcall(function()
-        success, result = self.browser.api:getEntries(options)
-    end)
+    local result = self:performApiCall({
+        operation_name = "fetch entries",
+        api_call_func = function()
+            return self.browser.api:getEntries(options)
+        end,
+        loading_message = _("Fetching entries..."),
+        data_name = "entries",
+        skip_validation = true  -- Skip validation since we handle empty entries properly
+    })
     
-    self.browser:closeLoadingMessage(loading_info)
-    
-    if not ok then
-        self.browser:showErrorMessage(_("Failed to fetch entries: ") .. tostring(err))
-        return
-    end
-    
-    if not self.browser:handleApiError(success, result, _("Failed to fetch entries")) then
+    if not result then
         return
     end
     
     -- Check if we have no entries and show appropriate message
     local entries = result.entries or {}
     if #entries == 0 then
-        -- Always show "unread entries" message since this view is specifically for unread
-        local no_entries_items = {
-            {
-                text = _("There are no unread entries."),
-                mandatory = "",
-                action_type = "no_action",
-            }
-        }
+        -- Create no entries item for unread-only view
+        local no_entries_items = { self:createNoEntriesItem(true) }
         
         -- Create navigation data
-        local navigation_data = self.browser.page_state_manager:createNavigationData(
-            is_refresh or false,  -- Use is_refresh parameter if provided
+        local navigation_data = self:createNavigationData(
+            is_refresh or false,
             "main",
             nil,
             nil,  -- page_info 
-            is_refresh -- is_settings_refresh when this is a refresh
+            is_refresh
         )
         
         -- Always use "Unread Entries" title since this view is specifically for unread
-        self.browser:showEntriesList(no_entries_items, _("Unread Entries"), true, navigation_data)
+        self:showEntriesList(no_entries_items, _("Unread Entries"), true, navigation_data)
         return
     end
     
     -- Create navigation data
-    local navigation_data = self.browser.page_state_manager:createNavigationData(
-        is_refresh or false,  -- Use is_refresh parameter if provided
+    local navigation_data = self:createNavigationData(
+        is_refresh or false,
         "main",
         nil,
         nil,  -- page_info 
-        is_refresh -- is_settings_refresh when this is a refresh
+        is_refresh
     )
     
     -- Always use "Unread Entries" title since this view is specifically for unread
-    self.browser:showEntriesList(entries, _("Unread Entries"), true, navigation_data)
+    self:showEntriesList(entries, _("Unread Entries"), true, navigation_data)
 end
 
 ---Show unread entries screen (refresh version - no navigation context)

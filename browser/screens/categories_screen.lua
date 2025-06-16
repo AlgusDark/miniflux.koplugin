@@ -7,7 +7,7 @@ It manages category data presentation and user interactions.
 @module miniflux.browser.screens.categories_screen
 --]]--
 
-local BrowserUtils = require("browser/utils/browser_utils")
+local BaseScreen = require("browser/screens/base_screen")
 local SortingUtils = require("browser/utils/sorting_utils")
 local _ = require("gettext")
 
@@ -17,52 +17,26 @@ local _ = require("gettext")
 ---@field action_type string Action type identifier
 ---@field category_data MinifluxCategory Category data
 
----@class CategoriesScreen
----@field browser BaseBrowser Reference to the browser instance
+---@class CategoriesScreen : BaseScreen
 ---@field cached_categories? MinifluxCategory[] Cached categories data
-local CategoriesScreen = {}
-
----Create a new categories screen instance
----@return CategoriesScreen
-function CategoriesScreen:new()
-    local obj = {}
-    setmetatable(obj, self)
-    self.__index = self
-    return obj
-end
-
----Initialize the categories screen
----@param browser BaseBrowser Browser instance to manage
----@return nil
-function CategoriesScreen:init(browser)
-    self.browser = browser
-end
+local CategoriesScreen = BaseScreen:extend{}
 
 ---Show categories list screen
 ---@param paths_updated? boolean Whether navigation paths were updated
 ---@param page_info? table Page information for restoration
 ---@return nil
 function CategoriesScreen:show(paths_updated, page_info)
-    local loading_info = self.browser:showLoadingMessage(_("Fetching categories..."))
-    
     -- Request categories with counts enabled
-    local success, result
-    local ok, err = pcall(function()
-        success, result = self.browser.api:getCategories(true)
-    end)
+    local result = self:performApiCall({
+        operation_name = "fetch categories",
+        api_call_func = function()
+            return self.browser.api:getCategories(true)
+        end,
+        loading_message = _("Fetching categories..."),
+        data_name = "categories"
+    })
     
-    self.browser:closeLoadingMessage(loading_info)
-    
-    if not ok then
-        self.browser:showErrorMessage(_("Failed to fetch categories: ") .. tostring(err))
-        return
-    end
-    
-    if not self.browser:handleApiError(success, result, _("Failed to fetch categories")) then
-        return
-    end
-    
-    if not self.browser:validateData(result, "categories") then
+    if not result then
         return
     end
     
@@ -73,7 +47,7 @@ function CategoriesScreen:show(paths_updated, page_info)
     SortingUtils.sortByUnreadCount(menu_items)
     
     -- Create navigation data
-    local navigation_data = self.browser.page_state_manager:createNavigationData(
+    local navigation_data = self:createNavigationData(
         paths_updated, 
         "main", 
         nil, 
@@ -86,11 +60,9 @@ function CategoriesScreen:show(paths_updated, page_info)
     end
     
     -- Build subtitle with status icon
-    local hide_read_entries = self.browser.settings and self.browser.settings:getHideReadEntries()
-    local eye_icon = hide_read_entries and "⊘ " or "◯ "
-    local subtitle = eye_icon .. #result .. _(" categories")
+    local subtitle = self:buildSubtitle(#result, "categories")
     
-    self.browser:updateBrowser(_("Categories"), menu_items, subtitle, navigation_data)
+    self:updateBrowser(_("Categories"), menu_items, subtitle, navigation_data)
 end
 
 ---Build menu items for categories
@@ -128,40 +100,30 @@ end
 ---@param paths_updated? boolean Whether navigation paths were updated
 ---@return nil
 function CategoriesScreen:showCategoryEntries(category_id, category_title, paths_updated)
-    local loading_info = self.browser:showLoadingMessage(_("Fetching entries for category..."))
+    local options = self:getApiOptions()
     
-    local options = BrowserUtils.getApiOptions(self.browser.settings)
-    local success, result
-    local ok, err = pcall(function()
-        success, result = self.browser.api:getCategoryEntries(category_id, options)
-    end)
+    local result = self:performApiCall({
+        operation_name = "fetch category entries",
+        api_call_func = function()
+            return self.browser.api:getCategoryEntries(category_id, options)
+        end,
+        loading_message = _("Fetching entries for category..."),
+        data_name = "category entries",
+        skip_validation = true  -- Skip validation since we handle empty entries properly
+    })
     
-    self.browser:closeLoadingMessage(loading_info)
-    
-    if not ok then
-        self.browser:showErrorMessage(_("Failed to fetch category entries: ") .. tostring(err))
-        return
-    end
-    
-    if not self.browser:handleApiError(success, result, _("Failed to fetch category entries")) then
+    if not result then
         return
     end
     
     -- Check if we have no entries and show appropriate message
     local entries = result.entries or {}
     if #entries == 0 then
-        local hide_read_entries = self.browser.settings and self.browser.settings:getHideReadEntries()
-        -- Show "no entries" message
-        local no_entries_items = {
-            {
-                text = hide_read_entries and _("There are no unread entries.") or _("There are no entries."),
-                mandatory = "",
-                action_type = "no_action",
-            }
-        }
+        -- Create no entries item
+        local no_entries_items = { self:createNoEntriesItem() }
         
         -- Create navigation data
-        local navigation_data = self.browser.page_state_manager:createNavigationData(
+        local navigation_data = self:createNavigationData(
             paths_updated or false,
             "categories", 
             {
@@ -172,12 +134,12 @@ function CategoriesScreen:showCategoryEntries(category_id, category_title, paths
             paths_updated  -- is_settings_refresh when paths_updated is true
         )
         
-        self.browser:showEntriesList(no_entries_items, category_title, true, navigation_data)
+        self:showEntriesList(no_entries_items, category_title, true, navigation_data)
         return
     end
     
     -- Create navigation data - ensure we capture current page state unless paths are being updated
-    local navigation_data = self.browser.page_state_manager:createNavigationData(
+    local navigation_data = self:createNavigationData(
         paths_updated or false,
         "categories", 
         {
@@ -188,7 +150,7 @@ function CategoriesScreen:showCategoryEntries(category_id, category_title, paths
         paths_updated  -- is_settings_refresh when paths_updated is true
     )
     
-    self.browser:showEntriesList(entries, category_title, true, navigation_data)
+    self:showEntriesList(entries, category_title, true, navigation_data)
 end
 
 ---Show entries for a specific category (refresh version - no navigation context)

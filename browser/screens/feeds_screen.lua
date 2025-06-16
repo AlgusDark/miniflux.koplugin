@@ -7,9 +7,8 @@ It manages feed data presentation and user interactions.
 @module miniflux.browser.screens.feeds_screen
 --]]--
 
-local BrowserUtils = require("browser/utils/browser_utils")
+local BaseScreen = require("browser/screens/base_screen")
 local SortingUtils = require("browser/utils/sorting_utils")
-local ErrorUtils = require("browser/utils/error_utils")
 local _ = require("gettext")
 
 ---@class FeedMenuItem
@@ -19,28 +18,11 @@ local _ = require("gettext")
 ---@field action_type string Action type identifier
 ---@field unread_count number Unread count for sorting
 
----@class FeedsScreen
----@field browser BaseBrowser Reference to the browser instance
+---@class FeedsScreen : BaseScreen
 ---@field cached_feeds? MinifluxFeed[] Cached feeds data
 ---@field cached_counters? FeedCounters Cached feed counters
 ---@field cached_entry_counts? table<string, number> Cached accurate entry counts per feed
-local FeedsScreen = {}
-
----Create a new feeds screen instance
----@return FeedsScreen
-function FeedsScreen:new()
-    local obj = {}
-    setmetatable(obj, self)
-    self.__index = self
-    return obj
-end
-
----Initialize the feeds screen
----@param browser BaseBrowser Browser instance to manage
----@return nil
-function FeedsScreen:init(browser)
-    self.browser = browser
-end
+local FeedsScreen = BaseScreen:extend{}
 
 ---Show feeds list screen
 ---@param paths_updated? boolean Whether navigation paths were updated
@@ -52,8 +34,7 @@ function FeedsScreen:show(paths_updated, page_info)
     local feed_counters = self:getCachedCounters()
     
     if not feeds then
-        feeds = ErrorUtils.handleApiCall({
-            browser = self.browser,
+        feeds = self:performApiCall({
             operation_name = "fetch feeds",
             api_call_func = function()
                 return self.browser.api:getFeeds()
@@ -71,8 +52,7 @@ function FeedsScreen:show(paths_updated, page_info)
     
     -- Fetch feed counters if not cached
     if not feed_counters then
-        feed_counters = ErrorUtils.handleApiCall({
-            browser = self.browser,
+        feed_counters = self:performApiCall({
             operation_name = "fetch feed counters",
             api_call_func = function()
                 return self.browser.api:getFeedCounters()
@@ -127,7 +107,7 @@ function FeedsScreen:show(paths_updated, page_info)
     SortingUtils.sortByUnreadCount(menu_items)
     
     -- Create navigation data to save our current state
-    local navigation_data = self.browser.page_state_manager:createNavigationData(
+    local navigation_data = self:createNavigationData(
         paths_updated or false,  -- Don't add to history if paths were just updated  
         "main",
         nil,
@@ -135,11 +115,9 @@ function FeedsScreen:show(paths_updated, page_info)
     )
     
     -- Build subtitle with status icon
-    local hide_read_entries = self.browser.settings and self.browser.settings:getHideReadEntries()
-    local eye_icon = hide_read_entries and "⊘ " or "◯ "
-    local subtitle = eye_icon .. #feeds .. _(" feeds")
+    local subtitle = self:buildSubtitle(#feeds, "feeds")
     
-    self.browser:updateBrowser(_("Feeds"), menu_items, subtitle, navigation_data)
+    self:updateBrowser(_("Feeds"), menu_items, subtitle, navigation_data)
 end
 
 ---Show entries for a specific feed
@@ -148,10 +126,9 @@ end
 ---@param paths_updated? boolean Whether navigation paths were updated
 ---@return nil
 function FeedsScreen:showFeedEntries(feed_id, feed_title, paths_updated)
-    local options = BrowserUtils.getApiOptions(self.browser.settings)
+    local options = self:getApiOptions()
     
-    local result = ErrorUtils.handleApiCall({
-        browser = self.browser,
+    local result = self:performApiCall({
         operation_name = "fetch feed entries",
         api_call_func = function()
             return self.browser.api:getFeedEntries(feed_id, options)
@@ -175,18 +152,11 @@ function FeedsScreen:showFeedEntries(feed_id, feed_title, paths_updated)
 
     -- Check if we have no entries and show appropriate message
     if #entries == 0 then
-        local hide_read_entries = self.browser.settings and self.browser.settings:getHideReadEntries()
-        -- Show "no entries" message
-        local no_entries_items = {
-            {
-                text = hide_read_entries and _("There are no unread entries.") or _("There are no entries."),
-                mandatory = "",
-                action_type = "no_action",
-            }
-        }
+        -- Create no entries item
+        local no_entries_items = { self:createNoEntriesItem() }
         
         -- Create navigation data
-        local navigation_data = self.browser.page_state_manager:createNavigationData(
+        local navigation_data = self:createNavigationData(
             paths_updated or false,
             "feeds", 
             {
@@ -197,12 +167,12 @@ function FeedsScreen:showFeedEntries(feed_id, feed_title, paths_updated)
             paths_updated  -- is_settings_refresh when paths_updated is true
         )
         
-        self.browser:showEntriesList(no_entries_items, feed_title, false, navigation_data)
+        self:showEntriesList(no_entries_items, feed_title, false, navigation_data)
         return
     end
     
     -- Create navigation data - ensure we capture current page state unless paths are being updated  
-    local navigation_data = self.browser.page_state_manager:createNavigationData(
+    local navigation_data = self:createNavigationData(
         paths_updated or false,  -- Default to false so we capture current state
         "feeds", 
         {
@@ -213,7 +183,7 @@ function FeedsScreen:showFeedEntries(feed_id, feed_title, paths_updated)
         paths_updated  -- is_settings_refresh when paths_updated is true
     )
     
-    self.browser:showEntriesList(entries, feed_title, false, navigation_data)
+    self:showEntriesList(entries, feed_title, false, navigation_data)
 end
 
 ---Handle feed screen content restoration from navigation
