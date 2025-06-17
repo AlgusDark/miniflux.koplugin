@@ -11,13 +11,14 @@ local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local DataStorage = require("datastorage")
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
+local Dispatcher = require("dispatcher")
+local _ = require("gettext")
 
 -- Import specialized modules
 local MinifluxAPI = require("api/api_client")
 local MinifluxSettings = require("settings/settings")
 local BrowserLauncher = require("browser/ui/browser_launcher")
 local MenuManager = require("menu/menu_manager")
-local EventHandler = require("events/event_handler")
 
 ---@class Miniflux : WidgetContainer
 ---@field name string Plugin name identifier
@@ -27,7 +28,6 @@ local EventHandler = require("events/event_handler")
 ---@field api MinifluxAPI API client instance
 ---@field browser_launcher BrowserLauncher Browser launcher instance
 ---@field menu_manager MenuManager Menu construction manager
----@field event_handler EventHandler Event handling manager
 local Miniflux = WidgetContainer:extend({
     name = "miniflux",
     is_doc_only = false,
@@ -67,10 +67,6 @@ function Miniflux:init()
 
     -- Create specialized managers
     self.menu_manager = MenuManager:new()
-    self.event_handler = EventHandler:new()
-
-    -- Set up event handling
-    self.event_handler:initializeEvents(self)
 
     -- Override ReaderStatus EndOfBook behavior for miniflux entries
     self:overrideEndOfBookBehavior()
@@ -109,8 +105,20 @@ end
 ---Handle dispatcher events (method required by KOReader)
 ---@return nil
 function Miniflux:onDispatcherRegisterActions()
-    -- Delegate to event handler
-    self.event_handler:registerDispatcherActions()
+    Dispatcher:registerAction("miniflux_read_entries", {
+        category = "none",
+        event = "ReadMinifluxEntries",
+        title = _("Read Miniflux entries"),
+        general = true,
+    })
+end
+
+---Handle the read entries dispatcher event
+---@return nil
+function Miniflux:onReadMinifluxEntries()
+    if self.browser_launcher then
+        self.browser_launcher:showMainScreen()
+    end
 end
 
 ---Override ReaderStatus EndOfBook behavior to handle miniflux entries
