@@ -8,43 +8,66 @@ This main file acts as a coordinator, delegating to specialized modules.
 --]]
 
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
+local DataStorage = require("datastorage")
+local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
 
 -- Import specialized modules
-local PluginInitializer = require("initialization/plugin_initializer")
+local MinifluxAPI = require("api/api_client")
+local MinifluxSettings = require("settings/settings")
+local BrowserLauncher = require("browser/ui/browser_launcher")
 local MenuManager = require("menu/menu_manager")
 local EventHandler = require("events/event_handler")
 
 ---@class Miniflux : WidgetContainer
 ---@field name string Plugin name identifier
 ---@field is_doc_only boolean Whether plugin is document-only
----@field initializer PluginInitializer Plugin initialization manager
----@field menu_manager MenuManager Menu construction manager
----@field event_handler EventHandler Event handling manager
 ---@field download_dir string Full path to download directory
+---@field settings table Settings module instance
 ---@field api MinifluxAPI API client instance
 ---@field browser_launcher BrowserLauncher Browser launcher instance
+---@field menu_manager MenuManager Menu construction manager
+---@field event_handler EventHandler Event handling manager
 local Miniflux = WidgetContainer:extend({
     name = "miniflux",
     is_doc_only = false,
 })
 
----Initialize the plugin by delegating to specialized modules
+---Initialize the plugin by setting up all components
 ---@return nil
 function Miniflux:init()
     logger.info("Initializing Miniflux plugin")
 
-    -- Create specialized managers
-    self.initializer = PluginInitializer:new()
-    self.menu_manager = MenuManager:new()
-    self.event_handler = EventHandler:new()
-
-    -- Initialize plugin components
-    local init_success = self.initializer:initializePlugin(self)
-    if not init_success then
-        logger.err("Failed to initialize Miniflux plugin")
+    -- Initialize download directory
+    local download_dir = self:initializeDownloadDirectory()
+    if not download_dir then
+        logger.err("Failed to initialize download directory")
         return
     end
+    self.download_dir = download_dir
+
+    -- Initialize settings
+    self.settings = MinifluxSettings
+    self.settings.init()
+
+    -- Initialize API client
+    self.api = MinifluxAPI:new()
+
+    -- Initialize browser launcher with dependency injection
+    self.browser_launcher = BrowserLauncher:new()
+    self.browser_launcher:init(self.settings, self.api, download_dir)
+
+    -- Initialize API with current settings if available
+    if self.settings.isConfigured() then
+        self.api:init(
+            self.settings.getServerAddress(), 
+            self.settings.getApiToken()
+        )
+    end
+
+    -- Create specialized managers
+    self.menu_manager = MenuManager:new()
+    self.event_handler = EventHandler:new()
 
     -- Set up event handling
     self.event_handler:initializeEvents(self)
@@ -56,6 +79,24 @@ function Miniflux:init()
     self.ui.menu:registerToMainMenu(self)
 
     logger.info("Miniflux plugin initialization complete")
+end
+
+---Initialize the download directory for entries
+---@return string|nil Download directory path or nil if failed
+function Miniflux:initializeDownloadDirectory()
+    local download_dir = ("%s/%s/"):format(DataStorage:getFullDataDir(), "miniflux")
+
+    -- Create the directory if it doesn't exist
+    if not lfs.attributes(download_dir, "mode") then
+        logger.dbg("Miniflux: Creating download directory:", download_dir)
+        local success = lfs.mkdir(download_dir)
+        if not success then
+            logger.err("Failed to create download directory:", download_dir)
+            return nil
+        end
+    end
+
+    return download_dir
 end
 
 ---Add Miniflux items to the main menu (called by KOReader)

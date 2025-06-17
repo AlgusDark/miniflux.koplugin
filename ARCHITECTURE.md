@@ -1,6 +1,6 @@
 # Miniflux Plugin Architecture
 
-This document describes the improved modular architecture of the Miniflux plugin, where `main.lua` has been transformed from a monolithic file into a simple coordinator that delegates to specialized modules.
+This document describes the streamlined modular architecture of the Miniflux plugin, where `main.lua` handles both coordination and initialization while delegating specialized functionality to focused modules.
 
 ## Before: Monolithic main.lua (189 lines)
 
@@ -11,21 +11,19 @@ The original `main.lua` was handling too many responsibilities:
 - ❌ Module coordination and dependency management
 - ❌ Mixed abstraction levels (low-level file ops + high-level coordination)
 
-## After: Modular Architecture (52 lines)
+## After: Streamlined Architecture (165 lines)
 
-The new `main.lua` is a **pure coordinator** that delegates to specialized modules:
-- ✅ Simple plugin definition and coordination only
-- ✅ Delegates initialization to `PluginInitializer`
+The new `main.lua` is a **coordinator with integrated initialization**:
+- ✅ Simple plugin definition and initialization
 - ✅ Delegates menu construction to `MenuManager`  
 - ✅ Delegates event handling to `EventHandler`
 - ✅ Clean separation of concerns
+- ✅ Direct initialization without unnecessary abstraction layers
 
 ## Architecture Overview
 
 ```
-main.lua (52 lines - Pure Coordinator)
-├── initialization/
-│   └── plugin_initializer.lua    # Bootstrap & setup logic
+main.lua (165 lines - Coordinator + Initialization)
 ├── menu/
 │   └── menu_manager.lua          # Menu construction & management
 ├── events/
@@ -37,18 +35,12 @@ main.lua (52 lines - Pure Coordinator)
 
 ## Module Responsibilities
 
-### 📋 main.lua - Pure Coordinator (52 lines)
-**Single Responsibility**: Coordinate between specialized modules
-- Creates specialized managers (`PluginInitializer`, `MenuManager`, `EventHandler`)
-- Delegates initialization, menu setup, and event handling
+### 📋 main.lua - Coordinator & Initializer (165 lines)
+**Single Responsibility**: Coordinate modules and handle straightforward initialization
+- Creates specialized managers (`MenuManager`, `EventHandler`)
+- Initializes download directory, settings, API, and browser launcher
 - Provides KOReader integration points (`init`, `addToMainMenu`, `onDispatcherRegisterActions`)
-- **Zero business logic** - pure coordination
-
-### 🚀 initialization/ - Bootstrap & Setup
-**Single Responsibility**: Plugin component initialization
-- **`plugin_initializer.lua`**: Handles directory setup, module initialization, dependency injection
-- Robust error handling during startup
-- Clean separation of initialization logic from coordination
+- **Focused initialization logic** - no unnecessary abstraction
 
 ### 📱 menu/ - Menu Construction & Management  
 **Single Responsibility**: KOReader menu integration
@@ -66,25 +58,24 @@ main.lua (52 lines - Pure Coordinator)
 
 ### 1. **Single Responsibility Principle**
 Each module has one clear purpose:
-- `main.lua`: Coordination only
-- `initialization/`: Setup only  
+- `main.lua`: Coordination and initialization
 - `menu/`: Menu construction only
 - `events/`: Event handling only
 
-### 2. **Maintainability**
-- **Easy to find code**: Menu changes go in `menu/`, initialization changes go in `initialization/`
-- **No mixed concerns**: No more low-level directory ops mixed with high-level coordination
+### 2. **Simplified Structure**
+- **Removed unnecessary abstraction**: Initialization logic is straightforward and doesn't need a separate module
+- **No mixed concerns**: Low-level initialization separate from high-level coordination within main.lua
 - **Clear dependencies**: Each module has clear, injected dependencies
 
-### 3. **Testability**  
-- **Isolated modules**: Each module can be tested independently
-- **Dependency injection**: Easy to mock dependencies for testing
-- **Focused tests**: Tests can focus on specific responsibilities
+### 3. **Maintainability**  
+- **Easy to find code**: Menu changes go in `menu/`, event changes go in `events/`
+- **Simplified initialization**: All setup logic in one logical place
+- **Focused modules**: Each specialized module does one thing well
 
 ### 4. **Extensibility**
 - **New menu items**: Add to `MenuManager` without touching main file
 - **New events**: Add to `EventHandler` without affecting other code  
-- **New initialization steps**: Add to `PluginInitializer` with proper error handling
+- **New initialization steps**: Add directly to main.lua init method
 
 ### 5. **Consistency**
 Now follows the same excellent patterns used in:
@@ -99,19 +90,19 @@ Now follows the same excellent patterns used in:
 - **Coupling**: High coupling between concerns
 - **Testing**: Difficult to test individual components
 
-### After Refactoring
-- **main.lua**: 52 lines of pure coordination (**72% reduction**)
-- **initialization/**: 75 lines of focused setup logic
-- **menu/**: 180 lines of focused menu construction
-- **events/**: 45 lines of focused event handling
-- **Total**: 352 lines across 4 focused modules vs 189 lines of mixed concerns
+### After Streamlined Refactoring
+- **main.lua**: 165 lines of coordination and initialization (**13% reduction**)
+- **menu/**: 511 lines of focused menu construction and dialogs
+- **events/**: 58 lines of focused event handling
+- **Total**: Clean, focused modules with minimal abstraction overhead
 
 ### Key Improvements
-- **📦 Modular Design**: Clear separation of concerns
-- **🧪 Testable Components**: Each module independently testable
+- **📦 Streamlined Design**: Clear separation without unnecessary layers
+- **🧪 Testable Components**: Each specialized module independently testable
 - **📚 Self-Documenting**: Module names clearly indicate their purpose
 - **🔧 Maintainable**: Easy to modify specific functionality
 - **🎯 Single Responsibility**: Each module does one thing well
+- **⚡ Simplified**: Removed abstraction layer that provided no real value
 
 ## Usage Examples
 
@@ -125,17 +116,21 @@ function Miniflux:init()
 end
 ```
 
-### New Way (Coordinated Modules)
+### New Way (Streamlined Coordination)
 ```lua
--- main.lua is now a clean coordinator
+-- main.lua handles initialization and coordination efficiently
 function Miniflux:init()
+    -- Direct initialization
+    local download_dir = self:initializeDownloadDirectory()
+    self.settings = MinifluxSettings
+    self.api = MinifluxAPI:new()
+    self.browser_launcher = BrowserLauncher:new()
+    
     -- Create specialized managers
-    self.initializer = PluginInitializer:new()
     self.menu_manager = MenuManager:new()
     self.event_handler = EventHandler:new()
     
-    -- Delegate to specialists
-    self.initializer:initializePlugin(self)
+    -- Delegate specialized functionality
     self.event_handler:initializeEvents(self)
     self.ui.menu:registerToMainMenu(self)
 end
@@ -143,11 +138,11 @@ end
 
 ## Future Enhancements
 
-This modular architecture makes it easy to add new functionality:
+This streamlined architecture makes it easy to add new functionality:
 
-1. **New Initialization Steps**: Add to `PluginInitializer` with proper error handling
+1. **New Initialization Steps**: Add directly to main.lua init method with clear error handling
 2. **New Menu Sections**: Add builder methods to `MenuManager`
 3. **New Events**: Add to `EventHandler` with proper delegation
 4. **New Modules**: Follow the same patterns established in existing modules
 
-The plugin now follows modern software architecture principles while maintaining all existing functionality and providing a solid foundation for future development. 
+The plugin now follows modern software architecture principles with minimal abstraction overhead while maintaining all existing functionality and providing a solid foundation for future development. 
