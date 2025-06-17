@@ -219,9 +219,9 @@ end
 function BrowserLauncher:createAndShowBrowser(unread_count, feeds_count, categories_count)
     -- Create browser with proper error handling
     local browser_success = pcall(function()
-        -- Use the main browser with single instance pattern (like OPDS)
-        local MainBrowser = require("browser/main_browser")
-        self.miniflux_browser = MainBrowser:new{
+        -- Use the simplified main browser with providers pattern
+        local SimpleBrowser = require("browser/main_browser_simple")
+        self.miniflux_browser = SimpleBrowser:new{
             title = _("Miniflux"),
             settings = self.settings,
             api = self.api,

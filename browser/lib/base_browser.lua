@@ -5,7 +5,6 @@ Base browser class for Miniflux browsers
 --]]--
 
 local UIComponents = require("browser/lib/ui_components")
-local ScreenUI = require("browser/screens/ui_components")
 local Menu = require("ui/widget/menu")
 local UIManager = require("ui/uimanager")
 local InfoMessage = require("ui/widget/infomessage")
@@ -385,40 +384,6 @@ function BaseBrowser:validateData(data, data_name)
     return true
 end
 
----Show entries list (base implementation for all browsers)
----@param entries table[] List of entries or message items
----@param title_prefix string Screen title
----@param is_category? boolean Whether this is a category view
----@param navigation_data? table Navigation context data
----@return nil
-function BaseBrowser:showEntriesList(entries, title_prefix, is_category, navigation_data)
-    local menu_items = {}
-    local has_no_entries_message = false
-    
-    for i, entry in ipairs(entries) do
-        -- Check if this is a special non-entry item (like "no entries" message)
-        if entry.action_type == "no_action" then
-            table.insert(menu_items, ScreenUI.createMenuItem({
-                text = entry.text,
-                mandatory = entry.mandatory or "",
-                action_type = entry.action_type
-            }))
-            has_no_entries_message = true
-        else
-            -- This is a regular entry, use ScreenUI to create the menu item
-            table.insert(menu_items, ScreenUI.createEntryMenuItem(entry, is_category))
-        end
-    end
-    
-    if #menu_items == 0 then
-        menu_items = ScreenUI.createFallbackItems(_("No entries found"))
-    end
-    
-    -- Build subtitle using ScreenUI
-    local hide_read_entries = self.settings and self.settings:getHideReadEntries()
-    local subtitle = ScreenUI.buildEntriesSubtitle(#entries, hide_read_entries)
-    
-    self:updateBrowser(title_prefix, menu_items, subtitle, navigation_data)
-end
+
 
 return BaseBrowser 

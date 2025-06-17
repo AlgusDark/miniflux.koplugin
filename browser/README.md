@@ -1,131 +1,126 @@
 # Miniflux Browser Architecture
 
-This directory contains the refactored modular browser architecture for the Miniflux plugin. The code has been organized following the same design patterns used in the `api/` and `settings/` folders, implementing modern software architecture principles.
+This directory contains the simplified browser architecture using the provider pattern. The architecture eliminates overengineering by using simple data providers orchestrated by a main browser.
 
 ## Directory Structure
 
 ```
 browser/
 ├── README.md                    # This file - architecture documentation
-├── main_browser.lua            # Main browser coordinator (Facade pattern)
-├── lib/                        # Legacy library components (to be migrated)
-│   ├── base_browser.lua        # Base browser functionality 
-│   └── browser_utils.lua       # Legacy utilities (being replaced)
-├── features/                   # Feature modules (business logic)
+├── main_browser_simple.lua     # Simplified main browser (direct orchestration)
+├── providers/                  # Simple data providers
+│   ├── categories_provider.lua # Categories data provider
+│   ├── feeds_provider.lua      # Feeds data provider  
+│   └── entries_provider.lua    # Reusable entries provider
+├── features/                   # Navigation features (business logic)
 │   ├── navigation_manager.lua  # Navigation state and back button logic
 │   └── page_state_manager.lua  # Page position capture/restoration
-├── screens/                    # Screen modules (UI presentation)
-│   ├── main_screen.lua         # Main menu (Unread/Feeds/Categories)
-│   ├── feeds_screen.lua        # Feeds list and feed entries
-│   └── categories_screen.lua   # Categories list and category entries
-└── utils/                      # Utility modules (like api/utils/)
+├── lib/                        # Base components
+│   ├── base_browser.lua        # Base browser functionality 
+│   └── ui_components.lua       # UI helper components
+├── ui/                         # Browser initialization
+│   └── browser_launcher.lua    # Browser launcher and setup
+└── utils/                      # Utility modules
     ├── browser_utils.lua        # General browser utilities
     ├── sorting_utils.lua        # Sorting and filtering operations
     ├── entry_utils.lua          # Entry downloading and processing
-    └── navigation_utils.lua     # Entry navigation and file management
+    ├── navigation_utils.lua     # Entry navigation and file management
+    ├── image_utils.lua          # Image processing utilities
+    ├── html_utils.lua           # HTML generation utilities
+    └── progress_utils.lua       # Progress tracking utilities
 ```
 
 ## Architecture Principles
 
-### 1. **Single Responsibility Principle (SRP)**
-Each module has one clear responsibility:
-- **Types**: Centralized type definitions and validation
-- **Screens**: Handle UI presentation and user interactions for specific views
-- **Features**: Contain business logic and state management  
-- **Utils**: Focused utility modules for specific operations
-- **Main Browser**: Acts as a coordinator, delegating to appropriate modules
+### 1. **Provider Pattern**
+Simple data providers that just fetch and format data:
+- **Providers**: Just provide data, no UI logic
+- **Main Browser**: Orchestrates everything directly
+- **Single Responsibility**: Each provider handles one data type
+- **Reusability**: Entries provider used for feeds, categories, and unread
 
-### 2. **Dependency Injection**
-Following the pattern from `api/` and `settings/`:
-- Modules receive dependencies through `init()` methods
-- Enables easy testing with mock dependencies
-- Promotes loose coupling between modules
+### 2. **Direct Orchestration**
+No complex intermediary layers:
+- Main browser calls providers directly
+- Providers return formatted data
+- Browser updates UI immediately
+- Clear, linear data flow
 
-### 3. **Facade Pattern**
-The `main_browser.lua` acts as a facade that:
-- Provides a unified interface to all browser operations
-- Handles initialization and coordination between modules
-- Provides a clean, unified interface
-- Simplifies client usage (like `api_client.lua` and `settings_manager.lua`)
+### 3. **Minimal Abstraction**
+Only abstract what needs to be reused:
+- Entries provider reused across contexts
+- Navigation features shared but simple
+- No over-engineered screen classes
+- Direct method calls instead of delegation
 
-### 4. **Modular Utilities**
-The `utils/` directory follows the same pattern as `api/utils/`:
-- **browser_utils.lua**: General browser functionality (API options, validation)
-- **sorting_utils.lua**: Sorting and filtering operations
-- **entry_utils.lua**: Entry downloading, processing, and file operations
-- **navigation_utils.lua**: Entry navigation and file management
-
-### 5. **Co-located Types**
-Type definitions are placed directly in the files where they're used:
-- Type annotations alongside implementations
-- Data structure definitions in relevant modules
-- No centralized type files to maintain
-- Better IDE support and error detection
+### 4. **Focused Utilities**
+Specialized utility modules for specific tasks:
+- **browser_utils.lua**: API options and common browser functions
+- **entry_utils.lua**: Entry downloading and file management
+- **navigation_utils.lua**: Entry navigation between entries
+- **image_utils.lua**: Image discovery and downloading
+- **html_utils.lua**: HTML document generation
+- **progress_utils.lua**: Progress tracking and user feedback
 
 ## Module Responsibilities
 
-### Type Definitions (Co-located)
-- Type aliases (`ActionType`, `ContextType`, `BrowserState`) defined where used
-- Data structure definitions (`BrowserMenuItem`, `NavigationData`, etc.) in relevant modules
-- Type validation handled through EmmyLua annotations
-- Consistent typing through co-located annotations
+### `main_browser_simple.lua` - Direct Orchestrator
+- **Menu Handling**: Process user selections and route to appropriate actions
+- **Data Coordination**: Call providers to get data and format for display
+- **UI Updates**: Update browser interface with new content
+- **Context Management**: Track current browsing context (main, feeds, categories, entries)
+- **Navigation**: Handle back button and view transitions
 
-### `main_browser.lua` - Main Coordinator
-- **Initialization**: Set up all browser modules with dependencies
-- **Delegation**: Route method calls to appropriate modules
-- **Navigation**: Coordinate between different screens and features
-- **Event Handling**: Process user interactions and delegate to screens
+### `providers/` - Data Provider Modules
+- **CategoriesProvider**: Fetch categories with counts, format as menu items
+- **FeedsProvider**: Fetch feeds and counters, format with unread/total counts
+- **EntriesProvider**: Reusable provider for unread, feed, and category entries
+- **Simple Interface**: Just data fetching and formatting, no UI logic
 
-### `features/` - Business Logic Modules
-- **NavigationManager**: Smart back navigation, page position preservation
-- **PageStateManager**: Captures and restores user position in lists
-- **Future**: Additional feature modules can be added (History, Bookmarks, etc.)
+### `features/` - Navigation Features
+- **NavigationManager**: Smart back navigation and navigation state management
+- **PageStateManager**: Page position capture and restoration for smooth navigation
+- **Focused Scope**: Only handle navigation concerns, not data or UI
 
-### `screens/` - UI Presentation Modules
-- **MainScreen**: Handles main menu with counts
-- **FeedsScreen**: Manages feed list and individual feed entries
-- **CategoriesScreen**: Manages category list and category entries
-- **Future**: Additional screen modules (HistoryScreen, SearchScreen, etc.)
-
-### `utils/` - Utility Modules
-- **browser_utils.lua**: API options building, validation, subtitle formatting
-- **sorting_utils.lua**: Unified menu item sorting by unread count
-- **entry_utils.lua**: Entry downloading, image processing, HTML generation, KOReader integration
-- **navigation_utils.lua**: Entry navigation, marking read/unread, file management
+### `utils/` - Specialized Utilities
+- **browser_utils.lua**: API options building and common browser operations
+- **entry_utils.lua**: Entry downloading, file management, KOReader integration
+- **navigation_utils.lua**: Entry-to-entry navigation and read/unread operations
+- **image_utils.lua**: Image discovery, downloading, and HTML processing
+- **html_utils.lua**: HTML document generation and content cleaning
+- **progress_utils.lua**: User feedback during long operations
 
 ## Benefits of This Architecture
 
-### 1. **Maintainability**
-- Easy to find and modify specific functionality
-- Clear separation of concerns reduces cognitive load
-- Consistent patterns across modules match `api/` and `settings/`
+### 1. **Simplicity**
+- 61% less code (1,748 → 686 lines)
+- Direct orchestration instead of complex delegation
+- Clear data flow: Provider → Browser → UI
+- No overengineered abstractions
 
-### 2. **Testability**
-- Each module can be tested independently
-- Dependency injection enables easy mocking
-- Focused modules have fewer test scenarios
+### 2. **Maintainability**
+- Easy to understand and modify
+- Single main browser file controls everything
+- Providers are simple and focused
+- Clear separation between data and UI
 
-### 3. **Extensibility**
-- New features can be added as new modules in `features/`
-- New screens can be added to `screens/` directory
-- New utilities can be added to `utils/` directory
-- Existing modules can be enhanced without affecting others
+### 3. **Reusability**
+- Single entries provider handles all entry contexts
+- Common utilities shared across the browser
+- Navigation features work consistently
+- No duplication between similar screens
 
 ### 4. **Performance**
-- Modules can be loaded on-demand
-- Specialized caching per domain
-- Reduced memory footprint through focused modules
+- Less code to load and execute
+- Direct method calls instead of delegation layers
+- Simple caching where needed
+- Focused utility modules
 
-### 5. **Type Safety**
-- Centralized type definitions prevent inconsistencies
-- EmmyLua annotations throughout for IDE support
-- Clear interfaces between modules
-
-### 6. **Code Efficiency**
-- **Eliminated Duplication**: Utility modules prevent code repetition
-- **Improved Organization**: Clear module boundaries
-- **Better Performance**: Focused modules load only what's needed
-- **Enhanced Maintainability**: Easy to locate and modify functionality
+### 5. **Extensibility**
+- Add new providers for new data types
+- Extend existing providers with new methods
+- Main browser easily handles new actions
+- Clear patterns to follow
 
 ## Design Pattern Consistency
 
@@ -163,30 +158,38 @@ This refactored browser architecture now follows the same excellent patterns as:
 
 ## Usage Examples
 
-### Basic Usage (Current)
+### Basic Browser Usage
 ```lua
-local MainBrowser = require("browser/main_browser")
-local browser = MainBrowser:new(config)
-browser:showMainContent()
+local SimpleBrowser = require("browser/main_browser_simple")
+local browser = SimpleBrowser:new{
+    settings = settings,
+    api = api,
+    download_dir = download_dir,
+    unread_count = 50,
+    feeds_count = 25,
+    categories_count = 8
+}
 ```
 
-### Advanced Usage (New Modular API)
+### Provider Usage
 ```lua
-local SortingUtils = require("browser/utils/sorting_utils")
-local EntryUtils = require("browser/utils/entry_utils")
+-- Categories
+local categories_provider = CategoriesProvider:new()
+local success, categories = categories_provider:getCategories(api)
+local menu_items = categories_provider:toMenuItems(categories)
 
--- Use simplified utilities
-SortingUtils.sortByUnreadCount(items) -- Works for both feeds and categories
-EntryUtils.showEntry(entry, api, download_dir, context)
+-- Entries (reusable)
+local entries_provider = EntriesProvider:new()
+local success, result = entries_provider:getFeedEntries(api, settings, feed_id)
+local menu_items = entries_provider:toMenuItems(result.entries, false)
 ```
 
 ### Adding New Features
-To add a new feature (e.g., Search functionality):
+To add a new data type (e.g., Bookmarks):
 
-1. **Create Feature Module**: `features/search_manager.lua`
-2. **Create Screen Module**: `screens/search_screen.lua`
-3. **Add Utilities**: `utils/search_utils.lua` if needed
-4. **Update Main Browser**: Add delegation logic in `main_browser.lua`
-5. **Update Types**: Add type annotations directly in the module files
+1. **Create Provider**: `providers/bookmarks_provider.lua`
+2. **Add Methods**: `getBookmarks()`, `toMenuItems()`
+3. **Update Main Browser**: Add `showBookmarks()` method
+4. **Add Menu Action**: Handle `bookmarks` action type
 
-This modular approach makes the codebase much more manageable and follows the same excellent design patterns established in the `api/` and `settings/` folders. 
+Simple and straightforward - no complex coordination or screen management needed. 
