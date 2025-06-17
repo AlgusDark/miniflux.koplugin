@@ -49,7 +49,6 @@ function Miniflux:init()
 
     -- Initialize settings instance
     self.settings = MinifluxSettings.MinifluxSettings:new()
-    self.settings:init()
 
     -- Initialize API client
     self.api = MinifluxAPI:new()

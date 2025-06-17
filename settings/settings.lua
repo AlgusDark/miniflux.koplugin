@@ -57,6 +57,9 @@ function MinifluxSettings:new(o)
     o.initialized = false
     o.cache = {}  -- In-memory cache for settings
     
+    -- Auto-initialize (safe due to guard in init() method)
+    o:init()
+    
     return o
 end
 
@@ -111,7 +114,6 @@ end
 ---@param default any Default value
 ---@return any Setting value or default
 function MinifluxSettings:get(key, default)
-    self:init() -- Ensure initialized
     local value = self.cache[key]
     if value ~= nil then
         return value
@@ -125,7 +127,6 @@ end
 ---@param value any Setting value
 ---@return nil
 function MinifluxSettings:set(key, value)
-    self:init() -- Ensure initialized
     self.cache[key] = value
     self.settings_instance:saveSetting(key, value)
 end
@@ -298,7 +299,6 @@ end
 -- =============================================================================
 
 function MinifluxSettings:export()
-    self:init() -- Ensure initialized
     -- Return a copy of the cache to prevent external modification
     local exported = {}
     for key, value in pairs(self.cache) do
@@ -341,8 +341,7 @@ local _default_instance = nil
 
 local function getDefaultInstance()
     if not _default_instance then
-        _default_instance = MinifluxSettings:new()
-        _default_instance:init()
+        _default_instance = MinifluxSettings:new()  -- Auto-initializes now
     end
     return _default_instance
 end
