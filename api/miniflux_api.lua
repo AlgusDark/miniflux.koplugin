@@ -128,7 +128,8 @@ end
 ---@param body? table Request body to encode as JSON
 ---@return boolean success, any result_or_error
 function MinifluxAPI:makeRequest(method, endpoint, body)
-    if not self.server_address or not self.api_token then
+    if not self.server_address or not self.api_token or 
+       self.server_address == "" or self.api_token == "" then
         return false, _("Server address and API token must be configured")
     end
 
