@@ -23,15 +23,16 @@ local _ = require("gettext")
 ---@field cached_feeds? MinifluxFeed[] Cached feeds data
 ---@field cached_counters? FeedCounters Cached feed counters
 ---@field cached_entry_counts? table<string, number> Cached accurate entry counts per feed
-local FeedsScreen = BaseScreen:extend{}
+local FeedsScreen = {}
+setmetatable(FeedsScreen, BaseScreen)
+FeedsScreen.__index = FeedsScreen
 
 ---Create a new FeedsScreen instance
 ---@return FeedsScreen
 function FeedsScreen:new()
-    local obj = BaseScreen.new(self)
+    local obj = BaseScreen:new()
     setmetatable(obj, self)
     self.__index = self
-    ---@cast obj FeedsScreen
     return obj
 end
 

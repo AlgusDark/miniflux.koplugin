@@ -18,15 +18,16 @@ local _ = require("gettext")
 
 ---@class MainScreen : BaseScreen
 ---@field cached_unread_count? number Cached unread count
-local MainScreen = BaseScreen:extend{}
+local MainScreen = {}
+setmetatable(MainScreen, BaseScreen)
+MainScreen.__index = MainScreen
 
 ---Create a new MainScreen instance
 ---@return MainScreen
 function MainScreen:new()
-    local obj = BaseScreen.new(self)
+    local obj = BaseScreen:new()
     setmetatable(obj, self)
     self.__index = self
-    ---@cast obj MainScreen
     return obj
 end
 

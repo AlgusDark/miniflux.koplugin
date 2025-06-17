@@ -20,15 +20,16 @@ local _ = require("gettext")
 
 ---@class CategoriesScreen : BaseScreen
 ---@field cached_categories? MinifluxCategory[] Cached categories data
-local CategoriesScreen = BaseScreen:extend{}
+local CategoriesScreen = {}
+setmetatable(CategoriesScreen, BaseScreen)
+CategoriesScreen.__index = CategoriesScreen
 
 ---Create a new CategoriesScreen instance
 ---@return CategoriesScreen
 function CategoriesScreen:new()
-    local obj = BaseScreen.new(self)
+    local obj = BaseScreen:new()
     setmetatable(obj, self)
     self.__index = self
-    ---@cast obj CategoriesScreen
     return obj
 end
 

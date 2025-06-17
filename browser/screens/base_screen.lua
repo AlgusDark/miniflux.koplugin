@@ -25,15 +25,7 @@ function BaseScreen:new()
     return obj
 end
 
----Extend this class to create a subclass
----@param o table Optional table with initial values
----@return BaseScreen Subclass instance
-function BaseScreen:extend(o)
-    o = o or {}
-    setmetatable(o, self)
-    self.__index = self
-    return o
-end
+
 
 ---Initialize the screen with browser reference
 ---@param browser BaseBrowser Browser instance to manage
@@ -60,22 +52,7 @@ function BaseScreen:closeLoadingMessage(loading_info)
     self.browser:closeLoadingMessage(loading_info)
 end
 
----Handle API error response
----@param success boolean Whether API call succeeded
----@param result any API result or error message
----@param operation_name string Name of the operation for error messages
----@return boolean True if successful, false if error occurred
-function BaseScreen:handleApiError(success, result, operation_name)
-    return self.browser:handleApiError(success, result, operation_name)
-end
 
----Validate API response data
----@param data any Data to validate
----@param data_name string Name of the data for error messages
----@return boolean True if valid, false if invalid
-function BaseScreen:validateData(data, data_name)
-    return self.browser:validateData(data, data_name)
-end
 
 ---Show error message to user
 ---@param message string Error message to display
@@ -203,29 +180,14 @@ function BaseScreen:buildSubtitle(count, item_type, is_unread_only)
 end
 
 -- =============================================================================
--- CACHE MANAGEMENT INTERFACE
+-- ABSTRACT METHODS (to be overridden by subclasses)
 -- =============================================================================
 
----Invalidate all cached data (to be overridden by subclasses)
----@return nil
-function BaseScreen:invalidateCache()
-    -- Base implementation does nothing
-    -- Subclasses should override this method
-end
-
-
-
--- =============================================================================
--- CONTENT DISPLAY INTERFACE
--- =============================================================================
-
----Show main content (to be overridden by subclasses)
+---Show main content (must be overridden by subclasses)
 ---@param paths_updated? boolean Whether navigation paths were updated
 ---@param page_info? table Page information for restoration
 ---@return nil
 function BaseScreen:show(paths_updated, page_info)
-    -- Base implementation does nothing
-    -- Subclasses must override this method
     error("BaseScreen:show() must be overridden by subclass")
 end
 
@@ -236,6 +198,12 @@ end
 function BaseScreen:showContent(paths_updated, page_info)
     -- Default implementation calls show with paths_updated = true
     self:show(paths_updated or true, page_info)
+end
+
+---Invalidate cached data (to be overridden by subclasses that use caching)
+---@return nil
+function BaseScreen:invalidateCache()
+    -- Base implementation does nothing - subclasses override if needed
 end
 
 return BaseScreen 

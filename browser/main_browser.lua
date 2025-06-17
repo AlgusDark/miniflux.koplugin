@@ -11,8 +11,7 @@ local BaseBrowser = require("browser/lib/base_browser")
 local NavigationManager = require("browser/features/navigation_manager")
 local PageStateManager = require("browser/features/page_state_manager")
 local ScreenCoordinator = require("browser/coordinators/screen_coordinator")
-local ContextManager = require("browser/coordinators/context_manager")
-local MenuRouter = require("browser/coordinators/menu_router")
+local EntryUtils = require("browser/utils/entry_utils")
 local _ = require("gettext")
 
 ---@class BrowserMenuItem
@@ -27,9 +26,7 @@ local _ = require("gettext")
 ---@field browser_type string Browser type identifier
 ---@field navigation_manager NavigationManager Navigation state manager
 ---@field page_state_manager PageStateManager Page state manager
----@field screen_coordinator ScreenCoordinator Screen management coordinator
----@field context_manager ContextManager Context tracking coordinator
----@field menu_router MenuRouter Menu routing coordinator
+---@field screen_coordinator ScreenCoordinator Screen management and context coordinator
 ---@field unread_count number Unread entries count
 ---@field feeds_count number Total feeds count
 ---@field categories_count number Total categories count
@@ -44,15 +41,9 @@ function MainBrowser:init()
     self.api = self.api or {}
     self.download_dir = self.download_dir
     
-    -- Initialize coordinators
+    -- Initialize screen coordinator (includes context management)
     self.screen_coordinator = ScreenCoordinator:new()
     self.screen_coordinator:init(self)
-    
-    self.context_manager = ContextManager:new()
-    self.context_manager:init(self)
-    
-    self.menu_router = MenuRouter:new()
-    self.menu_router:init(self, self.screen_coordinator, self.context_manager)
     
     -- Initialize with counts if available and set initial items
     if self.unread_count or self.feeds_count or self.categories_count then
@@ -81,11 +72,60 @@ function MainBrowser:init()
     end
 end
 
----Handle menu selection by delegating to menu router
+---Handle menu selection with inline routing
 ---@param item BrowserMenuItem Menu item that was selected
 ---@return nil
 function MainBrowser:onMenuSelect(item)
-    self.menu_router:routeMenuSelection(item)
+    if not item or not item.action_type then
+        return
+    end
+    
+    if item.action_type == "unread" then
+        if self.screen_coordinator:getMainScreen() and self.screen_coordinator:getMainScreen().showUnreadEntries then
+            self.screen_coordinator:showUnreadEntries()
+        end
+        
+    elseif item.action_type == "feeds" then
+        if self.screen_coordinator:getFeedsScreen() and self.screen_coordinator:getFeedsScreen().show then
+            self.screen_coordinator:getFeedsScreen():show()
+        end
+        
+    elseif item.action_type == "categories" then
+        if self.screen_coordinator:getCategoriesScreen() and self.screen_coordinator:getCategoriesScreen().show then
+            self.screen_coordinator:getCategoriesScreen():show()
+        end
+        
+    elseif item.action_type == "feed_entries" then
+        local feed_data = item.feed_data
+        if feed_data and feed_data.id and feed_data.title then
+            if self.screen_coordinator:getFeedsScreen() and self.screen_coordinator:getFeedsScreen().showFeedEntries then
+                self.screen_coordinator:showFeedEntries(feed_data.id, feed_data.title)
+            end
+        end
+        
+    elseif item.action_type == "category_entries" then
+        local category_data = item.category_data
+        if category_data and category_data.id and category_data.title then
+            if self.screen_coordinator:getCategoriesScreen() and self.screen_coordinator:getCategoriesScreen().showCategoryEntries then
+                self.screen_coordinator:showCategoryEntries(category_data.id, category_data.title)
+            end
+        end
+        
+            elseif item.action_type == "read_entry" then
+        local entry_data = item.entry_data
+        if entry_data and self.api then
+            -- Set navigation context based on current browsing context
+            self.screen_coordinator:setEntryNavigationContext(entry_data)
+            
+            -- Show the entry
+            EntryUtils.showEntry({
+                entry = entry_data,
+                api = self.api,
+                download_dir = self.download_dir,
+                browser = self
+            })
+        end
+    end
 end
 
 ---Back navigation handler
@@ -113,7 +153,7 @@ end
 -- Override refreshCurrentView to refresh the current screen
 ---@return nil
 function MainBrowser:refreshCurrentView()
-    self.context_manager:refreshCurrentView(self.screen_coordinator)
+    self.screen_coordinator:refreshCurrentView()
 end
 
 ---Show entries list with navigation data (overrides BaseBrowser)
@@ -123,8 +163,8 @@ end
 ---@param navigation_data table Navigation context data
 ---@return nil
 function MainBrowser:showEntriesList(entries, title_prefix, is_category, navigation_data)
-    -- Update context via context manager
-    self.context_manager:updateContextFromEntriesList(title_prefix, is_category, navigation_data)
+    -- Update context via screen coordinator
+    self.screen_coordinator:updateContextFromEntriesList(title_prefix, is_category, navigation_data)
     
     local menu_items = {}
     local has_no_entries_message = false
@@ -174,7 +214,7 @@ function MainBrowser:showEntriesList(entries, title_prefix, is_category, navigat
     -- Build subtitle with enhanced logic for different view types
     local subtitle = ""
     local hide_read_entries = self.settings and self.settings:getHideReadEntries()
-    local current_context = self.context_manager:getCurrentContext()
+    local current_context = self.screen_coordinator:getCurrentContext()
     local is_unread_entries_view = current_context and current_context.type == "unread_entries"
     
     if is_unread_entries_view then
@@ -211,7 +251,7 @@ end
 ---Show main content (called by navigation manager)
 ---@return nil
 function MainBrowser:showMainContent()
-    self.context_manager:setMainContext()
+    self.screen_coordinator:setMainContext()
     self.screen_coordinator:showMainContent()
 end
 
@@ -220,7 +260,7 @@ end
 ---@param page_info? table Page information for restoration
 ---@return nil
 function MainBrowser:showFeedsContent(paths_updated, page_info)
-    self.context_manager:setFeedsContext()
+    self.screen_coordinator:setFeedsContext()
     self.screen_coordinator:showFeedsContent(paths_updated, page_info)
 end
 
@@ -229,7 +269,7 @@ end
 ---@param page_info? table Page information for restoration
 ---@return nil
 function MainBrowser:showCategoriesContent(paths_updated, page_info)
-    self.context_manager:setCategoriesContext()
+    self.screen_coordinator:setCategoriesContext()
     self.screen_coordinator:showCategoriesContent(paths_updated, page_info)
 end
 
@@ -239,7 +279,7 @@ end
 ---@param paths_updated? boolean Whether navigation paths were updated
 ---@return nil
 function MainBrowser:showFeedEntries(feed_id, feed_title, paths_updated)
-    self.context_manager:setFeedEntriesContext(feed_id, feed_title)
+    self.screen_coordinator:setFeedEntriesContext(feed_id, feed_title)
     self.screen_coordinator:showFeedEntries(feed_id, feed_title, paths_updated)
 end
 
@@ -249,7 +289,7 @@ end
 ---@param paths_updated? boolean Whether navigation paths were updated
 ---@return nil
 function MainBrowser:showCategoryEntries(category_id, category_title, paths_updated)
-    self.context_manager:setCategoryEntriesContext(category_id, category_title)
+    self.screen_coordinator:setCategoryEntriesContext(category_id, category_title)
     self.screen_coordinator:showCategoryEntries(category_id, category_title, paths_updated)
 end
 
