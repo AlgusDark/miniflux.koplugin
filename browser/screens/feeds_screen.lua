@@ -100,7 +100,7 @@ function FeedsScreen:show(paths_updated, page_info)
     )
     
     -- Build subtitle using ScreenUI
-    local hide_read_entries = self.browser.settings and self.browser.settings.getHideReadEntries()
+    local hide_read_entries = self.browser.settings and self.browser.settings:getHideReadEntries()
     local subtitle = ScreenUI.buildSubtitle(#feeds, "feeds", hide_read_entries)
     
     self:updateBrowser(_("Feeds"), menu_items, subtitle, navigation_data)
@@ -139,7 +139,7 @@ function FeedsScreen:showFeedEntries(feed_id, feed_title, paths_updated)
     -- Check if we have no entries and show appropriate message
     if #entries == 0 then
         -- Create no entries item using ScreenUI
-        local hide_read_entries = self.browser.settings and self.browser.settings.getHideReadEntries()
+        local hide_read_entries = self.browser.settings and self.browser.settings:getHideReadEntries()
         local no_entries_items = { ScreenUI.createNoEntriesItem(false) }
         
         -- Create navigation data

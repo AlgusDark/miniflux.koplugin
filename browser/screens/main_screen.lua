@@ -63,9 +63,9 @@ function MainScreen:showUnreadEntries(is_refresh)
     -- HARDCODE: Always fetch only unread entries for this view, regardless of user settings
     local options = {
         status = {"unread"},  -- Always unread only
-        order = self.browser.settings.getOrder(),
-        direction = self.browser.settings.getDirection(),
-        limit = self.browser.settings.getLimit(),
+        order = self.browser.settings:getOrder(),
+        direction = self.browser.settings:getDirection(),
+        limit = self.browser.settings:getLimit(),
     }
     
     local result = self:performApiCall({

@@ -92,7 +92,7 @@ end
 function MenuManager:buildEntriesLimitItem(plugin_instance)
     return {
         text_func = function()
-            return T(_("Entries limit - %1"), plugin_instance.settings.getLimit())
+            return T(_("Entries limit - %1"), plugin_instance.settings:getLimit())
         end,
         keep_menu_open = true,
         callback = function(touchmenu_instance)
@@ -110,7 +110,7 @@ function MenuManager:buildSortOrderItem(plugin_instance)
     return {
         text_func = function()
             local order_names = self:getSortOrderNames()
-            local current_order = plugin_instance.settings.getOrder()
+            local current_order = plugin_instance.settings:getOrder()
             local order_name = order_names[current_order] or _("Published date")
             return T(_("Sort order - %1"), order_name)
         end,
@@ -127,7 +127,7 @@ end
 function MenuManager:buildSortDirectionItem(plugin_instance)
     return {
         text_func = function()
-            local direction_name = plugin_instance.settings.getDirection() == "asc" 
+            local direction_name = plugin_instance.settings:getDirection() == "asc" 
                 and _("Ascending") or _("Descending")
             return T(_("Sort direction - %1"), direction_name)
         end,
@@ -144,7 +144,7 @@ end
 function MenuManager:buildIncludeImagesItem(plugin_instance)
     return {
         text_func = function()
-            return plugin_instance.settings.getIncludeImages() 
+            return plugin_instance.settings:getIncludeImages() 
                 and _("Include images - ON") or _("Include images - OFF")
         end,
         keep_menu_open = true,
@@ -195,8 +195,8 @@ end
 ---@param plugin_instance table The main plugin instance
 ---@return nil
 function MenuManager:showServerSettings(plugin_instance)
-    local server_address = plugin_instance.settings.getServerAddress()
-    local api_token = plugin_instance.settings.getApiToken()
+    local server_address = plugin_instance.settings:getServerAddress()
+    local api_token = plugin_instance.settings:getApiToken()
     
     local settings_dialog
     settings_dialog = MultiInputDialog:new{
@@ -227,16 +227,16 @@ function MenuManager:showServerSettings(plugin_instance)
                     callback = function()
                         local fields = settings_dialog:getFields()
                         if fields[1] and fields[1] ~= "" then
-                            plugin_instance.settings.setServerAddress(fields[1])
+                            plugin_instance.settings:setServerAddress(fields[1])
                         end
                         if fields[2] and fields[2] ~= "" then
-                            plugin_instance.settings.setApiToken(fields[2])
+                            plugin_instance.settings:setApiToken(fields[2])
                         end
-                        plugin_instance.settings.save()
+                        plugin_instance.settings:save()
                         
                         -- Reinitialize API with new settings (with error handling)
                         local api_success = pcall(function()
-                            plugin_instance.api:init(plugin_instance.settings.getServerAddress(), plugin_instance.settings.getApiToken())
+                            plugin_instance.api:init(plugin_instance.settings:getServerAddress(), plugin_instance.settings:getApiToken())
                         end)
                         
                         UIManager:close(settings_dialog)
@@ -265,7 +265,7 @@ end
 ---@param refresh_callback? function Optional callback to refresh the menu after saving
 ---@return nil
 function MenuManager:showLimitSettings(plugin_instance, refresh_callback)
-    local current_limit = tostring(plugin_instance.settings.getLimit())
+    local current_limit = tostring(plugin_instance.settings:getLimit())
     
     local limit_dialog
     limit_dialog = InputDialog:new{
@@ -286,8 +286,8 @@ function MenuManager:showLimitSettings(plugin_instance, refresh_callback)
                     callback = function()
                         local new_limit = tonumber(limit_dialog:getInputText())
                         if new_limit and new_limit > 0 then
-                            plugin_instance.settings.setLimit(new_limit)
-                            plugin_instance.settings.save()
+                            plugin_instance.settings:setLimit(new_limit)
+                            plugin_instance.settings:save()
                             UIManager:close(limit_dialog)
                             UIManager:show(InfoMessage:new{
                                 text = _("Entries limit saved"),
@@ -315,7 +315,7 @@ end
 ---@param plugin_instance table The main plugin instance
 ---@return nil
 function MenuManager:testConnection(plugin_instance)
-    if not plugin_instance.settings.isConfigured() then
+    if not plugin_instance.settings:isConfigured() then
         UIManager:show(InfoMessage:new{
             text = _("Please configure server address and API token first"),
         })
@@ -329,7 +329,7 @@ function MenuManager:testConnection(plugin_instance)
     UIManager:forceRePaint() -- Force immediate display before API call
     
     -- Reinitialize API with current settings
-    plugin_instance.api:init(plugin_instance.settings.getServerAddress(), plugin_instance.settings.getApiToken())
+    plugin_instance.api:init(plugin_instance.settings:getServerAddress(), plugin_instance.settings:getApiToken())
     
     local success, result = plugin_instance.api:testConnection()
     
@@ -347,15 +347,15 @@ end
 ---@param plugin_instance table The main plugin instance
 ---@return table[] Sort order menu items
 function MenuManager:getOrderSubMenu(plugin_instance)
-    local current_order = plugin_instance.settings.getOrder()
+    local current_order = plugin_instance.settings:getOrder()
     
     return {
         {
             text = _("ID") .. (current_order == "id" and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                plugin_instance.settings.setOrder("id")
-                plugin_instance.settings.save()
+                plugin_instance.settings:setOrder("id")
+                plugin_instance.settings:save()
                 UIManager:show(InfoMessage:new{
                     text = _("Sort order updated"),
                     timeout = 2,
@@ -369,8 +369,8 @@ function MenuManager:getOrderSubMenu(plugin_instance)
             text = _("Status") .. (current_order == "status" and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                plugin_instance.settings.setOrder("status")
-                plugin_instance.settings.save()
+                plugin_instance.settings:setOrder("status")
+                plugin_instance.settings:save()
                 UIManager:show(InfoMessage:new{
                     text = _("Sort order updated"),
                     timeout = 2,
@@ -384,8 +384,8 @@ function MenuManager:getOrderSubMenu(plugin_instance)
             text = _("Published date") .. (current_order == "published_at" and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                plugin_instance.settings.setOrder("published_at")
-                plugin_instance.settings.save()
+                plugin_instance.settings:setOrder("published_at")
+                plugin_instance.settings:save()
                 UIManager:show(InfoMessage:new{
                     text = _("Sort order updated"),
                     timeout = 2,
@@ -399,8 +399,8 @@ function MenuManager:getOrderSubMenu(plugin_instance)
             text = _("Category title") .. (current_order == "category_title" and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                plugin_instance.settings.setOrder("category_title")
-                plugin_instance.settings.save()
+                plugin_instance.settings:setOrder("category_title")
+                plugin_instance.settings:save()
                 UIManager:show(InfoMessage:new{
                     text = _("Sort order updated"),
                     timeout = 2,
@@ -414,8 +414,8 @@ function MenuManager:getOrderSubMenu(plugin_instance)
             text = _("Category ID") .. (current_order == "category_id" and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                plugin_instance.settings.setOrder("category_id")
-                plugin_instance.settings.save()
+                plugin_instance.settings:setOrder("category_id")
+                plugin_instance.settings:save()
                 UIManager:show(InfoMessage:new{
                     text = _("Sort order updated"),
                     timeout = 2,
@@ -432,15 +432,15 @@ end
 ---@param plugin_instance table The main plugin instance
 ---@return table[] Sort direction menu items
 function MenuManager:getDirectionSubMenu(plugin_instance)
-    local current_direction = plugin_instance.settings.getDirection()
+    local current_direction = plugin_instance.settings:getDirection()
     
     return {
         {
             text = _("Ascending") .. (current_direction == "asc" and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                plugin_instance.settings.setDirection("asc")
-                plugin_instance.settings.save()
+                plugin_instance.settings:setDirection("asc")
+                plugin_instance.settings:save()
                 UIManager:show(InfoMessage:new{
                     text = _("Sort direction updated"),
                     timeout = 2,
@@ -454,8 +454,8 @@ function MenuManager:getDirectionSubMenu(plugin_instance)
             text = _("Descending") .. (current_direction == "desc" and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                plugin_instance.settings.setDirection("desc")
-                plugin_instance.settings.save()
+                plugin_instance.settings:setDirection("desc")
+                plugin_instance.settings:save()
                 UIManager:show(InfoMessage:new{
                     text = _("Sort direction updated"),
                     timeout = 2,
@@ -472,15 +472,15 @@ end
 ---@param plugin_instance table The main plugin instance
 ---@return table[] Include images menu items
 function MenuManager:getIncludeImagesSubMenu(plugin_instance)
-    local current_include_images = plugin_instance.settings.getIncludeImages()
+    local current_include_images = plugin_instance.settings:getIncludeImages()
     
     return {
         {
             text = _("ON") .. (current_include_images and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                plugin_instance.settings.setIncludeImages(true)
-                plugin_instance.settings.save()
+                plugin_instance.settings:setIncludeImages(true)
+                plugin_instance.settings:save()
                 UIManager:show(InfoMessage:new{
                     text = _("Images will be downloaded with entries"),
                     timeout = 2,
@@ -494,8 +494,8 @@ function MenuManager:getIncludeImagesSubMenu(plugin_instance)
             text = _("OFF") .. (not current_include_images and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                plugin_instance.settings.setIncludeImages(false)
-                plugin_instance.settings.save()
+                plugin_instance.settings:setIncludeImages(false)
+                plugin_instance.settings:save()
                 UIManager:show(InfoMessage:new{
                     text = _("Images will be skipped when downloading entries"),
                     timeout = 2,

@@ -175,7 +175,7 @@ end
 ---Check if read entries should be hidden
 ---@return boolean True if read entries should be hidden
 function BaseScreen:shouldHideReadEntries()
-    return self.browser.settings and self.browser.settings.getHideReadEntries()
+    return self.browser.settings and self.browser.settings:getHideReadEntries()
 end
 
 ---Get status icon for subtitles

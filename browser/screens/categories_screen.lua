@@ -71,7 +71,7 @@ function CategoriesScreen:show(paths_updated, page_info)
     end
     
     -- Build subtitle using ScreenUI
-    local hide_read_entries = self.browser.settings and self.browser.settings.getHideReadEntries()
+    local hide_read_entries = self.browser.settings and self.browser.settings:getHideReadEntries()
     local subtitle = ScreenUI.buildSubtitle(#result, "categories", hide_read_entries)
     
     self:updateBrowser(_("Categories"), menu_items, subtitle, navigation_data)

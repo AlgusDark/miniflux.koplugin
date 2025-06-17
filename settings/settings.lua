@@ -40,6 +40,7 @@ local VALID_SORT_DIRECTIONS = {
 ---@field settings_file string Path to settings file
 ---@field settings_instance LuaSettings LuaSettings instance
 ---@field initialized boolean Whether settings have been initialized
+---@field cache table In-memory cache of settings values
 local MinifluxSettings = {}
 
 ---Create a new settings instance
@@ -54,6 +55,7 @@ function MinifluxSettings:new(o)
     o.settings_file = nil
     o.settings_instance = nil
     o.initialized = false
+    o.cache = {}  -- In-memory cache for settings
     
     return o
 end
@@ -65,28 +67,52 @@ function MinifluxSettings:init()
         self.settings_file = DataStorage:getSettingsDir() .. "/miniflux.lua"
         self.settings_instance = LuaSettings:open(self.settings_file)
         
+        -- Load all settings into cache
+        self:loadSettingsIntoCache()
+        
         -- Set defaults for any missing values
+        local needs_flush = false
         for key, default_value in pairs(DEFAULTS) do
-            if self.settings_instance:readSetting(key) == nil then
+            if self.cache[key] == nil then
+                self.cache[key] = default_value
                 self.settings_instance:saveSetting(key, default_value)
+                needs_flush = true
             end
         end
         
-        self.settings_instance:flush()
+        if needs_flush then
+            self.settings_instance:flush()
+        end
+        
         self.initialized = true
-        logger.info("Miniflux settings initialized:", self.settings_file)
+        logger.info("Miniflux settings initialized with cache:", self.settings_file)
     end
     
     return self
 end
 
----Get a setting value with default fallback
+---Load all settings from disk into memory cache
+---@return nil
+function MinifluxSettings:loadSettingsIntoCache()
+    self.cache = {}
+    for key, _ in pairs(DEFAULTS) do
+        local value = self.settings_instance:readSetting(key)
+        if value ~= nil then
+            self.cache[key] = value
+        end
+    end
+    local count = 0
+    for _ in pairs(self.cache) do count = count + 1 end
+    logger.dbg("Loaded", count, "settings into cache")
+end
+
+---Get a setting value from cache with default fallback
 ---@param key string Setting key
 ---@param default any Default value
 ---@return any Setting value or default
 function MinifluxSettings:get(key, default)
     self:init() -- Ensure initialized
-    local value = self.settings_instance:readSetting(key)
+    local value = self.cache[key]
     if value ~= nil then
         return value
     else
@@ -94,20 +120,29 @@ function MinifluxSettings:get(key, default)
     end
 end
 
----Set a setting value
+---Set a setting value in cache and persist to disk
 ---@param key string Setting key
 ---@param value any Setting value
 ---@return nil
 function MinifluxSettings:set(key, value)
     self:init() -- Ensure initialized
+    self.cache[key] = value
     self.settings_instance:saveSetting(key, value)
 end
 
----Save settings to disk
+---Save all cached settings to disk (explicit flush)
 ---@return nil
 function MinifluxSettings:save()
     if self.settings_instance then
         self.settings_instance:flush()
+    end
+end
+
+---Reload settings from disk into cache (useful for external changes)
+---@return nil
+function MinifluxSettings:reload()
+    if self.initialized then
+        self:loadSettingsIntoCache()
     end
 end
 
@@ -263,16 +298,13 @@ end
 -- =============================================================================
 
 function MinifluxSettings:export()
-    return {
-        server_address = self:getServerAddress(),
-        api_token = self:getApiToken(),
-        limit = self:getLimit(),
-        order = self:getOrder(),
-        direction = self:getDirection(),
-        hide_read_entries = self:getHideReadEntries(),
-        auto_mark_read = self:getAutoMarkRead(),
-        include_images = self:getIncludeImages()
-    }
+    self:init() -- Ensure initialized
+    -- Return a copy of the cache to prevent external modification
+    local exported = {}
+    for key, value in pairs(self.cache) do
+        exported[key] = value
+    end
+    return exported
 end
 
 function MinifluxSettings:reset()
@@ -285,6 +317,7 @@ function MinifluxSettings:reset()
     self.settings_file = nil
     self.settings_instance = nil
     self.initialized = false
+    self.cache = {}
     
     -- Reinitialize with defaults
     self:init()

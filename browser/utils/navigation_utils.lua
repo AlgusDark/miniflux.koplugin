@@ -22,6 +22,16 @@ local FileManager = require("apps/filemanager/filemanager")
 
 local NavigationUtils = {}
 
+-- Create a singleton settings instance for this module
+local _settings_instance = nil
+local function getSettings()
+    if not _settings_instance then
+        _settings_instance = MinifluxSettings.MinifluxSettings:new()
+        _settings_instance:init()
+    end
+    return _settings_instance
+end
+
 --- Pure-Lua ISO-8601 → Unix timestamp (UTC)
 -- Handles "YYYY-MM-DDTHH:MM:SS±HH:MM"
 ---@param s string ISO-8601 formatted date string
@@ -79,10 +89,10 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
     end
     
     -- Get API instance with stored settings
-    MinifluxSettings.init()  -- Initialize settings
+    local settings = getSettings()
     
     local api = MinifluxAPI:new()
-    api:init(MinifluxSettings.getServerAddress(), MinifluxSettings.getApiToken())
+    api:init(settings:getServerAddress(), settings:getApiToken())
     
     -- Show loading message
     local loading_info = InfoMessage:new{
@@ -128,7 +138,7 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
     end
     
     -- Get filter options from current settings and global navigation context
-    local base_options = BrowserUtils.getApiOptions(MinifluxSettings)
+    local base_options = BrowserUtils.getApiOptions(settings)
     
     -- Apply context-aware filtering using global navigation context
     local options = NavigationContext.getContextAwareOptions(base_options)
@@ -137,7 +147,7 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
     options.direction = "asc"
     options.published_after = published_unix
     options.limit = 1
-    options.order = MinifluxSettings.getOrder()
+    options.order = settings:getOrder()
     
     -- Fetch previous entry using regular getEntries API
     local success, result = api:getEntries(options)
@@ -168,11 +178,11 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
         local current_context = NavigationContext.getCurrentContext()
         if current_context.type and current_context.type ~= "global" then
             -- Build global options (no feed/category filter for global search)
-            local global_options = BrowserUtils.getApiOptions(MinifluxSettings)
+            local global_options = BrowserUtils.getApiOptions(settings)
             global_options.direction = "asc"
             global_options.published_after = published_unix
             global_options.limit = 1
-            global_options.order = MinifluxSettings.getOrder()
+            global_options.order = settings:getOrder()
             
             -- Global fallback for previous entry
             
@@ -202,10 +212,10 @@ function NavigationUtils.navigateToNextEntry(entry_info)
     end
     
     -- Get API instance with stored settings
-    MinifluxSettings.init()  -- Initialize settings
+    local settings = getSettings()
     
     local api = MinifluxAPI:new()
-    api:init(MinifluxSettings.getServerAddress(), MinifluxSettings.getApiToken())
+    api:init(settings:getServerAddress(), settings:getApiToken())
     
     -- Show loading message
     local loading_info = InfoMessage:new{
@@ -251,7 +261,7 @@ function NavigationUtils.navigateToNextEntry(entry_info)
     end
     
     -- Get filter options from current settings and global navigation context
-    local base_options = BrowserUtils.getApiOptions(MinifluxSettings)
+    local base_options = BrowserUtils.getApiOptions(settings)
     
     -- Apply context-aware filtering using global navigation context
     local options = NavigationContext.getContextAwareOptions(base_options)
@@ -260,7 +270,7 @@ function NavigationUtils.navigateToNextEntry(entry_info)
     options.direction = "desc"
     options.published_before = published_unix
     options.limit = 1
-    options.order = MinifluxSettings.getOrder()
+    options.order = settings:getOrder()
     
     -- Fetch next entry using regular getEntries API
     local success, result = api:getEntries(options)
@@ -291,11 +301,11 @@ function NavigationUtils.navigateToNextEntry(entry_info)
         local current_context = NavigationContext.getCurrentContext()
         if current_context.type and current_context.type ~= "global" then
             -- Build global options (no feed/category filter for global search)
-            local global_options = BrowserUtils.getApiOptions(MinifluxSettings)
+            local global_options = BrowserUtils.getApiOptions(settings)
             global_options.direction = "desc"
             global_options.published_before = published_unix
             global_options.limit = 1
-            global_options.order = MinifluxSettings.getOrder()
+            global_options.order = settings:getOrder()
             
             -- Global fallback for next entry
             
@@ -353,10 +363,10 @@ function NavigationUtils.downloadAndShowEntry(entry)
     
     -- Download and show the entry (no context needed - it's now global)
     local EntryUtils = require("browser/utils/entry_utils")
-    MinifluxSettings.init()
+    local settings = getSettings()
     
     local api = MinifluxAPI:new()
-    api:init(MinifluxSettings.getServerAddress(), MinifluxSettings.getApiToken())
+    api:init(settings:getServerAddress(), settings:getApiToken())
     
     EntryUtils.downloadEntry({
         entry = entry,
@@ -385,10 +395,10 @@ function NavigationUtils.markEntryAsRead(entry_info)
     
     -- Get API instance (we'll need to figure out how to access this)
     -- For now, we'll create a new instance with stored settings
-    MinifluxSettings.init()  -- Initialize settings
+    local settings = getSettings()
     
     local api = MinifluxAPI:new()
-    api:init(MinifluxSettings.getServerAddress(), MinifluxSettings.getApiToken())
+    api:init(settings:getServerAddress(), settings:getApiToken())
     
     -- Mark as read
     local success, result = api:markEntryAsRead(tonumber(entry_id))
@@ -434,10 +444,10 @@ function NavigationUtils.markEntryAsUnread(entry_info)
     UIManager:forceRePaint()
     
     -- Get API instance with stored settings
-    MinifluxSettings.init()  -- Initialize settings
+    local settings = getSettings()
     
     local api = MinifluxAPI:new()
-    api:init(MinifluxSettings.getServerAddress(), MinifluxSettings.getApiToken())
+    api:init(settings:getServerAddress(), settings:getApiToken())
     
     -- Mark as unread
     local success, result = api:markEntryAsUnread(tonumber(entry_id))
@@ -592,11 +602,10 @@ function NavigationUtils.fetchAndShowEntry(entry_id)
     UIManager:forceRePaint()
     
     -- Get API instance with stored settings
-    local MinifluxSettings = MinifluxSettingsManager
-    MinifluxSettings:init()  -- Create and initialize instance
+    local settings = getSettings()
     
     local api = MinifluxAPI:new()
-    api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())
+    api:init(settings:getServerAddress(), settings:getApiToken())
     
     -- Fetch the entry by ID
     local success, result = api:getEntry(entry_id)

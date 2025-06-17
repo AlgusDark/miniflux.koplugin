@@ -24,13 +24,14 @@ local MenuManager = require("menu/menu_manager")
 ---@field name string Plugin name identifier
 ---@field is_doc_only boolean Whether plugin is document-only
 ---@field download_dir string Full path to download directory
----@field settings table Settings module instance
+---@field settings MinifluxSettings Settings instance
 ---@field api MinifluxAPI API client instance
 ---@field browser_launcher BrowserLauncher Browser launcher instance
 ---@field menu_manager MenuManager Menu construction manager
 local Miniflux = WidgetContainer:extend({
     name = "miniflux",
     is_doc_only = false,
+    settings = nil,
 })
 
 ---Initialize the plugin by setting up all components
@@ -46,9 +47,9 @@ function Miniflux:init()
     end
     self.download_dir = download_dir
 
-    -- Initialize settings
-    self.settings = MinifluxSettings
-    self.settings.init()
+    -- Initialize settings instance
+    self.settings = MinifluxSettings.MinifluxSettings:new()
+    self.settings:init()
 
     -- Initialize API client
     self.api = MinifluxAPI:new()
@@ -58,10 +59,10 @@ function Miniflux:init()
     self.browser_launcher:init(self.settings, self.api, download_dir)
 
     -- Initialize API with current settings if available
-    if self.settings.isConfigured() then
+    if self.settings:isConfigured() then
         self.api:init(
-            self.settings.getServerAddress(), 
-            self.settings.getApiToken()
+            self.settings:getServerAddress(), 
+            self.settings:getApiToken()
         )
     end
 

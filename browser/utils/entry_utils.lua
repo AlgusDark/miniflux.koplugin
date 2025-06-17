@@ -62,7 +62,9 @@ function EntryUtils.downloadEntry(params)
     local download_dir = params.download_dir
     local browser = params.browser
     
-    MinifluxSettings.init()  -- Initialize settings
+    -- Get settings instance (create singleton if needed)
+    local settings = MinifluxSettings.MinifluxSettings:new()
+    settings:init()
     
     local entry_title = entry.title or _("Untitled Entry")
     local entry_id = tostring(entry.id)
@@ -106,7 +108,7 @@ function EntryUtils.downloadEntry(params)
     end
     
     -- Check if images should be included
-    local include_images = MinifluxSettings.getIncludeImages()
+    local include_images = settings:getIncludeImages()
     
     progress:update(_("Scanning for images…"))
     

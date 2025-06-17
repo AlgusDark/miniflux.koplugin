@@ -43,7 +43,7 @@ end
 ---Show the main Miniflux browser screen
 ---@return nil
 function BrowserLauncher:showMainScreen()
-    if not self.settings.isConfigured() then
+    if not self.settings:isConfigured() then
         UIManager:show(InfoMessage:new{
             text = _("Please configure server settings first"),
             timeout = 3,
@@ -60,7 +60,7 @@ function BrowserLauncher:showMainScreen()
     
     -- Initialize API with current settings
     local api_success = pcall(function()
-        self.api:init(self.settings.getServerAddress(), self.settings.getApiToken())
+        self.api:init(self.settings:getServerAddress(), self.settings:getApiToken())
     end)
     
     if not api_success then
