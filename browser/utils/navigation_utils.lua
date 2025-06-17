@@ -12,7 +12,7 @@ local UIManager = require("ui/uimanager")
 local lfs = require("libs/libkoreader-lfs")
 local _ = require("gettext")
 local MinifluxAPI = require("api/api_client")
-local MinifluxSettingsManager = require("settings/settings_manager")
+local MinifluxSettings = require("settings/settings")
 local BrowserUtils = require("browser/utils/browser_utils")
 local NavigationContext = require("browser/utils/navigation_context")
 local DataStorage = require("datastorage")
@@ -79,11 +79,10 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
     end
     
     -- Get API instance with stored settings
-    local MinifluxSettings = MinifluxSettingsManager
-    MinifluxSettings:init()  -- Create and initialize instance
+    MinifluxSettings.init()  -- Initialize settings
     
     local api = MinifluxAPI:new()
-    api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())
+    api:init(MinifluxSettings.getServerAddress(), MinifluxSettings.getApiToken())
     
     -- Show loading message
     local loading_info = InfoMessage:new{
@@ -138,7 +137,7 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
     options.direction = "asc"
     options.published_after = published_unix
     options.limit = 1
-    options.order = MinifluxSettings:getOrder()
+    options.order = MinifluxSettings.getOrder()
     
     -- Fetch previous entry using regular getEntries API
     local success, result = api:getEntries(options)
@@ -173,7 +172,7 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
             global_options.direction = "asc"
             global_options.published_after = published_unix
             global_options.limit = 1
-            global_options.order = MinifluxSettings:getOrder()
+            global_options.order = MinifluxSettings.getOrder()
             
             -- Global fallback for previous entry
             
@@ -203,11 +202,10 @@ function NavigationUtils.navigateToNextEntry(entry_info)
     end
     
     -- Get API instance with stored settings
-    local MinifluxSettings = MinifluxSettingsManager
-    MinifluxSettings:init()  -- Create and initialize instance
+    MinifluxSettings.init()  -- Initialize settings
     
     local api = MinifluxAPI:new()
-    api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())
+    api:init(MinifluxSettings.getServerAddress(), MinifluxSettings.getApiToken())
     
     -- Show loading message
     local loading_info = InfoMessage:new{
@@ -262,7 +260,7 @@ function NavigationUtils.navigateToNextEntry(entry_info)
     options.direction = "desc"
     options.published_before = published_unix
     options.limit = 1
-    options.order = MinifluxSettings:getOrder()
+    options.order = MinifluxSettings.getOrder()
     
     -- Fetch next entry using regular getEntries API
     local success, result = api:getEntries(options)
@@ -297,7 +295,7 @@ function NavigationUtils.navigateToNextEntry(entry_info)
             global_options.direction = "desc"
             global_options.published_before = published_unix
             global_options.limit = 1
-            global_options.order = MinifluxSettings:getOrder()
+            global_options.order = MinifluxSettings.getOrder()
             
             -- Global fallback for next entry
             
@@ -355,11 +353,10 @@ function NavigationUtils.downloadAndShowEntry(entry)
     
     -- Download and show the entry (no context needed - it's now global)
     local EntryUtils = require("browser/utils/entry_utils")
-    local MinifluxSettings = MinifluxSettingsManager
-    MinifluxSettings:init()
+    MinifluxSettings.init()
     
     local api = MinifluxAPI:new()
-    api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())
+    api:init(MinifluxSettings.getServerAddress(), MinifluxSettings.getApiToken())
     
     EntryUtils.downloadEntry({
         entry = entry,
@@ -388,11 +385,10 @@ function NavigationUtils.markEntryAsRead(entry_info)
     
     -- Get API instance (we'll need to figure out how to access this)
     -- For now, we'll create a new instance with stored settings
-    local MinifluxSettings = MinifluxSettingsManager
-    MinifluxSettings:init()  -- Create and initialize instance
+    MinifluxSettings.init()  -- Initialize settings
     
     local api = MinifluxAPI:new()
-    api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())
+    api:init(MinifluxSettings.getServerAddress(), MinifluxSettings.getApiToken())
     
     -- Mark as read
     local success, result = api:markEntryAsRead(tonumber(entry_id))
@@ -438,11 +434,10 @@ function NavigationUtils.markEntryAsUnread(entry_info)
     UIManager:forceRePaint()
     
     -- Get API instance with stored settings
-    local MinifluxSettings = MinifluxSettingsManager
-    MinifluxSettings:init()  -- Create and initialize instance
+    MinifluxSettings.init()  -- Initialize settings
     
     local api = MinifluxAPI:new()
-    api:init(MinifluxSettings:getServerAddress(), MinifluxSettings:getApiToken())
+    api:init(MinifluxSettings.getServerAddress(), MinifluxSettings.getApiToken())
     
     -- Mark as unread
     local success, result = api:markEntryAsUnread(tonumber(entry_id))

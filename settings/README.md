@@ -1,215 +1,143 @@
 # Miniflux Settings Architecture
 
-This directory contains the refactored modular settings system for the Miniflux plugin. The code has been organized following the Unix philosophy of "do one thing and do it well" and incorporates modern design patterns.
+This directory contains the simplified settings system for the Miniflux plugin. The complex OOP architecture has been flattened into a single, efficient module.
 
 ## Directory Structure
 
 ```
 settings/
 ├── README.md                    # This file - architecture documentation
-├── enums.lua                    # Enums and constants for settings
-├── base_settings.lua            # Base class with common functionality
-├── server_settings.lua          # Server connection settings
-├── sorting_settings.lua         # Sorting and pagination settings
-├── display_settings.lua         # UI display preferences
-├── debug_settings.lua           # Debug and logging settings
-└── settings_manager.lua         # Main coordinator (Facade pattern)
+├── settings.lua                 # Main settings module (functional API)
+└── ui/
+    ├── README.md               # UI components documentation
+    └── settings_dialogs.lua    # UI dialogs for settings configuration
 ```
 
-**Note**: Type aliases (`SortOrder`, `SortDirection`) are defined in `api.lua` to prevent duplication.
+## Architecture Overview
 
-## Design Patterns Used
+The settings system has been simplified from a complex OOP hierarchy to a straightforward functional module that:
 
-### 1. **Single Responsibility Principle (SRP)**
-Each module has one clear responsibility:
-- **ServerSettings**: Server address and API token management
-- **SortingSettings**: Sort order, direction, and entry limits
-- **DisplaySettings**: UI preferences like hiding read entries, image inclusion
-- **DebugSettings**: Debug logging configuration
+- **Always gets from source of truth**: Direct access to LuaSettings without caching or abstraction layers
+- **No OOP complexity**: Simple functions instead of classes, inheritance, and dependency injection
+- **Minimal memory footprint**: No object instances or complex state management
+- **Fast and reliable**: Direct LuaSettings calls without performance overhead
 
-### 2. **Dependency Injection**
-The `BaseSettings` class accepts a `LuaSettings` instance and logger through its `init()` method, allowing for:
-- Easy testing with mock dependencies
-- Flexible configuration of storage backends
-- Loose coupling between modules
+## Design Principles
 
-### 3. **Facade Pattern**
-The `SettingsManager` acts as a facade that:
-- Provides a unified interface to all settings modules
-- Handles initialization and coordination
-- Provides clean access to all settings functionality
+### 1. **Simplicity Over Complexity**
+- Single module instead of multiple classes
+- Functional API instead of OOP methods
+- Direct LuaSettings access instead of abstraction layers
 
-### 4. **Inheritance**
-All settings modules inherit from `BaseSettings` which provides:
-- Common CRUD operations
-- Validation framework
-- Bulk operations
-- Error handling
+### 2. **Source of Truth Pattern**
+- All settings are read directly from LuaSettings on every call
+- No caching or state management complexity
+- Immediate persistence with `settings.save()`
 
-### 5. **Enum Pattern**
-The `enums.lua` file centralizes all constants and valid values:
-- Type-safe sort orders and directions (types defined in `api.lua`)
-- Centralized default values
-- Validation functions
+### 3. **Validation at the Boundary**
+- Input validation when setting values
+- Sensible defaults for all settings
+- Graceful fallback to defaults on invalid data
 
 ## Module Responsibilities
 
-### `enums.lua` - Constants and Validation
-- Defines all valid enumeration values
-- Provides validation functions
-- Centralizes default values
-- Note: Type aliases are defined in `api.lua`
+### `settings.lua` - All Settings Management
+- Server configuration (address, API token)
+- Sorting preferences (order, direction, limit)
+- Display settings (hide read entries, include images, font size)
+- Input validation and type checking
+- Default value management
+- Direct LuaSettings persistence
 
-### `base_settings.lua` - Common Functionality
-- Dependency injection setup
-- Basic CRUD operations (`get`, `set`, `toggle`)
-- Validation framework with `setWithValidation`
-- Bulk operations (`getMultiple`, `setMultiple`)
-- Error handling and logging
-
-### `server_settings.lua` - Server Configuration
-- Server address with URL validation and normalization
-- API token management with validation
-- Connection status checking
-- Server-specific utility functions
-
-### `sorting_settings.lua` - Sorting & Pagination
-- Sort order with enum validation
-- Sort direction with enum validation  
-- Entry limit with range validation
-- Display name resolution for UI
-- Reset functionality
-
-### `display_settings.lua` - UI Preferences
-- Hide/show read entries toggle
-- Image inclusion settings
-- Auto-mark read functionality
-- Entry font size with range validation
-- Legacy settings support
-
-### `debug_settings.lua` - Debug Configuration
-- Debug logging enable/disable
-- Simple boolean validation
-- Convenience methods for common operations
-
-### `settings_manager.lua` - Main Coordinator
-- Initializes all sub-modules with dependency injection
-- Provides unified API for settings management
-- Handles default value loading
-- Delegates operations to appropriate modules
-- Instance-based pattern for efficient memory usage
+### `ui/settings_dialogs.lua` - UI Components
+- Server settings dialog
+- Limit configuration dialog
+- Connection testing
+- Dynamic menu generation for sort options
+- Integration with the simplified settings API
 
 ## Benefits of This Architecture
 
 ### 1. **Maintainability**
-- Easy to find and modify specific settings
-- Clear separation of concerns
-- Consistent patterns across modules
+- Single file to understand and modify
+- No complex inheritance or dependency chains
+- Clear, simple function names and purposes
 
-### 2. **Testability**
-- Each module can be tested independently
-- Dependency injection allows for easy mocking
-- Validation logic is isolated and testable
+### 2. **Performance**
+- No object instantiation overhead
+- Direct LuaSettings access (fast enough for this use case)
+- Minimal memory footprint
 
-### 3. **Extensibility**
-- New setting categories can be added as new modules
-- Existing modules can be extended without affecting others
-- Plugin-specific settings can be added easily
+### 3. **Reliability**
+- Always gets current values from storage
+- No cache invalidation issues
+- Simple error handling and logging
 
-### 4. **Type Safety**
-- EmmyLua annotations throughout
-- Enum-based validation
-- Clear parameter and return types
-
-### 5. **Clean Architecture**
-- Direct access to SettingsManager
-- No unnecessary wrapper layers
-- Clear dependency paths
+### 4. **Simplicity**
+- Easy to understand and debug
+- No complex patterns or abstractions
+- Straightforward functional API
 
 ## Usage Examples
 
 ### Basic Usage
 ```lua
-local settings = require("settings/settings_manager")
+local Settings = require("settings/settings")
 
--- Direct access to the settings manager
-local server = settings:getServerAddress()
-settings:setServerAddress("https://miniflux.example.com")
+-- No initialization needed - auto-initializes on first use
+local server = Settings.getServerAddress()
+Settings.setServerAddress("https://miniflux.example.com")
+Settings.save()
 ```
 
-### Advanced Usage (New Modular API)
+### Complete Configuration
 ```lua
-local settings = require("settings/settings_manager")
+local Settings = require("settings/settings")
 
--- Access specific modules
-local serverConfig = settings:getModuleSettings("server")
-local sortingConfig = settings:getModuleSettings("sorting")
+-- Configure server
+Settings.setServerAddress("https://miniflux.example.com")
+Settings.setApiToken("your-api-token-here")
 
--- Set all settings for a module at once
-settings:setModuleSettings("display", {
-    hide_read_entries = true,
-    include_images = false,
-    auto_mark_read = true
-})
+-- Configure sorting
+Settings.setLimit(50)
+Settings.setOrder("published_at")
+Settings.setDirection("desc")
+
+-- Configure display
+Settings.setHideReadEntries(true)
+Settings.setIncludeImages(false)
+
+-- Save all changes
+Settings.save()
 ```
 
-### Direct Module Access
+### Validation and Constants
 ```lua
-local ServerSettings = require("settings/server_settings")
-local LuaSettings = require("luasettings")
+local Settings = require("settings/settings")
 
--- Create and inject dependencies
-local storage = LuaSettings:open("test.lua")
-local server = ServerSettings:new()
-server:init(storage, logger)
+-- Get available options
+local valid_orders = Settings.VALID_SORT_ORDERS
+local valid_directions = Settings.VALID_SORT_DIRECTIONS
+local defaults = Settings.DEFAULTS
 
--- Use normalized URL setting
-server:setNormalizedServerAddress("https://example.com/")
+-- Validation is automatic
+Settings.setOrder("invalid_order")  -- Will log warning and use default
+Settings.setLimit("not_a_number")   -- Will log warning and use default
 ```
 
-## Adding New Settings
+## Migration from Old Architecture
 
-To add a new setting category:
+The external API remains the same for compatibility:
 
-1. **Create Module**: `settings/new_category_settings.lua`
-2. **Inherit from BaseSettings**: Use the inheritance pattern
-3. **Add to SettingsManager**: Include initialization and delegation
-4. **Update Enums**: Add any new constants or defaults
-5. **Document**: Update this README
+- `Settings.getServerAddress()` (was `settings:getServerAddress()`)
+- `Settings.setServerAddress(addr)` (was `settings:setServerAddress(addr)`)
+- `Settings.isConfigured()` (was `settings:isConfigured()`)
+- All other getter/setter methods follow the same pattern
 
-### Example: Adding Theme Settings
-```lua
--- settings/theme_settings.lua
-local BaseSettings = require("settings/base_settings")
-local Enums = require("settings/enums")
+The main changes:
+- Use `.` instead of `:` for method calls (functional vs OOP)
+- No need to call `init()` or manage instances
+- Automatic initialization on first use
+- Direct save with `Settings.save()`
 
-local ThemeSettings = {}
-setmetatable(ThemeSettings, {__index = BaseSettings})
-
-function ThemeSettings:new(o)
-    o = o or {}
-    setmetatable(o, self)
-    self.__index = self
-    return o
-end
-
-function ThemeSettings:getTheme()
-    return self:get("theme", "light")
-end
-
-function ThemeSettings:setTheme(theme)
-    local validThemes = {"light", "dark", "sepia"}
-    local function isValidTheme(t)
-        for _, valid in ipairs(validThemes) do
-            if t == valid then return true end
-        end
-        return false
-    end
-    
-    return self:setWithValidation("theme", theme, isValidTheme, "light")
-end
-
-return ThemeSettings
-```
-
-This modular architecture makes the settings system much more maintainable and follows modern software engineering principles with a clean, consistent interface. 
+This simplified architecture removes all the complexity while maintaining the same functionality and external API compatibility. 

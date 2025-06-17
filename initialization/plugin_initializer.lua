@@ -13,7 +13,7 @@ local logger = require("logger")
 
 -- Import plugin modules
 local MinifluxAPI = require("api/api_client")
-local MinifluxSettingsManager = require("settings/settings_manager")
+local MinifluxSettings = require("settings/settings")
 local SettingsDialogs = require("settings/ui/settings_dialogs")
 local BrowserLauncher = require("browser/ui/browser_launcher")
 
@@ -44,9 +44,9 @@ function PluginInitializer:initializePlugin(plugin_instance)
     end
     plugin_instance.download_dir = download_dir
 
-    -- Initialize settings manager
-    plugin_instance.settings = MinifluxSettingsManager
-    plugin_instance.settings:init()
+    -- Initialize settings (no OOP needed anymore)
+    plugin_instance.settings = MinifluxSettings
+    plugin_instance.settings.init()
 
     -- Initialize API client
     plugin_instance.api = MinifluxAPI:new()
@@ -59,10 +59,10 @@ function PluginInitializer:initializePlugin(plugin_instance)
     plugin_instance.browser_launcher:init(plugin_instance.settings, plugin_instance.api, download_dir)
 
     -- Initialize API with current settings if available
-    if plugin_instance.settings:isConfigured() then
+    if plugin_instance.settings.isConfigured() then
         plugin_instance.api:init(
-            plugin_instance.settings:getServerAddress(), 
-            plugin_instance.settings:getApiToken()
+            plugin_instance.settings.getServerAddress(), 
+            plugin_instance.settings.getApiToken()
         )
     end
 

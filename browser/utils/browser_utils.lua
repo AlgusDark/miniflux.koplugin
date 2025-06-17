@@ -12,17 +12,17 @@ local _ = require("gettext")
 local BrowserUtils = {}
 
 ---Get API options based on current settings
----@param settings SettingsManager Settings manager instance
+---@param settings table Settings module instance
 ---@return ApiOptions Options for API calls
 function BrowserUtils.getApiOptions(settings)
     local options = {
-        limit = settings:getLimit(),
-        order = settings:getOrder(),
-        direction = settings:getDirection(),
+        limit = settings.getLimit(),
+        order = settings.getOrder(),
+        direction = settings.getDirection(),
     }
     
     -- Use server-side filtering based on settings
-    local hide_read_entries = settings:getHideReadEntries()
+    local hide_read_entries = settings.getHideReadEntries()
     if hide_read_entries then
         -- Only fetch unread entries
         options.status = {"unread"}

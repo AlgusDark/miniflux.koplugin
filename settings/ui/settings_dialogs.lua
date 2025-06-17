@@ -22,7 +22,7 @@ local _ = require("gettext")
 ---@field sub_item_table_func? function Function to generate sub-items
 
 ---@class SettingsDialogs
----@field settings SettingsManager Settings manager instance
+---@field settings table Settings module instance
 ---@field api MinifluxAPI API client instance
 ---@field settings_dialog MultiInputDialog|nil Current settings dialog
 local SettingsDialogs = {}
@@ -38,7 +38,7 @@ function SettingsDialogs:new(o)
 end
 
 ---Initialize the settings dialogs with required dependencies
----@param settings SettingsManager Settings manager instance
+---@param settings table Settings module instance
 ---@param api MinifluxAPI API client instance
 ---@return SettingsDialogs self for method chaining
 function SettingsDialogs:init(settings, api)
@@ -50,8 +50,8 @@ end
 ---Show server settings dialog
 ---@return nil
 function SettingsDialogs:showServerSettings()
-    local server_address = self.settings:getServerAddress()
-    local api_token = self.settings:getApiToken()
+    local server_address = self.settings.getServerAddress()
+    local api_token = self.settings.getApiToken()
     
     self.settings_dialog = MultiInputDialog:new{
         title = _("Miniflux server settings"),
@@ -82,15 +82,15 @@ function SettingsDialogs:showServerSettings()
                     callback = function()
                         local fields = self.settings_dialog:getFields()
                         if fields[1] and fields[1] ~= "" then
-                            self.settings:setServerAddress(fields[1])
+                            self.settings.setServerAddress(fields[1])
                         end
                         if fields[2] and fields[2] ~= "" then
-                            self.settings:setApiToken(fields[2])
+                            self.settings.setApiToken(fields[2])
                         end
-                        self.settings:save()
+                        self.settings.save()
                         
                         -- Reinitialize API with new settings
-                        self.api:init(self.settings:getServerAddress(), self.settings:getApiToken())
+                        self.api:init(self.settings.getServerAddress(), self.settings.getApiToken())
                         
                         UIManager:close(self.settings_dialog)
                         UIManager:show(InfoMessage:new{
@@ -105,9 +105,10 @@ function SettingsDialogs:showServerSettings()
 end
 
 ---Show entries limit settings dialog
+---@param refresh_callback? function Optional callback to refresh the menu after saving
 ---@return nil
-function SettingsDialogs:showLimitSettings()
-    local current_limit = tostring(self.settings:getLimit())
+function SettingsDialogs:showLimitSettings(refresh_callback)
+    local current_limit = tostring(self.settings.getLimit())
     
     local limit_dialog
     limit_dialog = InputDialog:new{
@@ -128,12 +129,17 @@ function SettingsDialogs:showLimitSettings()
                     callback = function()
                         local new_limit = tonumber(limit_dialog:getInputText())
                         if new_limit and new_limit > 0 then
-                            self.settings:setLimit(new_limit)
-                            self.settings:save()
+                            self.settings.setLimit(new_limit)
+                            self.settings.save()
                             UIManager:close(limit_dialog)
                             UIManager:show(InfoMessage:new{
                                 text = _("Entries limit saved"),
+                                timeout = 2,
                             })
+                            -- Refresh the menu to show updated limit
+                            if refresh_callback then
+                                refresh_callback()
+                            end
                         else
                             UIManager:show(InfoMessage:new{
                                 text = _("Please enter a valid number greater than 0"),
@@ -151,7 +157,7 @@ end
 ---Test connection to Miniflux server
 ---@return nil
 function SettingsDialogs:testConnection()
-    if not self.settings:isConfigured() then
+    if not self.settings.isConfigured() then
         UIManager:show(InfoMessage:new{
             text = _("Please configure server address and API token first"),
         })
@@ -165,7 +171,7 @@ function SettingsDialogs:testConnection()
     UIManager:forceRePaint() -- Force immediate display before API call
     
     -- Reinitialize API with current settings
-    self.api:init(self.settings:getServerAddress(), self.settings:getApiToken())
+    self.api:init(self.settings.getServerAddress(), self.settings.getApiToken())
     
     local success, result = self.api:testConnection()
     
@@ -182,15 +188,15 @@ end
 ---Get sort order submenu items
 ---@return MenuSubItem[] Sort order menu items
 function SettingsDialogs:getOrderSubMenu()
-    local current_order = self.settings:getOrder()
+    local current_order = self.settings.getOrder()
     
     return {
         {
             text = _("ID") .. (current_order == "id" and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                self.settings:setOrder("id")
-                self.settings:save()
+                self.settings.setOrder("id")
+                self.settings.save()
                 UIManager:show(InfoMessage:new{
                     text = _("Sort order updated"),
                     timeout = 2,
@@ -204,8 +210,8 @@ function SettingsDialogs:getOrderSubMenu()
             text = _("Status") .. (current_order == "status" and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                self.settings:setOrder("status")
-                self.settings:save()
+                self.settings.setOrder("status")
+                self.settings.save()
                 UIManager:show(InfoMessage:new{
                     text = _("Sort order updated"),
                     timeout = 2,
@@ -219,8 +225,8 @@ function SettingsDialogs:getOrderSubMenu()
             text = _("Published date") .. (current_order == "published_at" and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                self.settings:setOrder("published_at")
-                self.settings:save()
+                self.settings.setOrder("published_at")
+                self.settings.save()
                 UIManager:show(InfoMessage:new{
                     text = _("Sort order updated"),
                     timeout = 2,
@@ -234,8 +240,8 @@ function SettingsDialogs:getOrderSubMenu()
             text = _("Category title") .. (current_order == "category_title" and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                self.settings:setOrder("category_title")
-                self.settings:save()
+                self.settings.setOrder("category_title")
+                self.settings.save()
                 UIManager:show(InfoMessage:new{
                     text = _("Sort order updated"),
                     timeout = 2,
@@ -249,8 +255,8 @@ function SettingsDialogs:getOrderSubMenu()
             text = _("Category ID") .. (current_order == "category_id" and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                self.settings:setOrder("category_id")
-                self.settings:save()
+                self.settings.setOrder("category_id")
+                self.settings.save()
                 UIManager:show(InfoMessage:new{
                     text = _("Sort order updated"),
                     timeout = 2,
@@ -266,15 +272,15 @@ end
 ---Get sort direction submenu items
 ---@return MenuSubItem[] Sort direction menu items
 function SettingsDialogs:getDirectionSubMenu()
-    local current_direction = self.settings:getDirection()
+    local current_direction = self.settings.getDirection()
     
     return {
         {
             text = _("Ascending") .. (current_direction == "asc" and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                self.settings:setDirection("asc")
-                self.settings:save()
+                self.settings.setDirection("asc")
+                self.settings.save()
                 UIManager:show(InfoMessage:new{
                     text = _("Sort direction updated"),
                     timeout = 2,
@@ -288,8 +294,8 @@ function SettingsDialogs:getDirectionSubMenu()
             text = _("Descending") .. (current_direction == "desc" and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                self.settings:setDirection("desc")
-                self.settings:save()
+                self.settings.setDirection("desc")
+                self.settings.save()
                 UIManager:show(InfoMessage:new{
                     text = _("Sort direction updated"),
                     timeout = 2,

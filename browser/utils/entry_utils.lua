@@ -15,7 +15,7 @@ local _ = require("gettext")
 local T = require("ffi/util").template
 
 -- Move frequently used requires to module level for performance
-local MinifluxSettingsManager = require("settings/settings_manager")
+local MinifluxSettings = require("settings/settings")
 local time = require("ui/time")
 local BrowserUtils = require("browser/utils/browser_utils")
 local ReaderUI = require("apps/reader/readerui")
@@ -62,8 +62,7 @@ function EntryUtils.downloadEntry(params)
     local download_dir = params.download_dir
     local browser = params.browser
     
-    local MinifluxSettings = MinifluxSettingsManager
-    MinifluxSettings:init()  -- Create and initialize instance
+    MinifluxSettings.init()  -- Initialize settings
     
     local entry_title = entry.title or _("Untitled Entry")
     local entry_id = tostring(entry.id)
@@ -107,7 +106,7 @@ function EntryUtils.downloadEntry(params)
     end
     
     -- Check if images should be included
-    local include_images = MinifluxSettings:getIncludeImages()
+    local include_images = MinifluxSettings.getIncludeImages()
     
     progress:update(_("Scanning for images…"))
     

@@ -86,11 +86,13 @@ end
 function MenuManager:buildEntriesLimitItem(plugin_instance)
     return {
         text_func = function()
-            return T(_("Entries limit - %1"), plugin_instance.settings:getLimit())
+            return T(_("Entries limit - %1"), plugin_instance.settings.getLimit())
         end,
         keep_menu_open = true,
-        callback = function()
-            plugin_instance.settings_dialogs:showLimitSettings()
+        callback = function(touchmenu_instance)
+            plugin_instance.settings_dialogs:showLimitSettings(function()
+                touchmenu_instance:updateItems()
+            end)
         end,
     }
 end
@@ -102,7 +104,7 @@ function MenuManager:buildSortOrderItem(plugin_instance)
     return {
         text_func = function()
             local order_names = self:getSortOrderNames()
-            local current_order = plugin_instance.settings:getOrder()
+            local current_order = plugin_instance.settings.getOrder()
             local order_name = order_names[current_order] or _("Published date")
             return T(_("Sort order - %1"), order_name)
         end,
@@ -119,7 +121,7 @@ end
 function MenuManager:buildSortDirectionItem(plugin_instance)
     return {
         text_func = function()
-            local direction_name = plugin_instance.settings:getDirection() == "asc" 
+            local direction_name = plugin_instance.settings.getDirection() == "asc" 
                 and _("Ascending") or _("Descending")
             return T(_("Sort direction - %1"), direction_name)
         end,
@@ -136,12 +138,13 @@ end
 function MenuManager:buildIncludeImagesItem(plugin_instance)
     return {
         text_func = function()
-            return plugin_instance.settings:getIncludeImages() 
+            return plugin_instance.settings.getIncludeImages() 
                 and _("Include images - ON") or _("Include images - OFF")
         end,
         keep_menu_open = true,
         callback = function(touchmenu_instance)
-            local new_value = plugin_instance.settings:toggleIncludeImages()
+            local new_value = plugin_instance.settings.toggleIncludeImages()
+            plugin_instance.settings.save()
             local message = new_value 
                 and _("Images will be downloaded with entries")
                 or _("Images will be skipped when downloading entries")
