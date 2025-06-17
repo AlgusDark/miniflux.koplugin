@@ -261,38 +261,6 @@ function HtmlUtils.getTextSummary(html, max_length)
     return truncated .. "…"
 end
 
----Validate HTML content
----@param html string HTML content to validate
----@return boolean True if HTML appears valid
----@return string|nil Error message if invalid
-function HtmlUtils.validateHtml(html)
-    if not html or html == "" then
-        return false, _("HTML content is empty")
-    end
-    
-    -- Basic validation - check for proper structure
-    local has_content = html:match("[^%s<>]") ~= nil
-    if not has_content then
-        return false, _("HTML content has no text")
-    end
-    
-    -- Check for balanced tags (basic check)
-    local tag_balance = 0
-    for tag in html:gmatch("<%s*([^%s/>]+)") do
-        if not tag:match("^/") then
-            tag_balance = tag_balance + 1
-        end
-    end
-    for tag in html:gmatch("<%s*/[^>]+>") do
-        tag_balance = tag_balance - 1
-    end
-    
-    -- Allow some imbalance since HTML can have self-closing tags
-    if math.abs(tag_balance) > 10 then
-        return false, _("HTML structure appears malformed")
-    end
-    
-    return true
-end
+
 
 return HtmlUtils 

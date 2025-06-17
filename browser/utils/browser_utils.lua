@@ -123,27 +123,6 @@ function BrowserUtils.formatEntryTitle(entry, include_feed_name)
     return display_text
 end
 
----Validate browser dependencies
----@param config BrowserConfig Browser configuration
----@return boolean True if all dependencies are valid
-function BrowserUtils.validateDependencies(config)
-    if not config then
-        return false
-    end
-    
-    if not config.settings then
-        return false
-    end
-    
-    if not config.api then
-        return false
-    end
-    
-    if not config.download_dir or config.download_dir == "" then
-        return false
-    end
-    
-    return true
-end
+
 
 return BrowserUtils 

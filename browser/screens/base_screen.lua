@@ -98,28 +98,7 @@ function BaseScreen:performApiCall(params)
     })
 end
 
----Perform simple API call (legacy support for manual error handling)
----@param operation_name string Name of the operation
----@param api_call_func function Function that performs the API call
----@param loading_message string Loading message to display
----@return boolean, any success, result
-function BaseScreen:performSimpleApiCall(operation_name, api_call_func, loading_message)
-    local loading_info = self:showLoadingMessage(loading_message)
-    
-    local success, result
-    local ok, err = pcall(function()
-        success, result = api_call_func()
-    end)
-    
-    self:closeLoadingMessage(loading_info)
-    
-    if not ok then
-        self:showErrorMessage(_("Failed to ") .. operation_name .. ": " .. tostring(err))
-        return false, nil
-    end
-    
-    return success, result
-end
+
 
 -- =============================================================================
 -- NAVIGATION AND BROWSER INTEGRATION
@@ -234,23 +213,7 @@ function BaseScreen:invalidateCache()
     -- Subclasses should override this method
 end
 
----Get cached data (to be overridden by subclasses)
----@param cache_key string Cache key identifier
----@return any|nil Cached data or nil if not cached
-function BaseScreen:getCachedData(cache_key)
-    -- Base implementation returns nil
-    -- Subclasses should override this method
-    return nil
-end
 
----Cache data (to be overridden by subclasses)
----@param cache_key string Cache key identifier
----@param data any Data to cache
----@return nil
-function BaseScreen:setCachedData(cache_key, data)
-    -- Base implementation does nothing
-    -- Subclasses should override this method
-end
 
 -- =============================================================================
 -- CONTENT DISPLAY INTERFACE
