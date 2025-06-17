@@ -19,7 +19,6 @@ local DEFAULTS = {
     order = "published_at",
     direction = "desc",
     hide_read_entries = true,
-    auto_mark_read = false,
     include_images = true
 }
 
@@ -139,13 +138,7 @@ function MinifluxSettings:save()
     end
 end
 
----Reload settings from disk into cache (useful for external changes)
----@return nil
-function MinifluxSettings:reload()
-    if self.initialized then
-        self:loadSettingsIntoCache()
-    end
-end
+
 
 ---Validate if value is in allowed list
 ---@param value any Value to check
@@ -263,18 +256,6 @@ function MinifluxSettings:toggleHideReadEntries()
     return new_value
 end
 
-function MinifluxSettings:getAutoMarkRead()
-    return self:get("auto_mark_read", DEFAULTS.auto_mark_read)
-end
-
-function MinifluxSettings:setAutoMarkRead(auto_mark)
-    if type(auto_mark) == "boolean" then
-        self:set("auto_mark_read", auto_mark)
-    else
-        logger.warn("Invalid auto_mark_read type:", type(auto_mark))
-    end
-end
-
 function MinifluxSettings:getIncludeImages()
     return self:get("include_images", DEFAULTS.include_images)
 end
@@ -294,160 +275,8 @@ function MinifluxSettings:toggleIncludeImages()
     return new_value
 end
 
--- =============================================================================
--- UTILITY METHODS
--- =============================================================================
-
-function MinifluxSettings:export()
-    -- Return a copy of the cache to prevent external modification
-    local exported = {}
-    for key, value in pairs(self.cache) do
-        exported[key] = value
-    end
-    return exported
-end
-
-function MinifluxSettings:reset()
-    logger.info("Resetting all Miniflux settings to defaults")
-    if self.settings_instance then
-        self.settings_instance:clear()
-    end
-    
-    -- Reset instance state
-    self.settings_file = nil
-    self.settings_instance = nil
-    self.initialized = false
-    self.cache = {}
-    
-    -- Reinitialize with defaults
-    self:init()
-end
-
--- =============================================================================
--- CONSTANTS FOR EXTERNAL USE
--- =============================================================================
-
--- Expose constants as class properties
-MinifluxSettings.VALID_SORT_ORDERS = VALID_SORT_ORDERS
-MinifluxSettings.VALID_SORT_DIRECTIONS = VALID_SORT_DIRECTIONS
-MinifluxSettings.DEFAULTS = DEFAULTS
-
--- =============================================================================
--- COMPATIBILITY LAYER - FUNCTIONAL API
--- =============================================================================
-
--- Create a singleton instance for backward compatibility with functional API
-local _default_instance = nil
-
-local function getDefaultInstance()
-    if not _default_instance then
-        _default_instance = MinifluxSettings:new()  -- Auto-initializes now
-    end
-    return _default_instance
-end
-
--- Export both OOP and functional APIs
+-- Export only the class - no functional API or constants needed
 local Settings = {}
-
--- OOP API - export the class
 Settings.MinifluxSettings = MinifluxSettings
-
--- Functional API - delegate to singleton instance for backward compatibility
-function Settings.init()
-    getDefaultInstance():init()
-end
-
-function Settings.getServerAddress()
-    return getDefaultInstance():getServerAddress()
-end
-
-function Settings.setServerAddress(address)
-    getDefaultInstance():setServerAddress(address)
-end
-
-function Settings.getApiToken()
-    return getDefaultInstance():getApiToken()
-end
-
-function Settings.setApiToken(token)
-    getDefaultInstance():setApiToken(token)
-end
-
-function Settings.isConfigured()
-    return getDefaultInstance():isConfigured()
-end
-
-function Settings.getLimit()
-    return getDefaultInstance():getLimit()
-end
-
-function Settings.setLimit(limit)
-    getDefaultInstance():setLimit(limit)
-end
-
-function Settings.getOrder()
-    return getDefaultInstance():getOrder()
-end
-
-function Settings.setOrder(order)
-    getDefaultInstance():setOrder(order)
-end
-
-function Settings.getDirection()
-    return getDefaultInstance():getDirection()
-end
-
-function Settings.setDirection(direction)
-    getDefaultInstance():setDirection(direction)
-end
-
-function Settings.getHideReadEntries()
-    return getDefaultInstance():getHideReadEntries()
-end
-
-function Settings.setHideReadEntries(hide)
-    getDefaultInstance():setHideReadEntries(hide)
-end
-
-function Settings.toggleHideReadEntries()
-    return getDefaultInstance():toggleHideReadEntries()
-end
-
-function Settings.getAutoMarkRead()
-    return getDefaultInstance():getAutoMarkRead()
-end
-
-function Settings.setAutoMarkRead(auto_mark)
-    getDefaultInstance():setAutoMarkRead(auto_mark)
-end
-
-function Settings.getIncludeImages()
-    return getDefaultInstance():getIncludeImages()
-end
-
-function Settings.setIncludeImages(include)
-    getDefaultInstance():setIncludeImages(include)
-end
-
-function Settings.toggleIncludeImages()
-    return getDefaultInstance():toggleIncludeImages()
-end
-
-function Settings.save()
-    getDefaultInstance():save()
-end
-
-function Settings.export()
-    return getDefaultInstance():export()
-end
-
-function Settings.reset()
-    getDefaultInstance():reset()
-end
-
--- Export constants
-Settings.VALID_SORT_ORDERS = VALID_SORT_ORDERS
-Settings.VALID_SORT_DIRECTIONS = VALID_SORT_DIRECTIONS
-Settings.DEFAULTS = DEFAULTS
 
 return Settings 

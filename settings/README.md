@@ -7,7 +7,7 @@ This directory contains the object-oriented settings system for the Miniflux plu
 ```
 settings/
 ├── README.md                    # This file - architecture documentation
-├── settings.lua                 # Main settings module (OOP + functional API)
+├── settings.lua                 # Main settings module (OOP only)
 └── ui/
     └── README.md               # Documentation about UI consolidation
 ```
@@ -19,7 +19,7 @@ The settings system uses a clean OOP design with:
 - **Instance-based architecture**: Each instance manages its own state and LuaSettings file
 - **Common API pattern**: Uses `new()` and `init()` methods like other modules in the codebase
 - **Proper encapsulation**: Instance variables instead of module-level globals
-- **Backward compatibility**: Maintains functional API through singleton pattern
+- **Clean interface**: Simple class export without unnecessary complexity
 
 ## Design Principles
 
@@ -34,12 +34,7 @@ The settings system uses a clean OOP design with:
 - `init()` method for lazy initialization
 - Multiple instances supported for testing or specialized use cases
 
-### 3. **Backward Compatibility**
-- Functional API maintained through singleton pattern
-- Existing code continues to work without changes
-- Smooth migration path for future refactoring
-
-### 4. **Source of Truth Pattern**
+### 3. **Source of Truth Pattern**
 - All settings read directly from LuaSettings on every call
 - No complex caching or state management
 - Immediate persistence with `instance:save()`
@@ -51,7 +46,6 @@ The settings system uses a clean OOP design with:
 - **Server configuration**: Address, API token, connection validation
 - **Sorting preferences**: Order, direction, limit with validation
 - **Display settings**: Hide read entries, include images
-- **Functional API**: Backward-compatible singleton-based functions
 - **Input validation**: Type checking and default value fallback
 
 ### `ui/` - UI Integration Documentation
@@ -60,7 +54,7 @@ The settings system uses a clean OOP design with:
 
 ## Usage Examples
 
-### OOP API (Recommended for new code)
+### OOP API (Standard usage)
 ```lua
 local Settings = require("settings/settings")
 
@@ -86,23 +80,6 @@ if settings:isConfigured() then
 end
 ```
 
-### Functional API (Backward compatibility)
-```lua
-local Settings = require("settings/settings")
-
--- Auto-initialization on first use
-local server = Settings.getServerAddress()
-Settings.setServerAddress("https://miniflux.example.com")
-Settings.save()
-
--- All existing functional API calls work unchanged
-Settings.setApiToken("your-token")
-Settings.setLimit(100)
-if Settings.isConfigured() then
-    print("Ready to go!")
-end
-```
-
 ### Advanced Usage (Multiple instances)
 ```lua
 local Settings = require("settings/settings")
@@ -117,20 +94,6 @@ production_settings:init()
 -- Configure each independently
 test_settings:setServerAddress("https://test.miniflux.com")
 production_settings:setServerAddress("https://miniflux.example.com")
-```
-
-### Validation and Constants
-```lua
-local Settings = require("settings/settings")
-
--- Access constants (available on both class and module)
-local valid_orders = Settings.VALID_SORT_ORDERS
-local defaults = Settings.MinifluxSettings.DEFAULTS
-
--- Validation is automatic
-local settings = Settings.MinifluxSettings:new()
-settings:init()
-settings:setOrder("invalid_order")  -- Will log warning and use default
 ```
 
 ## Benefits of This Architecture
@@ -156,32 +119,10 @@ settings:setOrder("invalid_order")  -- Will log warning and use default
 - Common `new()` and `init()` API familiar to developers
 - EmmyLua type annotations for IDE support
 
-### 5. **Backward Compatibility**
-- Existing code continues to work without changes
-- Gradual migration path for modernizing code
-- Functional API delegates to singleton instance seamlessly
-
-## Migration Path
-
-The module supports both APIs simultaneously:
-
-### Existing Code (No changes needed)
-```lua
--- This continues to work unchanged
-local Settings = require("settings/settings")
-Settings.setServerAddress("https://example.com")
-local configured = Settings.isConfigured()
-```
-
-### New Code (Recommended)
-```lua
--- Use OOP API for new development
-local Settings = require("settings/settings")
-local settings = Settings.MinifluxSettings:new()
-settings:init()
-settings:setServerAddress("https://example.com")
-local configured = settings:isConfigured()
-```
+### 5. **Simplicity**
+- Clean, focused API without unnecessary complexity
+- No backward compatibility layers to maintain
+- Straightforward class-based design
 
 ## Class Interface
 
@@ -191,8 +132,6 @@ The `MinifluxSettings` class provides these methods:
 - `new(o?)` - Create new instance
 - `init()` - Initialize settings file and defaults
 - `save()` - Persist settings to disk
-- `export()` - Export all settings as table
-- `reset()` - Reset to defaults
 
 ### Server Settings
 - `getServerAddress()` / `setServerAddress(address)`
@@ -209,6 +148,5 @@ The `MinifluxSettings` class provides these methods:
 - `toggleHideReadEntries()` - Toggle and return new value
 - `getIncludeImages()` / `setIncludeImages(include)`
 - `toggleIncludeImages()` - Toggle and return new value
-- `getAutoMarkRead()` / `setAutoMarkRead(auto_mark)`
 
-This OOP architecture provides a solid foundation for settings management while maintaining full backward compatibility with existing code. 
+This clean OOP architecture provides a solid foundation for settings management with a simple, maintainable interface. 
