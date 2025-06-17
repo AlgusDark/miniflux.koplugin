@@ -4,7 +4,7 @@ Browser Launcher Module
 This module handles browser initialization, data fetching, and main screen creation.
 It coordinates between the API, settings, and browser modules to launch the Miniflux browser.
 
-@module koplugin.miniflux.browser.ui.browser_launcher
+@module koplugin.miniflux.browser.browser_launcher
 --]]--
 
 local InfoMessage = require("ui/widget/infomessage")
@@ -123,8 +123,10 @@ end
 ---@return number|nil Unread count or nil on error
 function BrowserLauncher:fetchUnreadCount(loading_info)
     -- Use proper settings for API call instead of hardcoded values
-    local BrowserUtils = require("browser/utils/browser_utils")
-    local options = BrowserUtils.getApiOptions(self.settings)
+    local options = {
+        order = self.settings:getOrder(),
+        direction = self.settings:getDirection(),
+    }
     options.limit = 1  -- We only need one entry to get the total count
     options.status = {"unread"}  -- Only unread for count
     
@@ -219,9 +221,9 @@ end
 function BrowserLauncher:createAndShowBrowser(unread_count, feeds_count, categories_count)
     -- Create browser with proper error handling
     local browser_success = pcall(function()
-        -- Use the simplified main browser with providers pattern
-        local SimpleBrowser = require("browser/main_browser_simple")
-        self.miniflux_browser = SimpleBrowser:new{
+        -- Use the new consolidated browser
+        local MinifluxBrowser = require("browser/browser")
+        self.miniflux_browser = MinifluxBrowser:new{
             title = _("Miniflux"),
             settings = self.settings,
             api = self.api,

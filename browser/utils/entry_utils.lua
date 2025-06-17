@@ -17,10 +17,17 @@ local T = require("ffi/util").template
 -- Move frequently used requires to module level for performance
 local MinifluxSettings = require("settings/settings")
 local time = require("ui/time")
-local BrowserUtils = require("browser/utils/browser_utils")
+-- BrowserUtils functionality moved inline to avoid dependency on deleted file
 local ReaderUI = require("apps/reader/readerui")
 local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
-local NavigationUtils = require("browser/utils/navigation_utils")
+-- Removed NavigationUtils import to break circular dependency - functions moved inline
+
+-- Additional imports for navigation functionality (moved from NavigationUtils)
+local MinifluxAPI = require("api/miniflux_api")
+local NavigationContext = require("browser/utils/navigation_context")
+local DataStorage = require("datastorage")
+local FFIUtil = require("ffi/util")
+local FileManager = require("apps/filemanager/filemanager")
 
 -- Import the new specialized utility modules
 local ProgressUtils = require("browser/utils/progress_utils")
@@ -207,7 +214,7 @@ function EntryUtils.downloadEntry(params)
     })
     
     -- Save metadata file
-    local metadata_content = "return " .. BrowserUtils.tableToString(metadata)
+    local metadata_content = "return " .. EntryUtils.tableToString(metadata)
     file = io.open(metadata_file, "w")
     if file then
         file:write(metadata_content)
@@ -314,8 +321,17 @@ function EntryUtils.showEndOfEntryDialog()
     -- Close any existing EndOfBook dialog first (prevent stacking)
     EntryUtils.closeEndOfEntryDialog()
     
-    -- Load entry metadata to check current status
-    local metadata = NavigationUtils.loadCurrentEntryMetadata(current_entry)
+    -- Load entry metadata to check current status with error handling
+    local metadata = nil
+    local metadata_success = pcall(function()
+        metadata = loadCurrentEntryMetadata(current_entry)
+    end)
+    
+    if not metadata_success then
+        -- If metadata loading fails, assume unread status
+        metadata = { status = "unread" }
+    end
+    
     local entry_status = metadata and metadata.status or "unread"
     
     -- Determine mark button text and action based on current status
@@ -332,62 +348,82 @@ function EntryUtils.showEndOfEntryDialog()
         end
     end
     
-    -- Create dialog and store reference for later cleanup
-    EntryUtils._current_end_dialog = ButtonDialogTitle:new{
-        title = _("You've reached the end of the entry."),
-        title_align = "center",
-        buttons = {
-            {
+    -- Create dialog and store reference for later cleanup with error handling
+    local dialog_success = pcall(function()
+        EntryUtils._current_end_dialog = ButtonDialogTitle:new{
+            title = _("You've reached the end of the entry."),
+            title_align = "center",
+            buttons = {
                 {
-                    text = _("← Previous"),
-                    callback = function()
-                        EntryUtils.closeEndOfEntryDialog()
-                        EntryUtils.navigateToPreviousEntry(current_entry)
-                    end,
+                    {
+                        text = _("← Previous"),
+                        callback = function()
+                            EntryUtils.closeEndOfEntryDialog()
+                            pcall(function()
+                                EntryUtils.navigateToPreviousEntry(current_entry)
+                            end)
+                        end,
+                    },
+                    {
+                        text = _("Next →"),
+                        callback = function()
+                            EntryUtils.closeEndOfEntryDialog()
+                            pcall(function()
+                                EntryUtils.navigateToNextEntry(current_entry)
+                            end)
+                        end,
+                    },
                 },
                 {
-                    text = _("Next →"),
-                    callback = function()
-                        EntryUtils.closeEndOfEntryDialog()
-                        EntryUtils.navigateToNextEntry(current_entry)
-                    end,
+                    {
+                        text = _("⚠ Delete local entry"),
+                        callback = function()
+                            EntryUtils.closeEndOfEntryDialog()
+                            pcall(function()
+                                EntryUtils.deleteLocalEntry(current_entry)
+                            end)
+                        end,
+                    },
+                    {
+                        text = mark_button_text,
+                        callback = function()
+                            EntryUtils.closeEndOfEntryDialog()
+                            pcall(function()
+                                mark_callback()
+                            end)
+                        end,
+                    },
+                },
+                {
+                    {
+                        text = _("⌂ Miniflux folder"),
+                        callback = function()
+                            EntryUtils.closeEndOfEntryDialog()
+                            pcall(function()
+                                EntryUtils.openMinifluxFolder(current_entry)
+                            end)
+                        end,
+                    },
+                    {
+                        text = _("Cancel"),
+                        callback = function()
+                            EntryUtils.closeEndOfEntryDialog()
+                        end,
+                    },
                 },
             },
-            {
-                {
-                    text = _("⚠ Delete local entry"),
-                    callback = function()
-                        EntryUtils.closeEndOfEntryDialog()
-                        EntryUtils.deleteLocalEntry(current_entry)
-                    end,
-                },
-                {
-                    text = mark_button_text,
-                    callback = function()
-                        EntryUtils.closeEndOfEntryDialog()
-                        mark_callback()
-                    end,
-                },
-            },
-            {
-                {
-                    text = _("⌂ Miniflux folder"),
-                    callback = function()
-                        EntryUtils.closeEndOfEntryDialog()
-                        EntryUtils.openMinifluxFolder(current_entry)
-                    end,
-                },
-                {
-                    text = _("Cancel"),
-                    callback = function()
-                        EntryUtils.closeEndOfEntryDialog()
-                    end,
-                },
-            },
-        },
-    }
+        }
+        
+        UIManager:show(EntryUtils._current_end_dialog)
+    end)
     
-    UIManager:show(EntryUtils._current_end_dialog)
+    if not dialog_success then
+        -- If dialog creation fails, show a simple error message
+        UIManager:show(InfoMessage:new{
+            text = _("Failed to create end of entry dialog"),
+            timeout = 3,
+        })
+    end
 end
 
 ---Close any existing EndOfEntry dialog
@@ -399,13 +435,776 @@ function EntryUtils.closeEndOfEntryDialog()
     end
 end
 
--- Delegate navigation functions to NavigationUtils
-EntryUtils.navigateToPreviousEntry = NavigationUtils.navigateToPreviousEntry
-EntryUtils.navigateToNextEntry = NavigationUtils.navigateToNextEntry
-EntryUtils.markEntryAsRead = NavigationUtils.markEntryAsRead
-EntryUtils.markEntryAsUnread = NavigationUtils.markEntryAsUnread
-EntryUtils.deleteLocalEntry = NavigationUtils.deleteLocalEntry
-EntryUtils.openMinifluxFolder = NavigationUtils.openMinifluxFolder
-EntryUtils.fetchAndShowEntry = NavigationUtils.fetchAndShowEntry
+-- =============================================================================
+-- NAVIGATION FUNCTIONS (moved from NavigationUtils to break circular dependency)
+-- =============================================================================
+
+-- Create a singleton settings instance for navigation
+local _navigation_settings_instance = nil
+local function getNavigationSettings()
+    if not _navigation_settings_instance then
+        _navigation_settings_instance = MinifluxSettings.MinifluxSettings:new()
+        _navigation_settings_instance:init()
+    end
+    return _navigation_settings_instance
+end
+
+-- Pure-Lua ISO-8601 → Unix timestamp (UTC)
+-- Handles "YYYY-MM-DDTHH:MM:SS±HH:MM"
+local function iso8601_to_unix(s)
+    local Y, M, D, h, m, sec, sign, tzh, tzm = s:match(
+      "(%d+)%-(%d+)%-(%d+)T"..
+      "(%d+):(%d+):(%d+)"..
+      "([%+%-])(%d%d):(%d%d)$"
+    )
+    if not Y then
+      error("Bad ISO-8601 string: "..tostring(s))
+    end
+    Y, M, D = tonumber(Y), tonumber(M), tonumber(D)
+    h, m, sec = tonumber(h), tonumber(m), tonumber(sec)
+    tzh, tzm = tonumber(tzh), tonumber(tzm)
+  
+    local y = Y
+    local mo = M
+    if mo <= 2 then
+      y = y - 1
+      mo = mo + 12
+    end
+    local era = math.floor(y / 400)
+    local yoe = y - era * 400
+    local doy = math.floor((153 * (mo - 3) + 2) / 5) + D - 1
+    local doe = yoe * 365 + math.floor(yoe / 4)
+              - math.floor(yoe / 100) + doy
+    local days = era * 146097 + doe - 719468
+  
+    local utc_secs = days * 86400 + h * 3600 + m * 60 + sec
+  
+    local offs = tzh * 3600 + tzm * 60
+    if sign == "+" then
+      utc_secs = utc_secs - offs
+    else
+      utc_secs = utc_secs + offs
+    end
+  
+    return utc_secs
+end
+
+-- Get API options based on settings (moved from NavigationUtils)
+local function getNavigationApiOptions(settings)
+    local options = {
+        limit = settings:getLimit(),
+        order = settings:getOrder(),
+        direction = settings:getDirection(),
+    }
+    
+    local hide_read_entries = settings:getHideReadEntries()
+    if hide_read_entries then
+        options.status = {"unread"}
+    else
+        options.status = {"unread", "read"}
+    end
+    
+    return options
+end
+
+-- Load current entry metadata (moved from NavigationUtils)
+local function loadCurrentEntryMetadata(entry_info)
+    if not entry_info.file_path or not entry_info.entry_id then
+        return nil
+    end
+    
+    local entry_dir = entry_info.file_path:match("(.*)/entry%.html$")
+    if not entry_dir then
+        return nil
+    end
+    
+    local metadata_file = entry_dir .. "/metadata.lua"
+    if lfs.attributes(metadata_file, "mode") ~= "file" then
+        return nil
+    end
+    
+    local success, metadata = pcall(dofile, metadata_file)
+    if success and metadata then
+        return metadata
+    end
+    
+    return nil
+end
+
+---Navigate to the previous entry
+---@param entry_info table Current entry information
+---@return nil
+function EntryUtils.navigateToPreviousEntry(entry_info)
+    local current_entry_id = entry_info.entry_id
+    if not current_entry_id then
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: missing entry ID"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local settings_success, settings = pcall(getNavigationSettings)
+    if not settings_success or not settings then
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: settings not available"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local api_success, api = pcall(function()
+        return MinifluxAPI:new({
+            server_address = settings:getServerAddress(),
+            api_token = settings:getApiToken()
+        })
+    end)
+    
+    if not api_success or not api then
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: API not available"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local loading_info = InfoMessage:new{
+        text = _("Finding previous entry..."),
+    }
+    UIManager:show(loading_info)
+    UIManager:forceRePaint()
+    
+    local context_success, has_context = pcall(function()
+        return NavigationContext.hasValidContext()
+    end)
+    
+    if not context_success or not has_context then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: no browsing context available"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local metadata = loadCurrentEntryMetadata(entry_info)
+    if not metadata or not metadata.published_at then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: missing timestamp information"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local published_unix
+    local ok = pcall(function()
+        published_unix = iso8601_to_unix(metadata.published_at)
+    end)
+    
+    if not ok or not published_unix then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: invalid timestamp format"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local base_options = getNavigationApiOptions(settings)
+    local options_success, options = pcall(function()
+        return NavigationContext.getContextAwareOptions(base_options)
+    end)
+    
+    if not options_success or not options then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: failed to get context options"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    options.direction = "asc"
+    options.published_after = published_unix
+    options.limit = 1
+    options.order = settings:getOrder()
+    
+    local success, result = api.entries:getEntries(options)
+    UIManager:close(loading_info)
+    
+    if success and result and result.entries and #result.entries > 0 then
+        local prev_entry = result.entries[1]
+        local prev_entry_id = tostring(prev_entry.id)
+        
+        local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
+        if miniflux_dir then
+            local prev_entry_dir = miniflux_dir .. "/miniflux/" .. prev_entry_id .. "/"
+            local prev_html_file = prev_entry_dir .. "entry.html"
+            
+            if lfs.attributes(prev_html_file, "mode") == "file" then
+                EntryUtils.openEntryFile(prev_html_file)
+                return
+            end
+        end
+        
+        EntryUtils.downloadAndShowEntry(prev_entry)
+    else
+        local current_context_success, current_context = pcall(function()
+            return NavigationContext.getCurrentContext()
+        end)
+        
+        if current_context_success and current_context and current_context.type and current_context.type ~= "global" then
+            local global_options = getNavigationApiOptions(settings)
+            global_options.direction = "asc"
+            global_options.published_after = published_unix
+            global_options.limit = 1
+            global_options.order = settings:getOrder()
+            
+            success, result = api.entries:getEntries(global_options)
+            
+            if success and result and result.entries and #result.entries > 0 then
+                local prev_entry = result.entries[1]
+                EntryUtils.downloadAndShowEntry(prev_entry)
+                return
+            end
+        end
+        
+        UIManager:show(InfoMessage:new{
+            text = _("No previous entry available"),
+            timeout = 3,
+        })
+    end
+end
+
+---Navigate to the next entry
+---@param entry_info table Current entry information
+---@return nil
+function EntryUtils.navigateToNextEntry(entry_info)
+    local current_entry_id = entry_info.entry_id
+    if not current_entry_id then
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: missing entry ID"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local settings_success, settings = pcall(getNavigationSettings)
+    if not settings_success or not settings then
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: settings not available"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local api_success, api = pcall(function()
+        return MinifluxAPI:new({
+            server_address = settings:getServerAddress(),
+            api_token = settings:getApiToken()
+        })
+    end)
+    
+    if not api_success or not api then
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: API not available"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local loading_info = InfoMessage:new{
+        text = _("Finding next entry..."),
+    }
+    UIManager:show(loading_info)
+    UIManager:forceRePaint()
+    
+    local context_success, has_context = pcall(function()
+        return NavigationContext.hasValidContext()
+    end)
+    
+    if not context_success or not has_context then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: no browsing context available"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local metadata = loadCurrentEntryMetadata(entry_info)
+    if not metadata or not metadata.published_at then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: missing timestamp information"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local published_unix
+    local ok = pcall(function()
+        published_unix = iso8601_to_unix(metadata.published_at)
+    end)
+    
+    if not ok or not published_unix then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: invalid timestamp format"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local base_options = getNavigationApiOptions(settings)
+    local options_success, options = pcall(function()
+        return NavigationContext.getContextAwareOptions(base_options)
+    end)
+    
+    if not options_success or not options then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot navigate: failed to get context options"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    options.direction = "desc"
+    options.published_before = published_unix
+    options.limit = 1
+    options.order = settings:getOrder()
+    
+    local success, result = api.entries:getEntries(options)
+    UIManager:close(loading_info)
+    
+    if success and result and result.entries and #result.entries > 0 then
+        local next_entry = result.entries[1]
+        local next_entry_id = tostring(next_entry.id)
+        
+        local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
+        if miniflux_dir then
+            local next_entry_dir = miniflux_dir .. "/miniflux/" .. next_entry_id .. "/"
+            local next_html_file = next_entry_dir .. "entry.html"
+            
+            if lfs.attributes(next_html_file, "mode") == "file" then
+                EntryUtils.openEntryFile(next_html_file)
+                return
+            end
+        end
+        
+        EntryUtils.downloadAndShowEntry(next_entry)
+    else
+        local current_context_success, current_context = pcall(function()
+            return NavigationContext.getCurrentContext()
+        end)
+        
+        if current_context_success and current_context and current_context.type and current_context.type ~= "global" then
+            local global_options = getNavigationApiOptions(settings)
+            global_options.direction = "desc"
+            global_options.published_before = published_unix
+            global_options.limit = 1
+            global_options.order = settings:getOrder()
+            
+            success, result = api.entries:getEntries(global_options)
+            
+            if success and result and result.entries and #result.entries > 0 then
+                local next_entry = result.entries[1]
+                EntryUtils.downloadAndShowEntry(next_entry)
+                return
+            end
+        end
+        
+        UIManager:show(InfoMessage:new{
+            text = _("No next entry available"),
+            timeout = 3,
+        })
+    end
+end
+
+---Download and show an entry (moved from NavigationUtils)
+---@param entry MinifluxEntry Entry to download and show
+---@return nil
+function EntryUtils.downloadAndShowEntry(entry)
+    if not entry or not entry.id then
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot download: invalid entry data"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local context_success = pcall(function()
+        NavigationContext.updateCurrentEntry(entry.id)
+    end)
+    
+    if not context_success then
+        -- Continue without context update if it fails
+    end
+    
+    local download_success = pcall(function()
+        local download_dir = ("%s/%s/"):format(DataStorage:getFullDataDir(), "miniflux")
+        local settings = getNavigationSettings()
+        
+        local api = MinifluxAPI:new({
+            server_address = settings:getServerAddress(),
+            api_token = settings:getApiToken()
+        })
+        
+        EntryUtils.downloadEntry({
+            entry = entry,
+            api = api,
+            download_dir = download_dir
+        })
+    end)
+    
+    if not download_success then
+        UIManager:show(InfoMessage:new{
+            text = _("Failed to download and show entry"),
+            timeout = 3,
+        })
+    end
+end
+
+---Mark an entry as read (moved from NavigationUtils)
+---@param entry_info table Current entry information
+---@return nil
+function EntryUtils.markEntryAsRead(entry_info)
+    local entry_id = entry_info.entry_id
+    if not entry_id then
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot mark as read: missing entry ID"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local loading_info = InfoMessage:new{
+        text = _("Marking entry as read..."),
+    }
+    UIManager:show(loading_info)
+    UIManager:forceRePaint()
+    
+    local settings_success, settings = pcall(getNavigationSettings)
+    if not settings_success or not settings then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot mark as read: settings not available"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local api_success, api = pcall(function()
+        return MinifluxAPI:new({
+            server_address = settings:getServerAddress(),
+            api_token = settings:getApiToken()
+        })
+    end)
+    
+    if not api_success or not api then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot mark as read: API not available"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local success, result = api.entries:markAsRead(tonumber(entry_id))
+    UIManager:close(loading_info)
+    
+    if success then
+        UIManager:show(InfoMessage:new{
+            text = _("Entry marked as read"),
+            timeout = 2,
+        })
+        
+        pcall(function()
+            EntryUtils.updateLocalEntryStatus(entry_info, "read")
+        end)
+        
+        UIManager:scheduleIn(0.5, function()
+            pcall(function()
+                EntryUtils.deleteLocalEntry(entry_info)
+            end)
+        end)
+    else
+        UIManager:show(InfoMessage:new{
+            text = _("Failed to mark entry as read: ") .. tostring(result),
+            timeout = 5,
+        })
+    end
+end
+
+---Mark an entry as unread (moved from NavigationUtils)
+---@param entry_info table Current entry information
+---@return nil
+function EntryUtils.markEntryAsUnread(entry_info)
+    local entry_id = entry_info.entry_id
+    if not entry_id then
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot mark as unread: missing entry ID"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local loading_info = InfoMessage:new{
+        text = _("Marking entry as unread..."),
+    }
+    UIManager:show(loading_info)
+    UIManager:forceRePaint()
+    
+    local settings_success, settings = pcall(getNavigationSettings)
+    if not settings_success or not settings then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot mark as unread: settings not available"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local api_success, api = pcall(function()
+        return MinifluxAPI:new({
+            server_address = settings:getServerAddress(),
+            api_token = settings:getApiToken()
+        })
+    end)
+    
+    if not api_success or not api then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot mark as unread: API not available"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local success, result = api.entries:markAsUnread(tonumber(entry_id))
+    UIManager:close(loading_info)
+    
+    if success then
+        UIManager:show(InfoMessage:new{
+            text = _("Entry marked as unread"),
+            timeout = 2,
+        })
+        
+        pcall(function()
+            EntryUtils.updateLocalEntryStatus(entry_info, "unread")
+        end)
+    else
+        UIManager:show(InfoMessage:new{
+            text = _("Failed to mark entry as unread: ") .. tostring(result),
+            timeout = 5,
+        })
+    end
+end
+
+---Update local entry metadata status (moved from NavigationUtils)
+---@param entry_info table Current entry information
+---@param new_status string New status to set
+---@return boolean True if successfully updated
+function EntryUtils.updateLocalEntryStatus(entry_info, new_status)
+    local entry_id = entry_info.entry_id
+    if not entry_id then
+        return false
+    end
+    
+    local success = pcall(function()
+        local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
+        if not miniflux_dir then
+            return false
+        end
+        
+        local entry_dir = miniflux_dir .. "/miniflux/" .. entry_id .. "/"
+        local metadata_file = entry_dir .. "metadata.lua"
+        
+        if lfs.attributes(metadata_file, "mode") ~= "file" then
+            return false
+        end
+        
+        local metadata_success, metadata = pcall(dofile, metadata_file)
+        if not metadata_success or not metadata then
+            return false
+        end
+        
+        metadata.status = new_status
+        
+        local metadata_content = "return " .. EntryUtils.tableToString(metadata)
+        
+        local file = io.open(metadata_file, "w")
+        if file then
+            file:write(metadata_content)
+            file:close()
+            return true
+        end
+        
+        return false
+    end)
+    
+    return success or false
+end
+
+---Delete a local entry (moved from NavigationUtils)
+---@param entry_info table Current entry information
+---@return nil
+function EntryUtils.deleteLocalEntry(entry_info)
+    local entry_id = entry_info.entry_id
+    if not entry_id then
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot delete: missing entry ID"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local delete_success = pcall(function()
+        local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
+        if not miniflux_dir then
+            return false
+        end
+        
+        local entry_dir = miniflux_dir .. "/miniflux/" .. entry_id .. "/"
+        
+        if ReaderUI.instance then
+            ReaderUI.instance:onClose()
+        end
+        
+        FFIUtil.purgeDir(entry_dir)
+        return true
+    end)
+    
+    if delete_success then
+        UIManager:show(InfoMessage:new{
+            text = _("Local entry deleted successfully"),
+            timeout = 2,
+        })
+    else
+        UIManager:show(InfoMessage:new{
+            text = _("Failed to delete local entry"),
+            timeout = 3,
+        })
+    end
+    
+    pcall(function()
+        EntryUtils.openMinifluxFolder(entry_info)
+    end)
+end
+
+---Open the Miniflux folder in file manager (moved from NavigationUtils)
+---@param entry_info table Current entry information
+---@return nil
+function EntryUtils.openMinifluxFolder(entry_info)
+    local folder_success = pcall(function()
+        local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
+        if not miniflux_dir then
+            return false
+        end
+        
+        local full_miniflux_dir = miniflux_dir .. "/miniflux/"
+        
+        if ReaderUI.instance then
+            ReaderUI.instance:onClose()
+        end
+        
+        if FileManager.instance then
+            FileManager.instance:reinit(full_miniflux_dir)
+        else
+            FileManager:showFiles(full_miniflux_dir)
+        end
+        
+        return true
+    end)
+    
+    if not folder_success then
+        UIManager:show(InfoMessage:new{
+            text = _("Failed to open Miniflux folder"),
+            timeout = 3,
+        })
+    end
+end
+
+---Fetch and show entry by ID (moved from NavigationUtils)
+---@param entry_id number Entry ID to fetch and show
+---@return nil
+function EntryUtils.fetchAndShowEntry(entry_id)
+    if not entry_id or type(entry_id) ~= "number" then
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot fetch: invalid entry ID"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local loading_info = InfoMessage:new{
+        text = _("Fetching entry from server..."),
+    }
+    UIManager:show(loading_info)
+    UIManager:forceRePaint()
+    
+    local fetch_success = pcall(function()
+        local settings = getNavigationSettings()
+        local api = MinifluxAPI:new({
+            server_address = settings:getServerAddress(),
+            api_token = settings:getApiToken()
+        })
+        
+        local success, result = api.entries:getEntry(entry_id)
+        UIManager:close(loading_info)
+        
+        if success and result then
+            EntryUtils.downloadAndShowEntry(result)
+        else
+            UIManager:show(InfoMessage:new{
+                text = _("Failed to fetch entry: ") .. tostring(result),
+                timeout = 5,
+            })
+        end
+    end)
+    
+    if not fetch_success then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Failed to fetch entry from server"),
+            timeout = 3,
+        })
+    end
+end
+
+-- Navigation functions no longer delegate to NavigationUtils - they're implemented above
+
+-- =============================================================================
+-- UTILITY METHODS (moved from deleted BrowserUtils)
+-- =============================================================================
+
+---Convert table to Lua string representation
+---@param tbl table Table to convert
+---@param indent? number Current indentation level
+---@return string Lua code representation of table
+function EntryUtils.tableToString(tbl, indent)
+    indent = indent or 0
+    local result = {}
+    local spaces = string.rep("  ", indent)
+    
+    table.insert(result, "{\n")
+    for k, v in pairs(tbl) do
+        local key = type(k) == "string" and string.format('"%s"', k) or tostring(k)
+        local value
+        if type(v) == "string" then
+            value = string.format('"%s"', v:gsub('"', '\\"'))
+        elseif type(v) == "table" then
+            value = EntryUtils.tableToString(v, indent + 1)
+        else
+            value = tostring(v)
+        end
+        table.insert(result, string.format("%s  [%s] = %s,\n", spaces, key, value))
+    end
+    table.insert(result, spaces .. "}")
+    
+    return table.concat(result)
+end
 
 return EntryUtils 

@@ -157,10 +157,14 @@ end
 -- SERVER SETTINGS
 -- =============================================================================
 
+---Get the configured server address
+---@return string Server address
 function MinifluxSettings:getServerAddress()
     return self:get("server_address", DEFAULTS.server_address)
 end
 
+---Set the server address
+---@param address string Server address URL
 function MinifluxSettings:setServerAddress(address)
     if type(address) == "string" then
         self:set("server_address", address)
@@ -169,10 +173,14 @@ function MinifluxSettings:setServerAddress(address)
     end
 end
 
+---Get the configured API token
+---@return string API token
 function MinifluxSettings:getApiToken()
     return self:get("api_token", DEFAULTS.api_token)
 end
 
+---Set the API token
+---@param token string API authentication token
 function MinifluxSettings:setApiToken(token)
     if type(token) == "string" then
         self:set("api_token", token)
@@ -181,6 +189,8 @@ function MinifluxSettings:setApiToken(token)
     end
 end
 
+---Check if server is properly configured
+---@return boolean True if both server address and API token are set
 function MinifluxSettings:isConfigured()
     return self:getServerAddress() ~= "" and self:getApiToken() ~= ""
 end
@@ -189,10 +199,14 @@ end
 -- SORTING SETTINGS
 -- =============================================================================
 
+---Get the configured entries limit
+---@return number Maximum number of entries to fetch
 function MinifluxSettings:getLimit()
     return self:get("limit", DEFAULTS.limit)
 end
 
+---Set the entries limit
+---@param limit number|string Maximum number of entries to fetch (1-1000)
 function MinifluxSettings:setLimit(limit)
     -- Convert string to number if needed
     if type(limit) == "string" then
@@ -207,10 +221,14 @@ function MinifluxSettings:setLimit(limit)
     end
 end
 
+---Get the configured sort order
+---@return string Sort order field
 function MinifluxSettings:getOrder()
     return self:get("order", DEFAULTS.order)
 end
 
+---Set the sort order
+---@param order string Sort order field ("id", "status", "published_at", "category_title", "category_id")
 function MinifluxSettings:setOrder(order)
     if self:isValidValue(order, VALID_SORT_ORDERS) then
         self:set("order", order)
@@ -220,10 +238,14 @@ function MinifluxSettings:setOrder(order)
     end
 end
 
+---Get the configured sort direction
+---@return string Sort direction ("asc" or "desc")
 function MinifluxSettings:getDirection()
     return self:get("direction", DEFAULTS.direction)
 end
 
+---Set the sort direction
+---@param direction string Sort direction ("asc" or "desc")
 function MinifluxSettings:setDirection(direction)
     if self:isValidValue(direction, VALID_SORT_DIRECTIONS) then
         self:set("direction", direction)
@@ -237,10 +259,14 @@ end
 -- DISPLAY SETTINGS
 -- =============================================================================
 
+---Get the hide read entries setting
+---@return boolean True if read entries should be hidden
 function MinifluxSettings:getHideReadEntries()
     return self:get("hide_read_entries", DEFAULTS.hide_read_entries)
 end
 
+---Set the hide read entries setting
+---@param hide boolean Whether to hide read entries
 function MinifluxSettings:setHideReadEntries(hide)
     if type(hide) == "boolean" then
         self:set("hide_read_entries", hide)
@@ -249,6 +275,8 @@ function MinifluxSettings:setHideReadEntries(hide)
     end
 end
 
+---Toggle the hide read entries setting
+---@return boolean New value after toggle
 function MinifluxSettings:toggleHideReadEntries()
     local current = self:getHideReadEntries()
     local new_value = not current
@@ -256,10 +284,14 @@ function MinifluxSettings:toggleHideReadEntries()
     return new_value
 end
 
+---Get the include images setting
+---@return boolean True if images should be downloaded with entries
 function MinifluxSettings:getIncludeImages()
     return self:get("include_images", DEFAULTS.include_images)
 end
 
+---Set the include images setting
+---@param include boolean Whether to download images with entries
 function MinifluxSettings:setIncludeImages(include)
     if type(include) == "boolean" then
         self:set("include_images", include)
@@ -268,6 +300,8 @@ function MinifluxSettings:setIncludeImages(include)
     end
 end
 
+---Toggle the include images setting
+---@return boolean New value after toggle
 function MinifluxSettings:toggleIncludeImages()
     local current = self:getIncludeImages()
     local new_value = not current

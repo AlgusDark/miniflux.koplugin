@@ -17,7 +17,7 @@ local _ = require("gettext")
 -- Import specialized modules
 local MinifluxAPI = require("api/miniflux_api")
 local MinifluxSettings = require("settings/settings")
-local BrowserLauncher = require("browser/ui/browser_launcher")
+local BrowserLauncher = require("browser/browser_launcher")
 local MenuManager = require("menu/menu_manager")
 
 ---@class Miniflux : WidgetContainer
