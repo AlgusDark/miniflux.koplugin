@@ -36,7 +36,6 @@ These files provide IDE support and type checking for development. The type defi
 - `InfoMessage.lua` - Information message dialogs
 - `MultiInputDialog.lua` - Multi-field input dialogs
 - `ButtonDialogTitle.lua` - Button dialogs with titles
-- `TextViewer.lua` - Text viewing widget
 
 ### KOReader System Components
 - `DataStorage.lua` - Data and settings storage paths
@@ -71,5 +70,9 @@ EmmyLua type definitions for MyWidget
 - **API response types** → Define in API modules
 - **Browser types** → Define in browser modules
 - **Settings types** → Define in settings modules
+
+## Cleanup Notes
+
+Only essential KOReader interface types are kept here. Unused typedefs like `TextViewer` have been removed to reduce maintenance overhead. All remaining typedefs are actively used in the codebase and provide valuable IDE support for KOReader integration.
 
 This approach makes type definitions much easier to maintain and follows modern software engineering principles. 
