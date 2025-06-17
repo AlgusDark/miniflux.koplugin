@@ -72,7 +72,7 @@ function MainScreen:showUnreadEntries(is_refresh)
     local result = self:performApiCall({
         operation_name = "fetch entries",
         api_call_func = function()
-            return self.browser.api:getEntries(options)
+            return self.browser.api.entries:getEntries(options)
         end,
         loading_message = _("Fetching entries..."),
         data_name = "entries",

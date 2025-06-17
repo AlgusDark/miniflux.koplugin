@@ -51,19 +51,18 @@ function Miniflux:init()
     self.settings = MinifluxSettings.MinifluxSettings:new()
 
     -- Initialize API client
-    self.api = MinifluxAPI:new()
+    if self.settings:isConfigured() then
+        self.api = MinifluxAPI:new({
+            server_address = self.settings:getServerAddress(),
+            api_token = self.settings:getApiToken()
+        })
+    else
+        self.api = MinifluxAPI:new()
+    end
 
     -- Initialize browser launcher with dependency injection
     self.browser_launcher = BrowserLauncher:new()
     self.browser_launcher:init(self.settings, self.api, download_dir)
-
-    -- Initialize API with current settings if available
-    if self.settings:isConfigured() then
-        self.api:init(
-            self.settings:getServerAddress(), 
-            self.settings:getApiToken()
-        )
-    end
 
     -- Create specialized managers
     self.menu_manager = MenuManager:new()

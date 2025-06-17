@@ -91,8 +91,10 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
     -- Get API instance with stored settings
     local settings = getSettings()
     
-    local api = MinifluxAPI:new()
-    api:init(settings:getServerAddress(), settings:getApiToken())
+    local api = MinifluxAPI:new({
+        server_address = settings:getServerAddress(),
+        api_token = settings:getApiToken()
+    })
     
     -- Show loading message
     local loading_info = InfoMessage:new{
@@ -150,7 +152,7 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
     options.order = settings:getOrder()
     
     -- Fetch previous entry using regular getEntries API
-    local success, result = api:getEntries(options)
+    local success, result = api.entries:getEntries(options)
     
     UIManager:close(loading_info)
     
@@ -186,7 +188,7 @@ function NavigationUtils.navigateToPreviousEntry(entry_info)
             
             -- Global fallback for previous entry
             
-            success, result = api:getEntries(global_options)
+            success, result = api.entries:getEntries(global_options)
             
             if success and result and result.entries and #result.entries > 0 then
                 local prev_entry = result.entries[1]
@@ -214,8 +216,10 @@ function NavigationUtils.navigateToNextEntry(entry_info)
     -- Get API instance with stored settings
     local settings = getSettings()
     
-    local api = MinifluxAPI:new()
-    api:init(settings:getServerAddress(), settings:getApiToken())
+    local api = MinifluxAPI:new({
+        server_address = settings:getServerAddress(),
+        api_token = settings:getApiToken()
+    })
     
     -- Show loading message
     local loading_info = InfoMessage:new{
@@ -273,7 +277,7 @@ function NavigationUtils.navigateToNextEntry(entry_info)
     options.order = settings:getOrder()
     
     -- Fetch next entry using regular getEntries API
-    local success, result = api:getEntries(options)
+    local success, result = api.entries:getEntries(options)
     
     UIManager:close(loading_info)
     
@@ -309,7 +313,7 @@ function NavigationUtils.navigateToNextEntry(entry_info)
             
             -- Global fallback for next entry
             
-            success, result = api:getEntries(global_options)
+            success, result = api.entries:getEntries(global_options)
             
             if success and result and result.entries and #result.entries > 0 then
                 local next_entry = result.entries[1]
@@ -365,8 +369,10 @@ function NavigationUtils.downloadAndShowEntry(entry)
     local EntryUtils = require("browser/utils/entry_utils")
     local settings = getSettings()
     
-    local api = MinifluxAPI:new()
-    api:init(settings:getServerAddress(), settings:getApiToken())
+    local api = MinifluxAPI:new({
+        server_address = settings:getServerAddress(),
+        api_token = settings:getApiToken()
+    })
     
     EntryUtils.downloadEntry({
         entry = entry,
@@ -397,11 +403,13 @@ function NavigationUtils.markEntryAsRead(entry_info)
     -- For now, we'll create a new instance with stored settings
     local settings = getSettings()
     
-    local api = MinifluxAPI:new()
-    api:init(settings:getServerAddress(), settings:getApiToken())
+    local api = MinifluxAPI:new({
+        server_address = settings:getServerAddress(),
+        api_token = settings:getApiToken()
+    })
     
     -- Mark as read
-    local success, result = api:markEntryAsRead(tonumber(entry_id))
+    local success, result = api.entries:markAsRead(tonumber(entry_id))
     
     UIManager:close(loading_info)
     
@@ -446,11 +454,13 @@ function NavigationUtils.markEntryAsUnread(entry_info)
     -- Get API instance with stored settings
     local settings = getSettings()
     
-    local api = MinifluxAPI:new()
-    api:init(settings:getServerAddress(), settings:getApiToken())
+    local api = MinifluxAPI:new({
+        server_address = settings:getServerAddress(),
+        api_token = settings:getApiToken()
+    })
     
     -- Mark as unread
-    local success, result = api:markEntryAsUnread(tonumber(entry_id))
+    local success, result = api.entries:markAsUnread(tonumber(entry_id))
     
     UIManager:close(loading_info)
     
@@ -604,11 +614,13 @@ function NavigationUtils.fetchAndShowEntry(entry_id)
     -- Get API instance with stored settings
     local settings = getSettings()
     
-    local api = MinifluxAPI:new()
-    api:init(settings:getServerAddress(), settings:getApiToken())
+    local api = MinifluxAPI:new({
+        server_address = settings:getServerAddress(),
+        api_token = settings:getApiToken()
+    })
     
     -- Fetch the entry by ID
-    local success, result = api:getEntry(entry_id)
+    local success, result = api.entries:getEntry(entry_id)
     
     UIManager:close(loading_info)
     

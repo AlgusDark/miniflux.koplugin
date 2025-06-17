@@ -60,7 +60,11 @@ function BrowserLauncher:showMainScreen()
     
     -- Initialize API with current settings
     local api_success = pcall(function()
-        self.api:init(self.settings:getServerAddress(), self.settings:getApiToken())
+        local MinifluxAPI = require("api/miniflux_api")
+        self.api = MinifluxAPI:new({
+            server_address = self.settings:getServerAddress(),
+            api_token = self.settings:getApiToken()
+        })
     end)
     
     if not api_success then
@@ -127,7 +131,7 @@ function BrowserLauncher:fetchUnreadCount(loading_info)
     -- Wrap API calls in pcall to catch network errors
     local success, result
     local api_call_success = pcall(function()
-        success, result = self.api:getEntries(options)
+        success, result = self.api.entries:getEntries(options)
     end)
     
     if not api_call_success then
@@ -166,7 +170,7 @@ function BrowserLauncher:fetchFeedsCount(loading_info)
     -- Get feeds count with error handling
     local feeds_success, feeds_result
     local feeds_call_success = pcall(function()
-        feeds_success, feeds_result = self.api:getFeeds()
+        feeds_success, feeds_result = self.api.feeds:getFeeds()
     end)
     
     -- Close the loading message before returning
@@ -194,7 +198,7 @@ function BrowserLauncher:fetchCategoriesCount(loading_info)
     -- Get categories count with error handling
     local categories_success, categories_result
     local categories_call_success = pcall(function()
-        categories_success, categories_result = self.api:getCategories()
+        categories_success, categories_result = self.api.categories:getCategories()
     end)
     
     -- Close the loading message before returning

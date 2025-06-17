@@ -49,7 +49,7 @@ function FeedsScreen:show(paths_updated, page_info)
         feeds = self:performApiCall({
             operation_name = "fetch feeds",
             api_call_func = function()
-                return self.browser.api:getFeeds()
+                return self.browser.api.feeds:getFeeds()
             end,
             loading_message = _("Fetching feeds..."),
             data_name = "feeds"
@@ -67,7 +67,7 @@ function FeedsScreen:show(paths_updated, page_info)
         feed_counters = self:performApiCall({
             operation_name = "fetch feed counters",
             api_call_func = function()
-                return self.browser.api:getFeedCounters()
+                return self.browser.api.feeds:getCounters()
             end,
             loading_message = _("Fetching feed counters..."),
             data_name = "feed counters",
@@ -118,7 +118,7 @@ function FeedsScreen:showFeedEntries(feed_id, feed_title, paths_updated)
     local result = self:performApiCall({
         operation_name = "fetch feed entries",
         api_call_func = function()
-            return self.browser.api:getFeedEntries(feed_id, options)
+            return self.browser.api.feeds:getEntries(feed_id, options)
         end,
         loading_message = _("Fetching entries for feed..."),
         data_name = "feed entries",

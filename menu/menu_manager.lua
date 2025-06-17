@@ -13,6 +13,7 @@ local MultiInputDialog = require("ui/widget/multiinputdialog")
 local UIManager = require("ui/uimanager")
 local _ = require("gettext")
 local T = require("ffi/util").template
+local MinifluxAPI = require("api/miniflux_api")
 
 ---@class MenuManager
 local MenuManager = {}
@@ -236,7 +237,10 @@ function MenuManager:showServerSettings(plugin_instance)
                         
                         -- Reinitialize API with new settings (with error handling)
                         local api_success = pcall(function()
-                            plugin_instance.api:init(plugin_instance.settings:getServerAddress(), plugin_instance.settings:getApiToken())
+                            plugin_instance.api = MinifluxAPI:new({
+            server_address = plugin_instance.settings:getServerAddress(),
+            api_token = plugin_instance.settings:getApiToken()
+        })
                         end)
                         
                         UIManager:close(settings_dialog)
@@ -329,7 +333,10 @@ function MenuManager:testConnection(plugin_instance)
     UIManager:forceRePaint() -- Force immediate display before API call
     
     -- Reinitialize API with current settings
-    plugin_instance.api:init(plugin_instance.settings:getServerAddress(), plugin_instance.settings:getApiToken())
+    plugin_instance.api = MinifluxAPI:new({
+        server_address = plugin_instance.settings:getServerAddress(),
+        api_token = plugin_instance.settings:getApiToken()
+    })
     
     local success, result = plugin_instance.api:testConnection()
     

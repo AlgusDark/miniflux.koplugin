@@ -133,60 +133,6 @@ function Entries:getNext(entry_id, options)
     return self.api:makeRequest("GET", endpoint)
 end
 
--- =============================================================================
--- BACKWARD COMPATIBILITY METHODS
--- These methods provide compatibility with the old API structure
--- =============================================================================
 
----Get entries (compatibility alias)
----@param options? ApiOptions Query options for filtering and sorting
----@return boolean success, EntriesResponse|string result_or_error
-function Entries:get(options)
-    return self:getEntries(options)
-end
-
----Mark entry as read (compatibility alias)
----@param entry_id number The entry ID to mark as read
----@return boolean success, any result_or_error
-function Entries:markEntryAsRead(entry_id)
-    return self:markAsRead(entry_id)
-end
-
----Mark entry as unread (compatibility alias)
----@param entry_id number The entry ID to mark as unread
----@return boolean success, any result_or_error
-function Entries:markEntryAsUnread(entry_id)
-    return self:markAsUnread(entry_id)
-end
-
----Mark multiple entries as read (compatibility alias)
----@param entry_ids number[] Array of entry IDs to mark as read
----@return boolean success, any result_or_error
-function Entries:markEntriesAsRead(entry_ids)
-    return self:markMultipleAsRead(entry_ids)
-end
-
----Mark multiple entries as unread (compatibility alias)
----@param entry_ids number[] Array of entry IDs to mark as unread
----@return boolean success, any result_or_error
-function Entries:markEntriesAsUnread(entry_ids)
-    return self:markMultipleAsUnread(entry_ids)
-end
-
----Get previous entry (compatibility alias)
----@param entry_id number The reference entry ID
----@param options? ApiOptions Query options for filtering and sorting
----@return boolean success, EntriesResponse|string result_or_error
-function Entries:getPreviousEntry(entry_id, options)
-    return self:getPrevious(entry_id, options)
-end
-
----Get next entry (compatibility alias)
----@param entry_id number The reference entry ID
----@param options? ApiOptions Query options for filtering and sorting
----@return boolean success, EntriesResponse|string result_or_error
-function Entries:getNextEntry(entry_id, options)
-    return self:getNext(entry_id, options)
-end
 
 return Entries 

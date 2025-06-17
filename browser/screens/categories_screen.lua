@@ -42,7 +42,7 @@ function CategoriesScreen:show(paths_updated, page_info)
     local result = self:performApiCall({
         operation_name = "fetch categories",
         api_call_func = function()
-            return self.browser.api:getCategories(true)
+            return self.browser.api.categories:getCategories(true)
         end,
         loading_message = _("Fetching categories..."),
         data_name = "categories"
@@ -118,7 +118,7 @@ function CategoriesScreen:showCategoryEntries(category_id, category_title, paths
     local result = self:performApiCall({
         operation_name = "fetch category entries",
         api_call_func = function()
-            return self.browser.api:getCategoryEntries(category_id, options)
+            return self.browser.api.categories:getEntries(category_id, options)
         end,
         loading_message = _("Fetching entries for category..."),
         data_name = "category entries",

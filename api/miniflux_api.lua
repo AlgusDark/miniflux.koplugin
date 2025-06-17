@@ -70,38 +70,34 @@ local _ = require("gettext")
 local MinifluxAPI = {}
 
 ---Create a new API instance
----@param o? table Optional initialization table
+---@param config table Configuration table with server_address and api_token
+---@param config.server_address string The Miniflux server address
+---@param config.api_token string The API authentication token
 ---@return MinifluxAPI
-function MinifluxAPI:new(o)
-    o = o or {}
+function MinifluxAPI:new(config)
+    config = config or {}
+    
+    local o = {}
     setmetatable(o, self)
     self.__index = self
     
-    -- Initialize specialized modules (will be loaded on demand)
-    -- We'll initialize these after the modules are created
+    -- Initialize with server details if provided
+    if config.server_address and config.api_token then
+        o.server_address = config.server_address
+        o.api_token = config.api_token
+        o.base_url = config.server_address .. "/v1"
+
+        -- Remove trailing slash if present
+        if o.server_address:sub(-1) == "/" then
+            o.server_address = o.server_address:sub(1, -2)
+            o.base_url = o.server_address .. "/v1"
+        end
+
+        -- Initialize specialized modules
+        o:_initializeModules()
+    end
     
     return o
-end
-
----Initialize the API client with server details
----@param server_address string The Miniflux server address
----@param api_token string The API authentication token
----@return MinifluxAPI self for method chaining
-function MinifluxAPI:init(server_address, api_token)
-    self.server_address = server_address
-    self.api_token = api_token
-    self.base_url = server_address .. "/v1"
-
-    -- Remove trailing slash if present
-    if self.server_address:sub(-1) == "/" then
-        self.server_address = self.server_address:sub(1, -2)
-        self.base_url = self.server_address .. "/v1"
-    end
-
-    -- Initialize specialized modules after configuration
-    self:_initializeModules()
-
-    return self
 end
 
 ---Initialize the specialized API modules
@@ -273,192 +269,6 @@ function MinifluxAPI:getApiTokenMasked()
     end
 end
 
--- =============================================================================
--- BACKWARD COMPATIBILITY METHODS
--- These methods provide compatibility with the old API structure by delegating
--- to the new modular structure
--- =============================================================================
 
----Ensure modules are initialized
----@private
----@return boolean success True if modules are initialized
-function MinifluxAPI:_ensureInitialized()
-    if not self.entries then
-        self:_initializeModules()
-    end
-    return self.entries ~= nil
-end
-
----Get entries (compatibility method)
----@param options? ApiOptions Query options for filtering and sorting
----@return boolean success, EntriesResponse|string result_or_error
-function MinifluxAPI:getEntries(options)
-    if not self:_ensureInitialized() then
-        return false, "API not properly initialized"
-    end
-    return self.entries:getEntries(options)
-end
-
----Get a single entry by ID (compatibility method)
----@param entry_id number The entry ID
----@return boolean success, MinifluxEntry|string result_or_error
-function MinifluxAPI:getEntry(entry_id)
-    if not self:_ensureInitialized() then
-        return false, "API not properly initialized"
-    end
-    return self.entries:getEntry(entry_id)
-end
-
----Get unread entries (compatibility method)
----@param options? ApiOptions Query options for filtering and sorting
----@return boolean success, EntriesResponse|string result_or_error
-function MinifluxAPI:getUnreadEntries(options)
-    if not self:_ensureInitialized() then
-        return false, "API not properly initialized"
-    end
-    return self.entries:getUnreadEntries(options)
-end
-
----Get read entries (compatibility method)
----@param options? ApiOptions Query options for filtering and sorting
----@return boolean success, EntriesResponse|string result_or_error
-function MinifluxAPI:getReadEntries(options)
-    if not self:_ensureInitialized() then
-        return false, "API not properly initialized"
-    end
-    return self.entries:getReadEntries(options)
-end
-
----Get starred entries (compatibility method)
----@param options? ApiOptions Query options for filtering and sorting
----@return boolean success, EntriesResponse|string result_or_error
-function MinifluxAPI:getStarredEntries(options)
-    if not self:_ensureInitialized() then
-        return false, "API not properly initialized"
-    end
-    return self.entries:getStarredEntries(options)
-end
-
----Mark entry as read (compatibility method)
----@param entry_id number The entry ID to mark as read
----@return boolean success, any result_or_error
-function MinifluxAPI:markEntryAsRead(entry_id)
-    if not self:_ensureInitialized() then
-        return false, "API not properly initialized"
-    end
-    return self.entries:markAsRead(entry_id)
-end
-
----Mark entry as unread (compatibility method)
----@param entry_id number The entry ID to mark as unread
----@return boolean success, any result_or_error
-function MinifluxAPI:markEntryAsUnread(entry_id)
-    if not self:_ensureInitialized() then
-        return false, "API not properly initialized"
-    end
-    return self.entries:markAsUnread(entry_id)
-end
-
----Mark entries as read (compatibility method)
----@param entry_ids number[] Array of entry IDs to mark as read
----@return boolean success, any result_or_error
-function MinifluxAPI:markEntriesAsRead(entry_ids)
-    if not self:_ensureInitialized() then
-        return false, "API not properly initialized"
-    end
-    return self.entries:markMultipleAsRead(entry_ids)
-end
-
----Mark entries as unread (compatibility method)
----@param entry_ids number[] Array of entry IDs to mark as unread
----@return boolean success, any result_or_error
-function MinifluxAPI:markEntriesAsUnread(entry_ids)
-    if not self:_ensureInitialized() then
-        return false, "API not properly initialized"
-    end
-    return self.entries:markMultipleAsUnread(entry_ids)
-end
-
----Toggle bookmark (compatibility method)
----@param entry_id number The entry ID to toggle bookmark
----@return boolean success, any result_or_error
-function MinifluxAPI:toggleBookmark(entry_id)
-    if not self:_ensureInitialized() then
-        return false, "API not properly initialized"
-    end
-    return self.entries:toggleBookmark(entry_id)
-end
-
----Get previous entry (compatibility method)
----@param entry_id number The reference entry ID
----@param options? ApiOptions Query options for filtering and sorting
----@return boolean success, EntriesResponse|string result_or_error
-function MinifluxAPI:getPreviousEntry(entry_id, options)
-    if not self:_ensureInitialized() then
-        return false, "API not properly initialized"
-    end
-    return self.entries:getPrevious(entry_id, options)
-end
-
----Get next entry (compatibility method)
----@param entry_id number The reference entry ID
----@param options? ApiOptions Query options for filtering and sorting
----@return boolean success, EntriesResponse|string result_or_error
-function MinifluxAPI:getNextEntry(entry_id, options)
-    if not self:_ensureInitialized() then
-        return false, "API not properly initialized"
-    end
-    return self.entries:getNext(entry_id, options)
-end
-
----Get feeds (compatibility method)
----@return boolean success, MinifluxFeed[]|string result_or_error
-function MinifluxAPI:getFeeds()
-    if not self:_ensureInitialized() then
-        return false, "API not properly initialized"
-    end
-    return self.feeds:getFeeds()
-end
-
----Get feed counters (compatibility method)
----@return boolean success, FeedCounters|string result_or_error
-function MinifluxAPI:getFeedCounters()
-    if not self:_ensureInitialized() then
-        return false, "API not properly initialized"
-    end
-    return self.feeds:getCounters()
-end
-
----Get feed entries (compatibility method)
----@param feed_id number The feed ID
----@param options? ApiOptions Query options for filtering and sorting
----@return boolean success, EntriesResponse|string result_or_error
-function MinifluxAPI:getFeedEntries(feed_id, options)
-    if not self:_ensureInitialized() then
-        return false, "API not properly initialized"
-    end
-    return self.feeds:getEntries(feed_id, options)
-end
-
----Get categories (compatibility method)
----@param include_counts? boolean Whether to include entry counts
----@return boolean success, MinifluxCategory[]|string result_or_error
-function MinifluxAPI:getCategories(include_counts)
-    if not self:_ensureInitialized() then
-        return false, "API not properly initialized"
-    end
-    return self.categories:getCategories(include_counts)
-end
-
----Get category entries (compatibility method)
----@param category_id number The category ID
----@param options? ApiOptions Query options for filtering and sorting
----@return boolean success, EntriesResponse|string result_or_error
-function MinifluxAPI:getCategoryEntries(category_id, options)
-    if not self:_ensureInitialized() then
-        return false, "API not properly initialized"
-    end
-    return self.categories:getEntries(category_id, options)
-end
 
 return MinifluxAPI 

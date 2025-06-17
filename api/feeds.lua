@@ -97,66 +97,6 @@ function Feeds:markAsRead(feed_id)
     return Utils.markResourceAsRead(self.api, "feeds", feed_id)
 end
 
--- =============================================================================
--- BACKWARD COMPATIBILITY METHODS
--- These methods provide compatibility with the old API structure
--- =============================================================================
 
----Get all feeds (compatibility alias)
----@return boolean success, MinifluxFeed[]|string result_or_error
-function Feeds:get()
-    return self:getFeeds()
-end
-
----Get feed counters (compatibility alias)
----@return boolean success, FeedCounters|string result_or_error
-function Feeds:getFeedCounters()
-    return self:getCounters()
-end
-
----Get feed entries (compatibility alias)
----@param feed_id number The feed ID
----@param options? ApiOptions Query options for filtering and sorting
----@return boolean success, EntriesResponse|string result_or_error
-function Feeds:getFeedEntries(feed_id, options)
-    return self:getEntries(feed_id, options)
-end
-
----Get unread feed entries (compatibility alias)
----@param feed_id number The feed ID
----@param options? ApiOptions Query options for filtering and sorting
----@return boolean success, EntriesResponse|string result_or_error
-function Feeds:getFeedUnreadEntries(feed_id, options)
-    return self:getUnreadEntries(feed_id, options)
-end
-
----Get read feed entries (compatibility alias)
----@param feed_id number The feed ID
----@param options? ApiOptions Query options for filtering and sorting
----@return boolean success, EntriesResponse|string result_or_error
-function Feeds:getFeedReadEntries(feed_id, options)
-    return self:getReadEntries(feed_id, options)
-end
-
----Refresh feed (compatibility alias)
----@param feed_id number The feed ID to refresh
----@return boolean success, any result_or_error
-function Feeds:refreshFeed(feed_id)
-    return self:refresh(feed_id)
-end
-
----Get feed icon (compatibility alias)
----@param feed_id number The feed ID
----@return boolean success, any result_or_error
-function Feeds:getFeedIcon(feed_id)
-    return self:getIcon(feed_id)
-end
-
----Mark feed as read (compatibility alias)
----@param feed_id number The feed ID
----@return boolean success, any result_or_error
-function Feeds:markFeedAsRead(feed_id)
-    return self:markAsRead(feed_id)
-end
 
 return Feeds 

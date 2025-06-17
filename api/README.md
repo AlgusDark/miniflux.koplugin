@@ -80,17 +80,19 @@ All old method names are preserved as aliases to ensure seamless migration.
 
 ### 2. **Better User Experience**
 ```lua
--- Old usage (verbose)
+-- Old usage (verbose, two-step initialization)
 local MinifluxAPI = require("api/api_client")
 local api = MinifluxAPI:new()
 api:init(server, token)
 local success, entries = api:getEntries({limit = 50})
 local success, result = api:markEntryAsRead(123)
 
--- New usage (intuitive)
+-- New usage (clean, one-step initialization)
 local MinifluxAPI = require("api/miniflux_api")
-local api = MinifluxAPI:new()
-api:init(server, token)
+local api = MinifluxAPI:new({
+    server_address = server,
+    api_token = token
+})
 local success, entries = api.entries:getEntries({limit = 50})
 local success, result = api.entries:markAsRead(123)
 local success, feeds = api.feeds:getFeeds()
@@ -114,8 +116,10 @@ local success, categories = api.categories:getCategories()
 ### Standard Usage
 ```lua
 local MinifluxAPI = require("api/miniflux_api")
-local api = MinifluxAPI:new()
-api:init(server_address, api_token)
+local api = MinifluxAPI:new({
+    server_address = "https://miniflux.example.com",
+    api_token = "your_api_token_here"
+})
 
 -- Clean, intuitive API access
 local success, entries = api.entries:getUnreadEntries({limit = 100})
@@ -126,6 +130,12 @@ local success, categories = api.categories:getCategories(true) -- with counts
 
 ### Advanced Usage
 ```lua
+local MinifluxAPI = require("api/miniflux_api")
+local api = MinifluxAPI:new({
+    server_address = server_address,
+    api_token = api_token
+})
+
 -- Direct module access for specialized operations
 local success, starred = api.entries:getStarredEntries({order = "published_at"})
 local success, result = api.feeds:refresh(feed_id)
@@ -136,17 +146,24 @@ local success, prev = api.entries:getPrevious(current_id, {status = {"unread"}})
 local success, next = api.entries:getNext(current_id, {status = {"unread"}})
 ```
 
-### Backward Compatibility
+### Simplified Architecture  
 ```lua
--- Old method names still work via aliases
-local success, entries = api.entries:getEntries({limit = 50})        -- New
-local success, entries = api.entries:get({limit = 50})               -- Alias
+-- Single-step initialization
+local api = MinifluxAPI:new({
+    server_address = "https://miniflux.example.com",
+    api_token = "your_api_token"
+})
 
-local success, result = api.entries:markAsRead(123)                  -- New  
-local success, result = api.entries:markEntryAsRead(123)             -- Alias
+-- Clean, modular access
+local success, entries = api.entries:getEntries({limit = 50})
+local success, result = api.entries:markAsRead(123)
+local success, feeds = api.feeds:getCounters()
+local success, categories = api.categories:getCategories()
 
-local success, feeds = api.feeds:getCounters()                       -- New
-local success, feeds = api.feeds:getFeedCounters()                   -- Alias
+-- Module-specific operations
+local success, starred = api.entries:getStarredEntries()
+local success, result = api.feeds:refresh(feed_id)
+local success, new_cat = api.categories:create("New Category")
 ```
 
 ## Error Handling
@@ -168,8 +185,9 @@ The refactored architecture maintains comprehensive error handling:
 
 ### For Existing Code
 1. **Change import**: `require("api/api_client")` → `require("api/miniflux_api")`
-2. **Update method calls**: `api:getEntries()` → `api.entries:getEntries()`
-3. **Optional**: Use new shorter method names for cleaner code
+2. **Simplify initialization**: Replace two-step `api:new()` + `api:init()` with single `api:new({server_address, api_token})`
+3. **Update method calls**: `api:getEntries()` → `api.entries:getEntries()`
+4. **Use cleaner method names**: `api:markEntryAsRead()` → `api.entries:markAsRead()`
 
 ### Adding New Features
 1. **Identify module**: Determine if it belongs in entries, feeds, or categories
@@ -202,9 +220,10 @@ The refactored architecture maintains comprehensive error handling:
 ## Benefits Summary
 
 1. **Simpler Architecture**: Fewer files, clearer structure, less cognitive overhead
-2. **Better UX**: More intuitive method names and access patterns  
-3. **Easier Maintenance**: Clear ownership, logical organization, consistent patterns
-4. **Future-Proof**: Solid foundation for new features without over-engineering
-5. **Migration-Friendly**: Complete backward compatibility for seamless upgrades
+2. **One-Step Initialization**: Clean `new({server_address, api_token})` pattern eliminates two-step setup
+3. **Better UX**: Intuitive module access via `api.entries`, `api.feeds`, `api.categories`
+4. **Cleaner Methods**: Shorter, more descriptive method names without redundant prefixes
+5. **Easier Maintenance**: Clear ownership, logical organization, consistent patterns
+6. **Future-Proof**: Solid foundation for new features without over-engineering
 
-This **optimized refactored architecture** provides the perfect balance of simplicity and functionality, eliminating unnecessary complexity while maintaining all capabilities and significantly improving the developer experience. 
+This **streamlined refactored architecture** provides the perfect balance of simplicity and functionality, eliminating unnecessary complexity while significantly improving the developer experience through cleaner initialization and intuitive modular access. 
