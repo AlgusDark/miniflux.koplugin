@@ -22,7 +22,6 @@ local EventHandler = require("events/event_handler")
 ---@field menu_manager MenuManager Menu construction manager
 ---@field event_handler EventHandler Event handling manager
 ---@field download_dir string Full path to download directory
----@field settings SettingsManager Settings manager instance
 ---@field api MinifluxAPI API client instance
 ---@field settings_dialogs SettingsDialogs Settings UI dialogs instance
 ---@field browser_launcher BrowserLauncher Browser launcher instance

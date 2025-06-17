@@ -24,8 +24,7 @@ local DEFAULTS = {
     direction = "desc",
     hide_read_entries = true,
     auto_mark_read = false,
-    include_images = true,
-    entry_font_size = 14
+    include_images = true
 }
 
 -- Valid values for validation
@@ -63,7 +62,11 @@ end
 local function get(key, default)
     init() -- Ensure initialized
     local value = settings_instance:readSetting(key)
-    return value ~= nil and value or default
+    if value ~= nil then
+        return value
+    else
+        return default
+    end
 end
 
 ---Set a setting value
@@ -227,23 +230,7 @@ function Settings.toggleIncludeImages()
     return new_value
 end
 
-function Settings.getEntryFontSize()
-    return get("entry_font_size", DEFAULTS.entry_font_size)
-end
 
-function Settings.setEntryFontSize(size)
-    -- Convert string to number if needed
-    if type(size) == "string" then
-        size = tonumber(size)
-    end
-    
-    if type(size) == "number" and size >= 8 and size <= 32 then
-        set("entry_font_size", size)
-    else
-        logger.warn("Invalid font size:", size, "- using default:", DEFAULTS.entry_font_size)
-        set("entry_font_size", DEFAULTS.entry_font_size)
-    end
-end
 
 -- Utility Functions
 function Settings.save()
@@ -263,8 +250,7 @@ function Settings.export()
         direction = Settings.getDirection(),
         hide_read_entries = Settings.getHideReadEntries(),
         auto_mark_read = Settings.getAutoMarkRead(),
-        include_images = Settings.getIncludeImages(),
-        entry_font_size = Settings.getEntryFontSize()
+        include_images = Settings.getIncludeImages()
     }
 end
 

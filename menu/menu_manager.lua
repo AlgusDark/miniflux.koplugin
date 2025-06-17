@@ -142,17 +142,8 @@ function MenuManager:buildIncludeImagesItem(plugin_instance)
                 and _("Include images - ON") or _("Include images - OFF")
         end,
         keep_menu_open = true,
-        callback = function(touchmenu_instance)
-            local new_value = plugin_instance.settings.toggleIncludeImages()
-            plugin_instance.settings.save()
-            local message = new_value 
-                and _("Images will be downloaded with entries")
-                or _("Images will be skipped when downloading entries")
-            UIManager:show(InfoMessage:new({
-                text = message,
-                timeout = 2,
-            }))
-            touchmenu_instance:updateItems()
+        sub_item_table_func = function()
+            return plugin_instance.settings_dialogs:getIncludeImagesSubMenu()
         end,
     }
 end

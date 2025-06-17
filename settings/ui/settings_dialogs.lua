@@ -308,4 +308,43 @@ function SettingsDialogs:getDirectionSubMenu()
     }
 end
 
+---Get include images submenu items
+---@return MenuSubItem[] Include images menu items
+function SettingsDialogs:getIncludeImagesSubMenu()
+    local current_include_images = self.settings.getIncludeImages()
+    
+    return {
+        {
+            text = _("ON") .. (current_include_images and " ✓" or ""),
+            keep_menu_open = true,
+            callback = function(touchmenu_instance)
+                self.settings.setIncludeImages(true)
+                self.settings.save()
+                UIManager:show(InfoMessage:new{
+                    text = _("Images will be downloaded with entries"),
+                    timeout = 2,
+                    dismiss_callback = function()
+                        touchmenu_instance:backToUpperMenu()
+                    end,
+                })
+            end,
+        },
+        {
+            text = _("OFF") .. (not current_include_images and " ✓" or ""),
+            keep_menu_open = true,
+            callback = function(touchmenu_instance)
+                self.settings.setIncludeImages(false)
+                self.settings.save()
+                UIManager:show(InfoMessage:new{
+                    text = _("Images will be skipped when downloading entries"),
+                    timeout = 2,
+                    dismiss_callback = function()
+                        touchmenu_instance:backToUpperMenu()
+                    end,
+                })
+            end,
+        },
+    }
+end
+
 return SettingsDialogs 
