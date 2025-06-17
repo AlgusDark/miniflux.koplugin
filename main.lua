@@ -33,28 +33,28 @@ local Miniflux = WidgetContainer:extend({
 ---@return nil
 function Miniflux:init()
     logger.info("Initializing Miniflux plugin")
-    
+
     -- Create specialized managers
     self.initializer = PluginInitializer:new()
     self.menu_manager = MenuManager:new()
     self.event_handler = EventHandler:new()
-    
+
     -- Initialize plugin components
     local init_success = self.initializer:initializePlugin(self)
     if not init_success then
         logger.err("Failed to initialize Miniflux plugin")
         return
     end
-    
+
     -- Set up event handling
     self.event_handler:initializeEvents(self)
-    
+
     -- Override ReaderStatus EndOfBook behavior for miniflux entries
     self:overrideEndOfBookBehavior()
-    
+
     -- Register with KOReader menu system
     self.ui.menu:registerToMainMenu(self)
-    
+
     logger.info("Miniflux plugin initialization complete")
 end
 
@@ -79,10 +79,10 @@ function Miniflux:overrideEndOfBookBehavior()
         logger.warn("Cannot override EndOfBook behavior - ReaderStatus not available")
         return
     end
-    
+
     -- Save the original onEndOfBook method
     local original_onEndOfBook = self.ui.status.onEndOfBook
-    
+
     -- Replace with our custom handler
     self.ui.status.onEndOfBook = function(reader_status_instance)
         -- Check if current document is a miniflux HTML file
@@ -90,33 +90,33 @@ function Miniflux:overrideEndOfBookBehavior()
             -- Fallback to original behavior
             return original_onEndOfBook(reader_status_instance)
         end
-        
+
         local file_path = self.ui.document.file
-        
+
         -- Check if this is a miniflux HTML entry
         if file_path:match("/miniflux/") and file_path:match("%.html$") then
             local EntryUtils = require("browser/utils/entry_utils")
-            
+
             -- Extract entry ID from path
             local entry_id = file_path:match("/miniflux/(%d+)/")
-            
+
             if entry_id then
                 -- Set up entry info for the dialog
                 EntryUtils._current_miniflux_entry = {
                     file_path = file_path,
-                    entry_id = entry_id
+                    entry_id = entry_id,
                 }
-                
+
                 -- Show the end of entry dialog instead of default
                 EntryUtils.showEndOfEntryDialog()
                 return -- Don't call original handler
             end
         end
-        
+
         -- For non-miniflux files, use original behavior
         return original_onEndOfBook(reader_status_instance)
     end
-    
+
     logger.info("Successfully overrode ReaderStatus EndOfBook behavior for miniflux entries")
 end
 

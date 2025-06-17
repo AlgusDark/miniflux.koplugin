@@ -1,8 +1,8 @@
 --[[--
 Miniflux Settings Module
 
-Simplified settings management that directly accesses LuaSettings without OOP complexity.
-Always gets/sets from the source of truth for maximum simplicity and reliability.
+Object-oriented settings management that provides a clean API for configuration persistence.
+Uses LuaSettings for storage with proper initialization and state management.
 
 @module koplugin.miniflux.settings
 --]]--
@@ -10,10 +10,6 @@ Always gets/sets from the source of truth for maximum simplicity and reliability
 local DataStorage = require("datastorage")
 local LuaSettings = require("luasettings")
 local logger = require("logger")
-
--- Module-level variables
-local settings_file
-local settings_instance
 
 -- Default values
 local DEFAULTS = {
@@ -36,32 +32,61 @@ local VALID_SORT_DIRECTIONS = {
     "asc", "desc"
 }
 
+-- =============================================================================
+-- SETTINGS CLASS
+-- =============================================================================
+
+---@class MinifluxSettings
+---@field settings_file string Path to settings file
+---@field settings_instance LuaSettings LuaSettings instance
+---@field initialized boolean Whether settings have been initialized
+local MinifluxSettings = {}
+
+---Create a new settings instance
+---@param o? table Optional initialization table
+---@return MinifluxSettings
+function MinifluxSettings:new(o)
+    o = o or {}
+    setmetatable(o, self)
+    self.__index = self
+    
+    -- Initialize instance variables
+    o.settings_file = nil
+    o.settings_instance = nil
+    o.initialized = false
+    
+    return o
+end
+
 ---Initialize settings (loads or creates settings file)
----@return nil
-local function init()
-    if not settings_file then
-        settings_file = DataStorage:getSettingsDir() .. "/miniflux.lua"
-        settings_instance = LuaSettings:open(settings_file)
+---@return MinifluxSettings self for method chaining
+function MinifluxSettings:init()
+    if not self.initialized then
+        self.settings_file = DataStorage:getSettingsDir() .. "/miniflux.lua"
+        self.settings_instance = LuaSettings:open(self.settings_file)
         
         -- Set defaults for any missing values
         for key, default_value in pairs(DEFAULTS) do
-            if settings_instance:readSetting(key) == nil then
-                settings_instance:saveSetting(key, default_value)
+            if self.settings_instance:readSetting(key) == nil then
+                self.settings_instance:saveSetting(key, default_value)
             end
         end
         
-        settings_instance:flush()
-        logger.info("Miniflux settings initialized:", settings_file)
+        self.settings_instance:flush()
+        self.initialized = true
+        logger.info("Miniflux settings initialized:", self.settings_file)
     end
+    
+    return self
 end
 
 ---Get a setting value with default fallback
 ---@param key string Setting key
 ---@param default any Default value
 ---@return any Setting value or default
-local function get(key, default)
-    init() -- Ensure initialized
-    local value = settings_instance:readSetting(key)
+function MinifluxSettings:get(key, default)
+    self:init() -- Ensure initialized
+    local value = self.settings_instance:readSetting(key)
     if value ~= nil then
         return value
     else
@@ -73,16 +98,16 @@ end
 ---@param key string Setting key
 ---@param value any Setting value
 ---@return nil
-local function set(key, value)
-    init() -- Ensure initialized
-    settings_instance:saveSetting(key, value)
+function MinifluxSettings:set(key, value)
+    self:init() -- Ensure initialized
+    self.settings_instance:saveSetting(key, value)
 end
 
 ---Save settings to disk
 ---@return nil
-local function save()
-    if settings_instance then
-        settings_instance:flush()
+function MinifluxSettings:save()
+    if self.settings_instance then
+        self.settings_instance:flush()
     end
 end
 
@@ -90,7 +115,7 @@ end
 ---@param value any Value to check
 ---@param allowed_values table List of allowed values
 ---@return boolean True if valid
-local function isValidValue(value, allowed_values)
+function MinifluxSettings:isValidValue(value, allowed_values)
     for _, allowed in ipairs(allowed_values) do
         if value == allowed then
             return true
@@ -100,175 +125,295 @@ local function isValidValue(value, allowed_values)
 end
 
 -- =============================================================================
--- PUBLIC API - Settings functions
+-- SERVER SETTINGS
 -- =============================================================================
 
-local Settings = {}
-
--- Server Settings
-function Settings.getServerAddress()
-    return get("server_address", DEFAULTS.server_address)
+function MinifluxSettings:getServerAddress()
+    return self:get("server_address", DEFAULTS.server_address)
 end
 
-function Settings.setServerAddress(address)
+function MinifluxSettings:setServerAddress(address)
     if type(address) == "string" then
-        set("server_address", address)
+        self:set("server_address", address)
     else
         logger.warn("Invalid server address type:", type(address))
     end
 end
 
-function Settings.getApiToken()
-    return get("api_token", DEFAULTS.api_token)
+function MinifluxSettings:getApiToken()
+    return self:get("api_token", DEFAULTS.api_token)
 end
 
-function Settings.setApiToken(token)
+function MinifluxSettings:setApiToken(token)
     if type(token) == "string" then
-        set("api_token", token)
+        self:set("api_token", token)
     else
         logger.warn("Invalid API token type:", type(token))
     end
 end
 
-function Settings.isConfigured()
-    return Settings.getServerAddress() ~= "" and Settings.getApiToken() ~= ""
+function MinifluxSettings:isConfigured()
+    return self:getServerAddress() ~= "" and self:getApiToken() ~= ""
 end
 
--- Sorting Settings
-function Settings.getLimit()
-    return get("limit", DEFAULTS.limit)
+-- =============================================================================
+-- SORTING SETTINGS
+-- =============================================================================
+
+function MinifluxSettings:getLimit()
+    return self:get("limit", DEFAULTS.limit)
 end
 
-function Settings.setLimit(limit)
+function MinifluxSettings:setLimit(limit)
     -- Convert string to number if needed
     if type(limit) == "string" then
         limit = tonumber(limit)
     end
     
     if type(limit) == "number" and limit > 0 and limit <= 1000 then
-        set("limit", limit)
+        self:set("limit", limit)
     else
         logger.warn("Invalid limit value:", limit, "- using default:", DEFAULTS.limit)
-        set("limit", DEFAULTS.limit)
+        self:set("limit", DEFAULTS.limit)
     end
 end
 
-function Settings.getOrder()
-    return get("order", DEFAULTS.order)
+function MinifluxSettings:getOrder()
+    return self:get("order", DEFAULTS.order)
 end
 
-function Settings.setOrder(order)
-    if isValidValue(order, VALID_SORT_ORDERS) then
-        set("order", order)
+function MinifluxSettings:setOrder(order)
+    if self:isValidValue(order, VALID_SORT_ORDERS) then
+        self:set("order", order)
     else
         logger.warn("Invalid sort order:", order, "- using default:", DEFAULTS.order)
-        set("order", DEFAULTS.order)
+        self:set("order", DEFAULTS.order)
     end
 end
 
-function Settings.getDirection()
-    return get("direction", DEFAULTS.direction)
+function MinifluxSettings:getDirection()
+    return self:get("direction", DEFAULTS.direction)
 end
 
-function Settings.setDirection(direction)
-    if isValidValue(direction, VALID_SORT_DIRECTIONS) then
-        set("direction", direction)
+function MinifluxSettings:setDirection(direction)
+    if self:isValidValue(direction, VALID_SORT_DIRECTIONS) then
+        self:set("direction", direction)
     else
         logger.warn("Invalid sort direction:", direction, "- using default:", DEFAULTS.direction)
-        set("direction", DEFAULTS.direction)
+        self:set("direction", DEFAULTS.direction)
     end
 end
 
--- Display Settings
-function Settings.getHideReadEntries()
-    return get("hide_read_entries", DEFAULTS.hide_read_entries)
+-- =============================================================================
+-- DISPLAY SETTINGS
+-- =============================================================================
+
+function MinifluxSettings:getHideReadEntries()
+    return self:get("hide_read_entries", DEFAULTS.hide_read_entries)
 end
 
-function Settings.setHideReadEntries(hide)
+function MinifluxSettings:setHideReadEntries(hide)
     if type(hide) == "boolean" then
-        set("hide_read_entries", hide)
+        self:set("hide_read_entries", hide)
     else
         logger.warn("Invalid hide_read_entries type:", type(hide))
     end
 end
 
-function Settings.toggleHideReadEntries()
-    local current = Settings.getHideReadEntries()
+function MinifluxSettings:toggleHideReadEntries()
+    local current = self:getHideReadEntries()
     local new_value = not current
-    Settings.setHideReadEntries(new_value)
+    self:setHideReadEntries(new_value)
     return new_value
 end
 
-function Settings.getAutoMarkRead()
-    return get("auto_mark_read", DEFAULTS.auto_mark_read)
+function MinifluxSettings:getAutoMarkRead()
+    return self:get("auto_mark_read", DEFAULTS.auto_mark_read)
 end
 
-function Settings.setAutoMarkRead(auto_mark)
+function MinifluxSettings:setAutoMarkRead(auto_mark)
     if type(auto_mark) == "boolean" then
-        set("auto_mark_read", auto_mark)
+        self:set("auto_mark_read", auto_mark)
     else
         logger.warn("Invalid auto_mark_read type:", type(auto_mark))
     end
 end
 
-function Settings.getIncludeImages()
-    return get("include_images", DEFAULTS.include_images)
+function MinifluxSettings:getIncludeImages()
+    return self:get("include_images", DEFAULTS.include_images)
 end
 
-function Settings.setIncludeImages(include)
+function MinifluxSettings:setIncludeImages(include)
     if type(include) == "boolean" then
-        set("include_images", include)
+        self:set("include_images", include)
     else
         logger.warn("Invalid include_images type:", type(include))
     end
 end
 
-function Settings.toggleIncludeImages()
-    local current = Settings.getIncludeImages()
+function MinifluxSettings:toggleIncludeImages()
+    local current = self:getIncludeImages()
     local new_value = not current
-    Settings.setIncludeImages(new_value)
+    self:setIncludeImages(new_value)
     return new_value
 end
 
+-- =============================================================================
+-- UTILITY METHODS
+-- =============================================================================
 
-
--- Utility Functions
-function Settings.save()
-    save()
-end
-
-function Settings.init()
-    init()
-end
-
-function Settings.export()
+function MinifluxSettings:export()
     return {
-        server_address = Settings.getServerAddress(),
-        api_token = Settings.getApiToken(),
-        limit = Settings.getLimit(),
-        order = Settings.getOrder(),
-        direction = Settings.getDirection(),
-        hide_read_entries = Settings.getHideReadEntries(),
-        auto_mark_read = Settings.getAutoMarkRead(),
-        include_images = Settings.getIncludeImages()
+        server_address = self:getServerAddress(),
+        api_token = self:getApiToken(),
+        limit = self:getLimit(),
+        order = self:getOrder(),
+        direction = self:getDirection(),
+        hide_read_entries = self:getHideReadEntries(),
+        auto_mark_read = self:getAutoMarkRead(),
+        include_images = self:getIncludeImages()
     }
 end
 
-function Settings.reset()
+function MinifluxSettings:reset()
     logger.info("Resetting all Miniflux settings to defaults")
-    if settings_instance then
-        settings_instance:clear()
+    if self.settings_instance then
+        self.settings_instance:clear()
     end
     
-    -- Reset module state
-    settings_file = nil
-    settings_instance = nil
+    -- Reset instance state
+    self.settings_file = nil
+    self.settings_instance = nil
+    self.initialized = false
     
     -- Reinitialize with defaults
-    init()
+    self:init()
 end
 
--- Constants for external use
+-- =============================================================================
+-- CONSTANTS FOR EXTERNAL USE
+-- =============================================================================
+
+-- Expose constants as class properties
+MinifluxSettings.VALID_SORT_ORDERS = VALID_SORT_ORDERS
+MinifluxSettings.VALID_SORT_DIRECTIONS = VALID_SORT_DIRECTIONS
+MinifluxSettings.DEFAULTS = DEFAULTS
+
+-- =============================================================================
+-- COMPATIBILITY LAYER - FUNCTIONAL API
+-- =============================================================================
+
+-- Create a singleton instance for backward compatibility with functional API
+local _default_instance = nil
+
+local function getDefaultInstance()
+    if not _default_instance then
+        _default_instance = MinifluxSettings:new()
+        _default_instance:init()
+    end
+    return _default_instance
+end
+
+-- Export both OOP and functional APIs
+local Settings = {}
+
+-- OOP API - export the class
+Settings.MinifluxSettings = MinifluxSettings
+
+-- Functional API - delegate to singleton instance for backward compatibility
+function Settings.init()
+    getDefaultInstance():init()
+end
+
+function Settings.getServerAddress()
+    return getDefaultInstance():getServerAddress()
+end
+
+function Settings.setServerAddress(address)
+    getDefaultInstance():setServerAddress(address)
+end
+
+function Settings.getApiToken()
+    return getDefaultInstance():getApiToken()
+end
+
+function Settings.setApiToken(token)
+    getDefaultInstance():setApiToken(token)
+end
+
+function Settings.isConfigured()
+    return getDefaultInstance():isConfigured()
+end
+
+function Settings.getLimit()
+    return getDefaultInstance():getLimit()
+end
+
+function Settings.setLimit(limit)
+    getDefaultInstance():setLimit(limit)
+end
+
+function Settings.getOrder()
+    return getDefaultInstance():getOrder()
+end
+
+function Settings.setOrder(order)
+    getDefaultInstance():setOrder(order)
+end
+
+function Settings.getDirection()
+    return getDefaultInstance():getDirection()
+end
+
+function Settings.setDirection(direction)
+    getDefaultInstance():setDirection(direction)
+end
+
+function Settings.getHideReadEntries()
+    return getDefaultInstance():getHideReadEntries()
+end
+
+function Settings.setHideReadEntries(hide)
+    getDefaultInstance():setHideReadEntries(hide)
+end
+
+function Settings.toggleHideReadEntries()
+    return getDefaultInstance():toggleHideReadEntries()
+end
+
+function Settings.getAutoMarkRead()
+    return getDefaultInstance():getAutoMarkRead()
+end
+
+function Settings.setAutoMarkRead(auto_mark)
+    getDefaultInstance():setAutoMarkRead(auto_mark)
+end
+
+function Settings.getIncludeImages()
+    return getDefaultInstance():getIncludeImages()
+end
+
+function Settings.setIncludeImages(include)
+    getDefaultInstance():setIncludeImages(include)
+end
+
+function Settings.toggleIncludeImages()
+    return getDefaultInstance():toggleIncludeImages()
+end
+
+function Settings.save()
+    getDefaultInstance():save()
+end
+
+function Settings.export()
+    return getDefaultInstance():export()
+end
+
+function Settings.reset()
+    getDefaultInstance():reset()
+end
+
+-- Export constants
 Settings.VALID_SORT_ORDERS = VALID_SORT_ORDERS
 Settings.VALID_SORT_DIRECTIONS = VALID_SORT_DIRECTIONS
 Settings.DEFAULTS = DEFAULTS
