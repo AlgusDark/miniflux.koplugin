@@ -23,7 +23,6 @@ local EventHandler = require("events/event_handler")
 ---@field event_handler EventHandler Event handling manager
 ---@field download_dir string Full path to download directory
 ---@field api MinifluxAPI API client instance
----@field settings_dialogs SettingsDialogs Settings UI dialogs instance
 ---@field browser_launcher BrowserLauncher Browser launcher instance
 local Miniflux = WidgetContainer:extend({
     name = "miniflux",

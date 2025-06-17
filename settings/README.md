@@ -9,8 +9,7 @@ settings/
 ├── README.md                    # This file - architecture documentation
 ├── settings.lua                 # Main settings module (functional API)
 └── ui/
-    ├── README.md               # UI components documentation
-    └── settings_dialogs.lua    # UI dialogs for settings configuration
+    └── README.md               # Documentation about UI consolidation
 ```
 
 ## Architecture Overview
@@ -49,12 +48,10 @@ The settings system has been simplified from a complex OOP hierarchy to a straig
 - Default value management
 - Direct LuaSettings persistence
 
-### `ui/settings_dialogs.lua` - UI Components
-- Server settings dialog
-- Limit configuration dialog
-- Connection testing
-- Dynamic menu generation for sort options
-- Integration with the simplified settings API
+### `ui/` - UI Integration Documentation
+- Documents the consolidation of settings dialogs into the menu system
+- No longer contains actual UI code (moved to `menu/menu_manager.lua`)
+- Settings UI now integrated directly with menu building for better cohesion
 
 ## Benefits of This Architecture
 

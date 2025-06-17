@@ -14,7 +14,6 @@ local logger = require("logger")
 -- Import plugin modules
 local MinifluxAPI = require("api/api_client")
 local MinifluxSettings = require("settings/settings")
-local SettingsDialogs = require("settings/ui/settings_dialogs")
 local BrowserLauncher = require("browser/ui/browser_launcher")
 
 ---@class PluginInitializer
@@ -52,9 +51,6 @@ function PluginInitializer:initializePlugin(plugin_instance)
     plugin_instance.api = MinifluxAPI:new()
 
     -- Initialize UI modules with dependency injection
-    plugin_instance.settings_dialogs = SettingsDialogs:new()
-    plugin_instance.settings_dialogs:init(plugin_instance.settings, plugin_instance.api)
-
     plugin_instance.browser_launcher = BrowserLauncher:new()
     plugin_instance.browser_launcher:init(plugin_instance.settings, plugin_instance.api, download_dir)
 
