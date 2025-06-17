@@ -9,10 +9,10 @@ Combines what was previously split across 10+ files into one maintainable module
 
 local Menu = require("ui/widget/menu")
 local UIManager = require("ui/uimanager")
-local InfoMessage = require("ui/widget/infomessage")
 local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
 local BrowserData = require("browser/browser_data") 
-local EntryHandler = require("browser/entry_handler")
+local EntryUtils = require("browser/utils/entry_utils")
+local NavigationContext = require("browser/utils/navigation_context")
 local UIComponents = require("browser/ui_components")
 local _ = require("gettext")
 
@@ -39,9 +39,6 @@ function MinifluxBrowser:init()
     
     -- Initialize data handler
     self.data = BrowserData:new(self.api, self.settings)
-    
-    -- Initialize entry handler
-    self.entry_handler = EntryHandler:new(self.api, self.settings, self.download_dir)
     
     -- Navigation state
     self.navigation_paths = {}
@@ -233,11 +230,24 @@ function MinifluxBrowser:showCategoryEntries(category_id, category_title, paths_
 end
 
 function MinifluxBrowser:openEntry(entry_data)
-    -- Set entry navigation context
-    self.entry_handler:setNavigationContext(self.current_context, entry_data.id)
+    -- Set navigation context directly using NavigationContext
     
-    -- Show the entry
-    self.entry_handler:showEntry(entry_data, self)
+    if self.current_context.type == "feed_entries" and self.current_context.feed_id then
+        NavigationContext.setFeedContext(self.current_context.feed_id, entry_data.id)
+    elseif self.current_context.type == "category_entries" and self.current_context.category_id then
+        NavigationContext.setCategoryContext(self.current_context.category_id, entry_data.id)
+    else
+        -- For unread_entries or any other context, use global
+        NavigationContext.setGlobalContext(entry_data.id)
+    end
+    
+    -- Show the entry using EntryUtils directly
+    EntryUtils.showEntry({
+        entry = entry_data,
+        api = self.api,
+        download_dir = self.download_dir,
+        browser = self
+    })
 end
 
 function MinifluxBrowser:showMainContent()
