@@ -60,8 +60,12 @@ function Miniflux:init()
     self.browser_launcher = BrowserLauncher:new()
     self.browser_launcher:init(self.settings, self.api, download_dir)
 
-    -- Create specialized managers
-    self.menu_manager = MenuManager:new()
+    -- Create menu manager with proper dependency injection
+    self.menu_manager = MenuManager:new({
+        browser_launcher = self.browser_launcher,
+        settings = self.settings,
+        api = self.api
+    })
 
     -- Override ReaderStatus EndOfBook behavior for miniflux entries
     self:overrideEndOfBookBehavior()
@@ -94,7 +98,7 @@ end
 ---@param menu_items table The main menu items table
 ---@return nil
 function Miniflux:addToMainMenu(menu_items)
-    self.menu_manager:addToMainMenu(menu_items, self)
+    self.menu_manager:addToMainMenu(menu_items)
 end
 
 ---Handle dispatcher events (method required by KOReader)
