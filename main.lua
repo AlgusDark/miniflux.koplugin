@@ -47,8 +47,8 @@ function Miniflux:init()
     end
     self.download_dir = download_dir
 
-    -- Initialize settings instance
-    self.settings = MinifluxSettings.MinifluxSettings:new()
+    -- Initialize settings singleton
+    self.settings = MinifluxSettings:getInstance()
 
     -- Initialize API client
     self.api = MinifluxAPI:new({

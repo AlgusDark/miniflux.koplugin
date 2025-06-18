@@ -1,7 +1,7 @@
 --[[--
 Miniflux Settings Module
 
-Object-oriented settings management that provides a clean API for configuration persistence.
+Singleton settings management that provides a clean API for configuration persistence.
 Uses LuaSettings for storage with proper initialization and state management.
 
 @module koplugin.miniflux.settings
@@ -32,65 +32,56 @@ local VALID_SORT_DIRECTIONS = {
 }
 
 -- =============================================================================
--- SETTINGS CLASS
+-- SINGLETON SETTINGS CLASS
 -- =============================================================================
 
 ---@class MinifluxSettings
----@field settings_file string Path to settings file
----@field settings_instance LuaSettings LuaSettings instance
----@field initialized boolean Whether settings have been initialized
+---@field settings LuaSettings LuaSettings instance
 ---@field cache table In-memory cache of settings values
 local MinifluxSettings = {}
+MinifluxSettings.__index = MinifluxSettings
 
----Create a new settings instance
----@param o? table Optional initialization table
+-- Singleton instance storage
+local _instance = nil
+
+---Create a new MinifluxSettings instance
 ---@return MinifluxSettings
-function MinifluxSettings:new(o)
-    o = o or {}
-    setmetatable(o, self)
-    self.__index = self
-    
-    -- Initialize instance variables
-    o.settings_file = nil
-    o.settings_instance = nil
-    o.initialized = false
-    o.cache = {}  -- In-memory cache for settings
-    
-    -- Auto-initialize (safe due to guard in init() method)
-    o:init()
-    
-    return o
-end
+local function new(o)
+    local self = setmetatable({
+        settings = nil,
+        cache = {}
+    }, MinifluxSettings)
 
----Initialize settings (loads or creates settings file)
----@return MinifluxSettings self for method chaining
-function MinifluxSettings:init()
-    if not self.initialized then
-        self.settings_file = DataStorage:getSettingsDir() .. "/miniflux.lua"
-        self.settings_instance = LuaSettings:open(self.settings_file)
-        
-        -- Load all settings into cache
-        self:loadSettingsIntoCache()
-        
-        -- Set defaults for any missing values
-        local needs_flush = false
-        for key, default_value in pairs(DEFAULTS) do
-            if self.cache[key] == nil then
-                self.cache[key] = default_value
-                self.settings_instance:saveSetting(key, default_value)
-                needs_flush = true
-            end
+    self.settings = LuaSettings:open(DataStorage:getSettingsDir() .. "/miniflux.lua")
+    
+    -- Load all settings into cache
+    self:loadSettingsIntoCache()
+    
+    -- Set defaults for any missing values
+    local needs_flush = false
+    for key, default_value in pairs(DEFAULTS) do
+        if self.cache[key] == nil then
+            self.cache[key] = default_value
+            self.settings:saveSetting(key, default_value)
+            needs_flush = true
         end
-        
-        if needs_flush then
-            self.settings_instance:flush()
-        end
-        
-        self.initialized = true
-        logger.info("Miniflux settings initialized with cache:", self.settings_file)
+    end
+    
+    if needs_flush then
+        self.settings:flush()
     end
     
     return self
+end
+
+---Get or create the singleton settings instance
+---@return MinifluxSettings
+function MinifluxSettings:getInstance()
+    if not _instance then
+        _instance = new()
+    end
+    
+    return _instance
 end
 
 ---Load all settings from disk into memory cache
@@ -98,7 +89,7 @@ end
 function MinifluxSettings:loadSettingsIntoCache()
     self.cache = {}
     for key, _ in pairs(DEFAULTS) do
-        local value = self.settings_instance:readSetting(key)
+        local value = self.settings:readSetting(key)
         if value ~= nil then
             self.cache[key] = value
         end
@@ -127,18 +118,16 @@ end
 ---@return nil
 function MinifluxSettings:set(key, value)
     self.cache[key] = value
-    self.settings_instance:saveSetting(key, value)
+    self.settings:saveSetting(key, value)
 end
 
 ---Save all cached settings to disk (explicit flush)
 ---@return nil
 function MinifluxSettings:save()
-    if self.settings_instance then
-        self.settings_instance:flush()
+    if self.settings then
+        self.settings:flush()
     end
 end
-
-
 
 ---Validate if value is in allowed list
 ---@param value any Value to check
@@ -309,8 +298,5 @@ function MinifluxSettings:toggleIncludeImages()
     return new_value
 end
 
--- Export only the class - no functional API or constants needed
-local Settings = {}
-Settings.MinifluxSettings = MinifluxSettings
-
-return Settings 
+-- Return the class directly (no wrapper needed)
+return MinifluxSettings 

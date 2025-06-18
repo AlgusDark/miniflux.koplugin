@@ -103,9 +103,8 @@ function EntryUtils.downloadEntry(params)
     local download_dir = params.download_dir
     local browser = params.browser
     
-    -- Get settings instance (create singleton if needed)
-    local settings = MinifluxSettings.MinifluxSettings:new()
-    settings:init()
+    -- Get settings singleton
+    local settings = MinifluxSettings:getInstance()
     
     local entry_title = entry.title or _("Untitled Entry")
     local entry_id = tostring(entry.id)
@@ -476,14 +475,9 @@ end
 -- NAVIGATION FUNCTIONS (moved from NavigationUtils to break circular dependency)
 -- =============================================================================
 
--- Create a singleton settings instance for navigation
-local _navigation_settings_instance = nil
+-- Get the singleton settings instance for navigation
 local function getNavigationSettings()
-    if not _navigation_settings_instance then
-        _navigation_settings_instance = MinifluxSettings.MinifluxSettings:new()
-        _navigation_settings_instance:init()
-    end
-    return _navigation_settings_instance
+    return MinifluxSettings:getInstance()
 end
 
 -- Pure-Lua ISO-8601 → Unix timestamp (UTC)
