@@ -266,7 +266,7 @@ end
 ---Test connection to Miniflux server
 ---@return nil
 function MenuManager:testConnection()
-    if not self.settings:isConfigured() then
+    if self.settings:getServerAddress() == "" or self.settings:getApiToken() == "" then
         UIManager:show(InfoMessage:new{
             text = _("Please configure server address and API token first"),
         })

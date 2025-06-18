@@ -43,7 +43,7 @@ end
 ---Show the main Miniflux browser screen
 ---@return nil
 function BrowserLauncher:showMainScreen()
-    if not self.settings:isConfigured() then
+    if self.settings:getServerAddress() == "" or self.settings:getApiToken() == "" then
         UIManager:show(InfoMessage:new{
             text = _("Please configure server settings first"),
             timeout = 3,

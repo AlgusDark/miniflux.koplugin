@@ -238,13 +238,6 @@ end
 -- UTILITY METHODS
 -- =============================================================================
 
----Check if the API client is properly configured
----@return boolean True if server address and API token are set
-function MinifluxAPI:isConfigured()
-    return self.server_address ~= nil and self.api_token ~= nil and
-           self.server_address ~= "" and self.api_token ~= ""
-end
-
 ---Get the base URL for API requests
 ---@return string The base API URL
 function MinifluxAPI:getBaseUrl()
