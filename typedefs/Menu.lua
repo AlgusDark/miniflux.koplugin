@@ -19,3 +19,4 @@ EmmyLua type definitions for Menu
 ---@field switchItemTable fun(self: Menu, title: string, items: table[], select_number?: number, menu_title?: string, subtitle?: string): nil Switch menu content
 ---@field updatePageInfo fun(self: Menu): nil Update page information
 ---@field extend fun(self: Menu, o: table): Menu Extend menu class 
+---@field new fun(self: Menu, o: table): Menu Create new menu instance 

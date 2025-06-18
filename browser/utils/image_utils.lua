@@ -41,12 +41,12 @@ function ImageUtils.discoverImages(content, base_url)
         end
         
         -- Skip data URLs
-        if src:sub(1,5) == "data:" then
+        if src and src:sub(1,5) == "data:" then
             return img_tag -- Keep original tag
         end
         
         -- Normalize URL
-        local normalized_src = ImageUtils.normalizeImageUrl(src, base_url)
+        local normalized_src = ImageUtils.normalizeImageUrl(src or "", base_url)
         
         if not seen_images[normalized_src] then
             image_count = image_count + 1
@@ -232,7 +232,7 @@ function ImageUtils.processHtmlImages(content, seen_images, include_images, base
         end
         
         -- Skip data URLs
-        if src:sub(1,5) == "data:" then
+        if src and src:sub(1,5) == "data:" then
             if include_images then
                 return img_tag -- Keep data URLs as-is
             else
@@ -241,7 +241,7 @@ function ImageUtils.processHtmlImages(content, seen_images, include_images, base
         end
         
         -- Normalize the URL to match what we stored
-        local normalized_src = ImageUtils.normalizeImageUrl(src, base_url)
+        local normalized_src = ImageUtils.normalizeImageUrl(src or "", base_url)
         
         local img_info = seen_images[normalized_src]
         if img_info then

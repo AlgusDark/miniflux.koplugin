@@ -11,6 +11,8 @@ local UIComponents = require("browser/ui_components")
 local _ = require("gettext")
 
 ---@class BrowserData
+---@field api table
+---@field settings table
 local BrowserData = {}
 
 function BrowserData:new(api, settings)

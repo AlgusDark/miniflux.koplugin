@@ -18,6 +18,9 @@ local _ = require("gettext")
 
 ---@class MinfluxBrowser : Menu
 ---@field close_callback function|nil Callback function to execute when closing the browser
+---@field unread_count number|nil Number of unread entries
+---@field feeds_count number|nil Number of feeds
+---@field categories_count number|nil Number of categories
 local MinifluxBrowser = Menu:extend{
     title_shrink_font_to_fit = true,
     is_popout = false,

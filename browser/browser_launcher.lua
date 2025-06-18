@@ -87,6 +87,11 @@ function BrowserLauncher:showMainScreen()
     -- Close loading message and prepare for browser creation
     UIManager:close(loading_info)
     
+    -- Ensure all values are numbers (fallback to 0 if nil)
+    unread_count = unread_count or 0
+    feeds_count = feeds_count or 0
+    categories_count = categories_count or 0
+    
     -- Add a small delay to ensure UI operations are complete before creating browser
     UIManager:scheduleIn(0.1, function()
         self:createAndShowBrowser(unread_count, feeds_count, categories_count)
