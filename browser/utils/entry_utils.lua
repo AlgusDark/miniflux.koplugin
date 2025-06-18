@@ -7,6 +7,16 @@ with KOReader. It delegates specialized tasks to focused utility modules.
 @module miniflux.browser.utils.entry_utils
 --]]--
 
+---@class EntryMetadata
+---@field id number Entry ID
+---@field title string Entry title
+---@field url? string Entry URL
+---@field status string Entry status ("read" or "unread")
+---@field starred boolean Whether entry is starred/bookmarked
+---@field published_at? string Publication timestamp
+---@field images_included boolean Whether images were downloaded
+---@field images_count number Number of images processed
+
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 local lfs = require("libs/libkoreader-lfs")
@@ -34,10 +44,34 @@ local ProgressUtils = require("browser/utils/progress_utils")
 local ImageUtils = require("browser/utils/image_utils")
 local HtmlUtils = require("browser/utils/html_utils")
 
+-- Load current entry metadata (moved from NavigationUtils)
+local function loadCurrentEntryMetadata(entry_info)
+    if not entry_info.file_path or not entry_info.entry_id then
+        return nil
+    end
+    
+    local entry_dir = entry_info.file_path:match("(.*)/entry%.html$")
+    if not entry_dir then
+        return nil
+    end
+    
+    local metadata_file = entry_dir .. "/metadata.lua"
+    if lfs.attributes(metadata_file, "mode") ~= "file" then
+        return nil
+    end
+    
+    local success, metadata = pcall(dofile, metadata_file)
+    if success and metadata then
+        return metadata
+    end
+    
+    return nil
+end
+
 local EntryUtils = {}
 
 ---Show an entry by downloading and opening it
----@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, browser?: BaseBrowser}
+---@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, browser?: table}
 function EntryUtils.showEntry(params)
     local entry = params.entry
     local api = params.api
@@ -62,7 +96,7 @@ function EntryUtils.showEntry(params)
 end
 
 ---Download and process an entry with images
----@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, browser?: BaseBrowser, progress_callback?: function, include_images?: boolean}
+---@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, browser?: table, progress_callback?: function, include_images?: boolean}
 function EntryUtils.downloadEntry(params)
     local entry = params.entry
     local api = params.api
@@ -290,12 +324,15 @@ function EntryUtils.openEntryFile(html_file)
             -- Note: We don't have browsing context when opening existing files,
             -- so navigation will be global unless the user came from a browser session
             local NavigationContext = require("browser/utils/navigation_context")
-            if not NavigationContext.hasValidContext() then
-                -- Set global context if no context exists
-                NavigationContext.setGlobalContext(tonumber(entry_id))
-            else
-                -- Update current entry in existing context
-                NavigationContext.updateCurrentEntry(tonumber(entry_id))
+            local entry_id_num = tonumber(entry_id)
+            if entry_id_num then
+                if not NavigationContext.hasValidContext() then
+                    -- Set global context if no context exists
+                    NavigationContext.setGlobalContext(entry_id_num)
+                else
+                    -- Update current entry in existing context
+                    NavigationContext.updateCurrentEntry(entry_id_num)
+                end
             end
         end
         
@@ -505,30 +542,6 @@ local function getNavigationApiOptions(settings)
     end
     
     return options
-end
-
--- Load current entry metadata (moved from NavigationUtils)
-local function loadCurrentEntryMetadata(entry_info)
-    if not entry_info.file_path or not entry_info.entry_id then
-        return nil
-    end
-    
-    local entry_dir = entry_info.file_path:match("(.*)/entry%.html$")
-    if not entry_dir then
-        return nil
-    end
-    
-    local metadata_file = entry_dir .. "/metadata.lua"
-    if lfs.attributes(metadata_file, "mode") ~= "file" then
-        return nil
-    end
-    
-    local success, metadata = pcall(dofile, metadata_file)
-    if success and metadata then
-        return metadata
-    end
-    
-    return nil
 end
 
 ---Navigate to the previous entry
@@ -912,7 +925,17 @@ function EntryUtils.markEntryAsRead(entry_info)
         return
     end
     
-    local success, result = api.entries:markAsRead(tonumber(entry_id))
+    local entry_id_num = tonumber(entry_id)
+    if not entry_id_num then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot mark as read: invalid entry ID format"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local success, result = api.entries:markAsRead(entry_id_num)
     UIManager:close(loading_info)
     
     if success then
@@ -983,7 +1006,17 @@ function EntryUtils.markEntryAsUnread(entry_info)
         return
     end
     
-    local success, result = api.entries:markAsUnread(tonumber(entry_id))
+    local entry_id_num = tonumber(entry_id)
+    if not entry_id_num then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot mark as unread: invalid entry ID format"),
+            timeout = 3,
+        })
+        return
+    end
+    
+    local success, result = api.entries:markAsUnread(entry_id_num)
     UIManager:close(loading_info)
     
     if success then
@@ -1155,7 +1188,7 @@ function EntryUtils.fetchAndShowEntry(entry_id)
         local success, result = api.entries:getEntry(entry_id)
         UIManager:close(loading_info)
         
-        if success and result then
+        if success and result and type(result) == "table" and result.id then
             EntryUtils.downloadAndShowEntry(result)
         else
             UIManager:show(InfoMessage:new{

@@ -123,7 +123,7 @@ function HtmlUtils.escapeHtml(text)
         ["'"] = '&#39;'
     }
     
-    return text:gsub('[&<>"\']', escape_map)
+    return (text:gsub('[&<>"\']', escape_map))
 end
 
 ---Create a simple HTML template for plain text content

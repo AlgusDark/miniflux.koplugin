@@ -17,6 +17,7 @@ local UIComponents = require("browser/ui_components")
 local _ = require("gettext")
 
 ---@class MinfluxBrowser : Menu
+---@field close_callback function|nil Callback function to execute when closing the browser
 local MinifluxBrowser = Menu:extend{
     title_shrink_font_to_fit = true,
     is_popout = false,
@@ -25,6 +26,7 @@ local MinifluxBrowser = Menu:extend{
     title_bar_fm_style = true,
     title_bar_left_icon = "appbar.settings",
     perpage = 20,
+    close_callback = nil,
 }
 
 -- =============================================================================

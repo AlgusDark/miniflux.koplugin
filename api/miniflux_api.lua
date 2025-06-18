@@ -20,6 +20,10 @@ local _ = require("gettext")
 ---@alias SortOrder "id"|"status"|"published_at"|"category_title"|"category_id"
 ---@alias SortDirection "asc"|"desc"
 
+---@class MinifluxConfig
+---@field server_address string The Miniflux server address
+---@field api_token string The API authentication token
+
 ---@class ApiOptions
 ---@field limit? number Maximum number of entries to return
 ---@field order? SortOrder Field to sort by
@@ -70,9 +74,7 @@ local _ = require("gettext")
 local MinifluxAPI = {}
 
 ---Create a new API instance
----@param config table Configuration table with server_address and api_token
----@param config.server_address string The Miniflux server address
----@param config.api_token string The API authentication token
+---@param config MinifluxConfig Configuration table with server_address and api_token
 ---@return MinifluxAPI
 function MinifluxAPI:new(config)
     config = config or {}
