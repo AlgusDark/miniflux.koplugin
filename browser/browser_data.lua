@@ -11,10 +11,14 @@ local UIComponents = require("browser/ui_components")
 local _ = require("gettext")
 
 ---@class BrowserData
----@field api table
----@field settings table
+---@field api MinifluxAPI
+---@field settings MinifluxSettings
 local BrowserData = {}
 
+---Create a new BrowserData instance
+---@param api MinifluxAPI The API client instance
+---@param settings MinifluxSettings The settings instance
+---@return BrowserData
 function BrowserData:new(api, settings)
     local obj = {
         api = api,
@@ -70,7 +74,7 @@ end
 
 function BrowserData:getFeedsWithCounters()
     -- Get feeds
-    local success, feeds = self.api.feeds:getFeeds()
+    local success, feeds = self.api.feeds:getAll()
     if not success then
         UIComponents.showErrorMessage(_("Failed to fetch feeds: ") .. tostring(feeds))
         return nil

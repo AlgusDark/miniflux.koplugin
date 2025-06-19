@@ -12,7 +12,7 @@ local UIManager = require("ui/uimanager")
 local _ = require("gettext")
 
 ---@class BrowserLauncher
----@field settings table Settings module instance
+---@field settings MinifluxSettings Settings module instance
 ---@field api MinifluxAPI API client instance
 ---@field download_dir string Download directory path
 ---@field miniflux_browser any Current browser instance
@@ -176,7 +176,7 @@ function BrowserLauncher:fetchFeedsCount(loading_info)
     -- Get feeds count with error handling
     local feeds_success, feeds_result
     local feeds_call_success = pcall(function()
-        feeds_success, feeds_result = self.api.feeds:getFeeds()
+        feeds_success, feeds_result = self.api.feeds:getAll()
     end)
 
     -- Close the loading message before returning

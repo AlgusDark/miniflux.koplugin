@@ -7,6 +7,8 @@ main API client and uses its HTTP methods for communication.
 @module koplugin.miniflux.api.entries
 --]] --
 
+local apiUtils = require("api/utils")
+
 ---@class Entries
 ---@field api MinifluxAPI Reference to the main API client
 local Entries = {}
@@ -26,51 +28,6 @@ end
 -- =============================================================================
 -- HELPER FUNCTIONS
 -- =============================================================================
-
----Convert ApiOptions to query parameters
----@param options? ApiOptions Query options for filtering and sorting
----@return table Query parameters table
-local function buildQueryParams(options)
-    if not options then
-        return {}
-    end
-
-    local params = {}
-
-    if options.limit then
-        params.limit = options.limit
-    end
-
-    if options.order then
-        params.order = options.order
-    end
-
-    if options.direction then
-        params.direction = options.direction
-    end
-
-    if options.status then
-        params.status = options.status
-    end
-
-    if options.category_id then
-        params.category_id = options.category_id
-    end
-
-    if options.feed_id then
-        params.feed_id = options.feed_id
-    end
-
-    if options.published_before then
-        params.published_before = options.published_before
-    end
-
-    if options.published_after then
-        params.published_after = options.published_after
-    end
-
-    return params
-end
 
 ---Build navigation query parameters
 ---@param entry_id number The reference entry ID
@@ -124,7 +81,7 @@ end
 ---@param options? ApiOptions Query options for filtering and sorting
 ---@return boolean success, EntriesResponse|string result_or_error
 function Entries:getEntries(options)
-    local query_params = buildQueryParams(options)
+    local query_params = apiUtils.buildQueryParams(options)
     return self.api:get("/entries", { query = query_params })
 end
 
