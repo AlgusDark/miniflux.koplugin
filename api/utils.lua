@@ -5,7 +5,7 @@ This utility module combines query building and request helpers into a single
 module to eliminate duplication and simplify the API structure.
 
 @module koplugin.miniflux.api.utils
---]]--
+--]] --
 
 local Utils = {}
 
@@ -20,7 +20,7 @@ function Utils.buildParams(options)
     if not options then
         return {}
     end
-    
+
     local params = {}
 
     if options.limit then
@@ -42,28 +42,28 @@ function Utils.buildParams(options)
             table.insert(params, "status=" .. status)
         end
     end
-    
+
     -- Add category filter if provided
     if options.category_id then
         table.insert(params, "category_id=" .. tostring(options.category_id))
     end
-    
-    -- Add feed filter if provided  
+
+    -- Add feed filter if provided
     if options.feed_id then
         table.insert(params, "feed_id=" .. tostring(options.feed_id))
     end
-    
+
     -- Add starred filter if provided
     if options.starred then
         table.insert(params, "starred=true")
     end
-    
+
     -- Add published_before filter if provided
     if options.published_before then
         table.insert(params, "published_before=" .. tostring(options.published_before))
     end
-    
-    -- Add published_after filter if provided  
+
+    -- Add published_after filter if provided
     if options.published_after then
         table.insert(params, "published_after=" .. tostring(options.published_after))
     end
@@ -96,17 +96,17 @@ end
 ---@return string Query string (with leading ? if non-empty)
 function Utils.buildNavigationQuery(entry_id, direction, options)
     local params = {}
-    
+
     -- Add navigation parameter
     if direction == "before" then
         table.insert(params, "before_entry_id=" .. tostring(entry_id))
     elseif direction == "after" then
         table.insert(params, "after_entry_id=" .. tostring(entry_id))
     end
-    
+
     -- We only want 1 entry (the immediate previous/next)
     table.insert(params, "limit=1")
-    
+
     -- Add other filter options if provided
     if options then
         if options.status then
@@ -123,33 +123,23 @@ function Utils.buildNavigationQuery(entry_id, direction, options)
         if options.direction then
             table.insert(params, "direction=" .. options.direction)
         end
-        
+
         -- Add category filter if provided
         if options.category_id then
             table.insert(params, "category_id=" .. tostring(options.category_id))
         end
-        
-        -- Add feed filter if provided  
+
+        -- Add feed filter if provided
         if options.feed_id then
             table.insert(params, "feed_id=" .. tostring(options.feed_id))
         end
-        
+
         -- Add starred filter if provided
         if options.starred then
             table.insert(params, "starred=true")
         end
     end
-    
-    return Utils.buildQueryString(params)
-end
 
----Build starred entries query parameters
----@param options? ApiOptions Query options for filtering and sorting
----@return string Query string (with leading ? if non-empty)
-function Utils.buildStarredQuery(options)
-    local params = Utils.buildParams(options)
-    -- Add starred filter
-    table.insert(params, "starred=true")
     return Utils.buildQueryString(params)
 end
 
@@ -218,7 +208,7 @@ end
 ---@param status EntryStatus New status for entries
 ---@return boolean success, any result_or_error
 function Utils.markEntries(api, entry_ids, status)
-    local ids_array = type(entry_ids) == "table" and entry_ids or {entry_ids}
+    local ids_array = type(entry_ids) == "table" and entry_ids or { entry_ids }
     local body = {
         entry_ids = ids_array,
         status = status,
@@ -239,7 +229,7 @@ end
 
 ---Get resource entries by status (convenience method)
 ---@param api MinifluxAPI API client instance
----@param resource_type string Resource type ("feeds" or "categories") 
+---@param resource_type string Resource type ("feeds" or "categories")
 ---@param resource_id number Resource ID
 ---@param status EntryStatus[] Status filter
 ---@param options? ApiOptions Additional query options
@@ -260,4 +250,4 @@ function Utils.markResourceAsRead(api, resource_type, resource_id)
     return api:makeRequest("PUT", endpoint)
 end
 
-return Utils 
+return Utils

@@ -5,7 +5,7 @@ This module handles browser initialization, data fetching, and main screen creat
 It coordinates between the API, settings, and browser modules to launch the Miniflux browser.
 
 @module koplugin.miniflux.browser.browser_launcher
---]]--
+--]] --
 
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
@@ -44,54 +44,53 @@ end
 ---@return nil
 function BrowserLauncher:showMainScreen()
     if self.settings.server_address == "" or self.settings.api_token == "" then
-        UIManager:show(InfoMessage:new{
+        UIManager:show(InfoMessage:new {
             text = _("Please configure server settings first"),
             timeout = 3,
         })
         return
     end
-    
+
     -- Show loading message while fetching count
-    local loading_info = InfoMessage:new{
+    local loading_info = InfoMessage:new {
         text = _("Loading Miniflux data..."),
     }
     UIManager:show(loading_info)
     UIManager:forceRePaint() -- Force immediate display before API calls
-    
-    -- Initialize API with current settings
+
+    -- Update API with current settings
     local api_success = pcall(function()
-        local MinifluxAPI = require("api/miniflux_api")
-        self.api = MinifluxAPI:new({
+        self.api:updateConfig({
             server_address = self.settings.server_address,
             api_token = self.settings.api_token
         })
     end)
-    
+
     if not api_success then
         UIManager:close(loading_info)
-        UIManager:show(InfoMessage:new{
+        UIManager:show(InfoMessage:new {
             text = _("Failed to initialize API connection"),
             timeout = 5,
         })
         return
     end
-    
+
     -- Fetch initial data for browser
     local unread_count, feeds_count, categories_count = self:fetchInitialData(loading_info)
-    
+
     if not unread_count then
         -- Error already handled in fetchInitialData
         return
     end
-    
+
     -- Close loading message and prepare for browser creation
     UIManager:close(loading_info)
-    
+
     -- Ensure all values are numbers (fallback to 0 if nil)
     unread_count = unread_count or 0
     feeds_count = feeds_count or 0
     categories_count = categories_count or 0
-    
+
     -- Add a small delay to ensure UI operations are complete before creating browser
     UIManager:scheduleIn(0.1, function()
         self:createAndShowBrowser(unread_count, feeds_count, categories_count)
@@ -107,19 +106,19 @@ function BrowserLauncher:fetchInitialData(loading_info)
     if not unread_count then
         return nil
     end
-    
+
     -- Get feeds count
     local feeds_count = self:fetchFeedsCount(loading_info)
     if not feeds_count then
         return nil
     end
-    
+
     -- Get categories count
     local categories_count = self:fetchCategoriesCount(loading_info)
     if not categories_count then
         return nil
     end
-    
+
     return unread_count, feeds_count, categories_count
 end
 
@@ -132,33 +131,33 @@ function BrowserLauncher:fetchUnreadCount(loading_info)
         order = self.settings.order,
         direction = self.settings.direction,
     }
-    options.limit = 1  -- We only need one entry to get the total count
-    options.status = {"unread"}  -- Only unread for count
-    
+    options.limit = 1             -- We only need one entry to get the total count
+    options.status = { "unread" } -- Only unread for count
+
     -- Wrap API calls in pcall to catch network errors
     local success, result
     local api_call_success = pcall(function()
         success, result = self.api.entries:getEntries(options)
     end)
-    
+
     if not api_call_success then
         UIManager:close(loading_info)
-        UIManager:show(InfoMessage:new{
+        UIManager:show(InfoMessage:new {
             text = _("Network error while fetching entries"),
             timeout = 5,
         })
         return nil
     end
-    
+
     if not success then
         UIManager:close(loading_info)
-        UIManager:show(InfoMessage:new{
+        UIManager:show(InfoMessage:new {
             text = _("Failed to connect to Miniflux: ") .. tostring(result),
             timeout = 5,
         })
         return nil
     end
-    
+
     return (result and result.total) and result.total or 0
 end
 
@@ -168,25 +167,25 @@ end
 function BrowserLauncher:fetchFeedsCount(loading_info)
     -- Update loading message for next operation
     UIManager:close(loading_info)
-    loading_info = InfoMessage:new{
+    loading_info = InfoMessage:new {
         text = _("Loading feeds data..."),
     }
     UIManager:show(loading_info)
     UIManager:forceRePaint()
-    
+
     -- Get feeds count with error handling
     local feeds_success, feeds_result
     local feeds_call_success = pcall(function()
         feeds_success, feeds_result = self.api.feeds:getFeeds()
     end)
-    
+
     -- Close the loading message before returning
     UIManager:close(loading_info)
-    
+
     if feeds_call_success and feeds_success and feeds_result then
         return #feeds_result
     else
-        return 0  -- Continue with 0 feeds instead of failing
+        return 0 -- Continue with 0 feeds instead of failing
     end
 end
 
@@ -196,25 +195,25 @@ end
 function BrowserLauncher:fetchCategoriesCount(loading_info)
     -- Update loading message for next operation
     UIManager:close(loading_info)
-    loading_info = InfoMessage:new{
+    loading_info = InfoMessage:new {
         text = _("Loading categories data..."),
     }
     UIManager:show(loading_info)
     UIManager:forceRePaint()
-    
+
     -- Get categories count with error handling
     local categories_success, categories_result
     local categories_call_success = pcall(function()
         categories_success, categories_result = self.api.categories:getCategories()
     end)
-    
+
     -- Close the loading message before returning
     UIManager:close(loading_info)
-    
+
     if categories_call_success and categories_success and categories_result then
         return #categories_result
     else
-        return 0  -- Continue with 0 categories instead of failing
+        return 0 -- Continue with 0 categories instead of failing
     end
 end
 
@@ -228,7 +227,7 @@ function BrowserLauncher:createAndShowBrowser(unread_count, feeds_count, categor
     local browser_success = pcall(function()
         -- Use the new consolidated browser
         local MinifluxBrowser = require("browser/browser")
-        self.miniflux_browser = MinifluxBrowser:new{
+        self.miniflux_browser = MinifluxBrowser:new {
             title = _("Miniflux"),
             settings = self.settings,
             api = self.api,
@@ -241,16 +240,16 @@ function BrowserLauncher:createAndShowBrowser(unread_count, feeds_count, categor
                 self.miniflux_browser = nil
             end,
         }
-        
+
         UIManager:show(self.miniflux_browser)
     end)
-    
+
     if not browser_success then
-        UIManager:show(InfoMessage:new{
+        UIManager:show(InfoMessage:new {
             text = _("Failed to create browser interface"),
             timeout = 5,
         })
     end
 end
 
-return BrowserLauncher 
+return BrowserLauncher

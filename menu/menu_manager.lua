@@ -5,7 +5,7 @@ This module handles the construction and management of Miniflux menu items
 for the KOReader main menu, including all settings dialogs and UI interactions.
 
 @module koplugin.miniflux.menu.menu_manager
---]]--
+--]] --
 
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
@@ -87,7 +87,7 @@ function MenuManager:buildMainMenu()
                     },
                     {
                         text_func = function()
-                            local direction_name = self.settings.direction == "asc" 
+                            local direction_name = self.settings.direction == "asc"
                                 and _("Ascending") or _("Descending")
                             return T(_("Sort direction - %1"), direction_name)
                         end,
@@ -98,7 +98,7 @@ function MenuManager:buildMainMenu()
                     },
                     {
                         text_func = function()
-                            return self.settings.include_images 
+                            return self.settings.include_images
                                 and _("Include images - ON") or _("Include images - OFF")
                         end,
                         keep_menu_open = true,
@@ -147,9 +147,9 @@ end
 function MenuManager:showServerSettings()
     local server_address = self.settings.server_address
     local api_token = self.settings.api_token
-    
+
     local settings_dialog
-    settings_dialog = MultiInputDialog:new{
+    settings_dialog = MultiInputDialog:new {
         title = _("Miniflux server settings"),
         fields = {
             {
@@ -182,25 +182,23 @@ function MenuManager:showServerSettings()
                         if fields[2] and fields[2] ~= "" then
                             self.settings.api_token = fields[2]
                         end
-                        self.settings:save()
-                        
-                        -- Reinitialize API with new settings (with error handling)
+                        self.settings:save() -- Update API with new settings (with error handling)
                         local api_success = pcall(function()
-                            self.api = MinifluxAPI:new({
+                            self.api:updateConfig({
                                 server_address = self.settings.server_address,
                                 api_token = self.settings.api_token
                             })
                         end)
-                        
+
                         UIManager:close(settings_dialog)
-                        
+
                         if api_success then
-                            UIManager:show(InfoMessage:new{
+                            UIManager:show(InfoMessage:new {
                                 text = _("Settings saved"),
                                 timeout = 2,
                             })
                         else
-                            UIManager:show(InfoMessage:new{
+                            UIManager:show(InfoMessage:new {
                                 text = _("Settings saved (API initialization will be done when needed)"),
                                 timeout = 3,
                             })
@@ -218,9 +216,9 @@ end
 ---@return nil
 function MenuManager:showLimitSettings(refresh_callback)
     local current_limit = tostring(self.settings.limit)
-    
+
     local limit_dialog
-    limit_dialog = InputDialog:new{
+    limit_dialog = InputDialog:new {
         title = _("Entries limit"),
         input = current_limit,
         input_type = "number",
@@ -241,7 +239,7 @@ function MenuManager:showLimitSettings(refresh_callback)
                             self.settings.limit = new_limit
                             self.settings:save()
                             UIManager:close(limit_dialog)
-                            UIManager:show(InfoMessage:new{
+                            UIManager:show(InfoMessage:new {
                                 text = _("Entries limit saved"),
                                 timeout = 2,
                             })
@@ -250,7 +248,7 @@ function MenuManager:showLimitSettings(refresh_callback)
                                 refresh_callback()
                             end
                         else
-                            UIManager:show(InfoMessage:new{
+                            UIManager:show(InfoMessage:new {
                                 text = _("Please enter a valid number greater than 0"),
                                 timeout = 3,
                             })
@@ -268,31 +266,31 @@ end
 ---@return nil
 function MenuManager:testConnection()
     if self.settings.server_address == "" or self.settings.api_token == "" then
-        UIManager:show(InfoMessage:new{
+        UIManager:show(InfoMessage:new {
             text = _("Please configure server address and API token first"),
         })
         return
     end
-    
-    local connection_info = InfoMessage:new{
+
+    local connection_info = InfoMessage:new {
         text = _("Testing connection to Miniflux server..."),
     }
     UIManager:show(connection_info)
     UIManager:forceRePaint() -- Force immediate display before API call
-    
-    -- Reinitialize API with current settings
-    self.api = MinifluxAPI:new({
+
+    -- Update API with current settings
+    self.api:updateConfig({
         server_address = self.settings.server_address,
         api_token = self.settings.api_token
     })
-    
+
     local success, result = self.api:testConnection()
-    
+
     -- Close the "testing" message
     UIManager:close(connection_info)
-    
+
     -- Show the result
-    UIManager:show(InfoMessage:new{
+    UIManager:show(InfoMessage:new {
         text = result,
         timeout = success and 3 or 5,
     })
@@ -302,7 +300,7 @@ end
 ---@return table[] Sort order menu items
 function MenuManager:getOrderSubMenu()
     local current_order = self.settings.order
-    
+
     return {
         {
             text = _("ID") .. (current_order == "id" and " ✓" or ""),
@@ -310,7 +308,7 @@ function MenuManager:getOrderSubMenu()
             callback = function(touchmenu_instance)
                 self.settings.order = "id"
                 self.settings:save()
-                UIManager:show(InfoMessage:new{
+                UIManager:show(InfoMessage:new {
                     text = _("Sort order updated"),
                     timeout = 2,
                     dismiss_callback = function()
@@ -325,7 +323,7 @@ function MenuManager:getOrderSubMenu()
             callback = function(touchmenu_instance)
                 self.settings.order = "status"
                 self.settings:save()
-                UIManager:show(InfoMessage:new{
+                UIManager:show(InfoMessage:new {
                     text = _("Sort order updated"),
                     timeout = 2,
                     dismiss_callback = function()
@@ -340,7 +338,7 @@ function MenuManager:getOrderSubMenu()
             callback = function(touchmenu_instance)
                 self.settings.order = "published_at"
                 self.settings:save()
-                UIManager:show(InfoMessage:new{
+                UIManager:show(InfoMessage:new {
                     text = _("Sort order updated"),
                     timeout = 2,
                     dismiss_callback = function()
@@ -355,7 +353,7 @@ function MenuManager:getOrderSubMenu()
             callback = function(touchmenu_instance)
                 self.settings.order = "category_title"
                 self.settings:save()
-                UIManager:show(InfoMessage:new{
+                UIManager:show(InfoMessage:new {
                     text = _("Sort order updated"),
                     timeout = 2,
                     dismiss_callback = function()
@@ -370,7 +368,7 @@ function MenuManager:getOrderSubMenu()
             callback = function(touchmenu_instance)
                 self.settings.order = "category_id"
                 self.settings:save()
-                UIManager:show(InfoMessage:new{
+                UIManager:show(InfoMessage:new {
                     text = _("Sort order updated"),
                     timeout = 2,
                     dismiss_callback = function()
@@ -386,7 +384,7 @@ end
 ---@return table[] Sort direction menu items
 function MenuManager:getDirectionSubMenu()
     local current_direction = self.settings.direction
-    
+
     return {
         {
             text = _("Ascending") .. (current_direction == "asc" and " ✓" or ""),
@@ -394,7 +392,7 @@ function MenuManager:getDirectionSubMenu()
             callback = function(touchmenu_instance)
                 self.settings.direction = "asc"
                 self.settings:save()
-                UIManager:show(InfoMessage:new{
+                UIManager:show(InfoMessage:new {
                     text = _("Sort direction updated"),
                     timeout = 2,
                     dismiss_callback = function()
@@ -409,7 +407,7 @@ function MenuManager:getDirectionSubMenu()
             callback = function(touchmenu_instance)
                 self.settings.direction = "desc"
                 self.settings:save()
-                UIManager:show(InfoMessage:new{
+                UIManager:show(InfoMessage:new {
                     text = _("Sort direction updated"),
                     timeout = 2,
                     dismiss_callback = function()
@@ -425,7 +423,7 @@ end
 ---@return table[] Include images menu items
 function MenuManager:getIncludeImagesSubMenu()
     local current_include_images = self.settings.include_images
-    
+
     return {
         {
             text = _("ON") .. (current_include_images and " ✓" or ""),
@@ -433,7 +431,7 @@ function MenuManager:getIncludeImagesSubMenu()
             callback = function(touchmenu_instance)
                 self.settings.include_images = true
                 self.settings:save()
-                UIManager:show(InfoMessage:new{
+                UIManager:show(InfoMessage:new {
                     text = _("Images will be downloaded with entries"),
                     timeout = 2,
                     dismiss_callback = function()
@@ -448,7 +446,7 @@ function MenuManager:getIncludeImagesSubMenu()
             callback = function(touchmenu_instance)
                 self.settings.include_images = false
                 self.settings:save()
-                UIManager:show(InfoMessage:new{
+                UIManager:show(InfoMessage:new {
                     text = _("Images will be skipped when downloading entries"),
                     timeout = 2,
                     dismiss_callback = function()
@@ -460,4 +458,4 @@ function MenuManager:getIncludeImagesSubMenu()
     }
 end
 
-return MenuManager 
+return MenuManager

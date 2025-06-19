@@ -5,7 +5,7 @@ This module handles all entry-related operations. It receives a reference to the
 main API client and uses its makeRequest method for HTTP communication.
 
 @module koplugin.miniflux.api.entries
---]]--
+--]] --
 
 local Utils = require("api/utils")
 
@@ -48,7 +48,7 @@ end
 ---@return boolean success, EntriesResponse|string result_or_error
 function Entries:getUnreadEntries(options)
     options = options or {}
-    options.status = {"unread"}
+    options.status = { "unread" }
     return self:getEntries(options)
 end
 
@@ -57,17 +57,8 @@ end
 ---@return boolean success, EntriesResponse|string result_or_error
 function Entries:getReadEntries(options)
     options = options or {}
-    options.status = {"read"}
+    options.status = { "read" }
     return self:getEntries(options)
-end
-
----Get starred entries
----@param options? ApiOptions Query options for filtering and sorting
----@return boolean success, EntriesResponse|string result_or_error
-function Entries:getStarredEntries(options)
-    local query_string = Utils.buildStarredQuery(options)
-    local endpoint = "/entries" .. query_string
-    return self.api:makeRequest("GET", endpoint)
 end
 
 -- =============================================================================
@@ -133,6 +124,4 @@ function Entries:getNext(entry_id, options)
     return self.api:makeRequest("GET", endpoint)
 end
 
-
-
-return Entries 
+return Entries

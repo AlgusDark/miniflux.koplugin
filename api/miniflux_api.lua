@@ -6,14 +6,21 @@ with specialized API modules. It consolidates the functionality from base_client
 and api_client into a single, more maintainable class.
 
 @module koplugin.miniflux.api.miniflux_api
---]]--
+--]] --
 
 local http = require("socket.http")
-local https = require("ssl.https")
-local json = require("json")
+local JSON = require("json")
 local ltn12 = require("ltn12")
+local socket = require("socket")
 local socketutil = require("socketutil")
 local _ = require("gettext")
+local logger = require("logger")
+local utils = require("utils/utils")
+
+-- Load specialized API modules
+local Entries = require("api/entries")
+local Feeds = require("api/feeds")
+local Categories = require("api/categories")
 
 ---@alias HttpMethod "GET"|"POST"|"PUT"|"DELETE"
 ---@alias EntryStatus "read"|"unread"|"removed"
@@ -78,51 +85,43 @@ local MinifluxAPI = {}
 ---@return MinifluxAPI
 function MinifluxAPI:new(config)
     config = config or {}
-    
-    local o = {}
-    setmetatable(o, self)
+
+    local instance = {}
+    setmetatable(instance, self)
     self.__index = self
-    
-    -- Initialize with server details if provided
-    if config.server_address and config.api_token then
-        o.server_address = config.server_address
-        o.api_token = config.api_token
-        o.base_url = config.server_address .. "/v1"
 
-        -- Remove trailing slash if present
-        if o.server_address:sub(-1) == "/" then
-            o.server_address = o.server_address:sub(1, -2)
-            o.base_url = o.server_address .. "/v1"
-        end
+    -- Use updateConfig to set configuration (eliminates duplication)
+    instance:updateConfig(config)
 
-        -- Initialize specialized modules
-        o:_initializeModules()
-    end
-    
-    return o
-end
+    -- Create module instances
+    instance.entries = Entries:new(instance)
+    instance.feeds = Feeds:new(instance)
+    instance.categories = Categories:new(instance)
 
----Initialize the specialized API modules
----@private
-function MinifluxAPI:_initializeModules()
-    -- Only initialize if not already done
-    if self.entries then
-        return
-    end
-    
-    -- Load modules on demand to avoid circular dependencies
-    local Entries = require("api/entries")
-    local Feeds = require("api/feeds") 
-    local Categories = require("api/categories")
-    
-    self.entries = Entries:new(self)
-    self.feeds = Feeds:new(self)
-    self.categories = Categories:new(self)
+    return instance
 end
 
 -- =============================================================================
 -- HTTP CLIENT FUNCTIONALITY (Consolidated from base_client)
 -- =============================================================================
+
+---Update the API configuration with new server address and/or API token
+---@param config MinifluxConfig Configuration table with server_address and/or api_token
+---@return nil
+function MinifluxAPI:updateConfig(config)
+    config = config or {}
+
+    -- Update server address if provided
+    if config.server_address then
+        self.server_address = utils.rtrim_slashes(config.server_address)
+        self.base_url = self.server_address .. "/v1"
+    end
+
+    -- Update API token if provided
+    if config.api_token then
+        self.api_token = config.api_token
+    end
+end
 
 ---Make an HTTP request to the API
 ---@param method HttpMethod HTTP method to use
@@ -130,8 +129,8 @@ end
 ---@param body? table Request body to encode as JSON
 ---@return boolean success, any result_or_error
 function MinifluxAPI:makeRequest(method, endpoint, body)
-    if not self.server_address or not self.api_token or 
-       self.server_address == "" or self.api_token == "" then
+    if not self.server_address or not self.api_token or
+        self.server_address == "" or self.api_token == "" then
         return false, _("Server address and API token must be configured")
     end
 
@@ -142,84 +141,69 @@ function MinifluxAPI:makeRequest(method, endpoint, body)
         ["User-Agent"] = "KOReader-Miniflux/1.0",
     }
 
-    local request_body = ""
+    local response_body = {}
+    local request = {
+        url = url,
+        method = method,
+        headers = headers,
+        sink = socketutil.table_sink(response_body),
+    }
+
     if body then
-        request_body = json.encode(body)
+        local request_body = JSON.encode(body)
+        request.source = ltn12.source.string(request_body)
         headers["Content-Length"] = tostring(#request_body)
     end
 
-    local response_body = {}
-    local request_func = http.request
+    logger.dbg("MinifluxAPI:makeRequest:", method, url)
 
-    -- Use HTTPS if URL starts with https
-    if url:match("^https://") then
-        request_func = https.request
-    end
-
-    -- Set timeouts to prevent hanging requests
-    local timeout, maxtime = 15, 30
-    socketutil:set_timeout(timeout, maxtime)
-
-    local result, status_code, response_headers
-    local network_success = pcall(function()
-        result, status_code, response_headers = request_func({
-            url = url,
-            method = method,
-            headers = headers,
-            source = ltn12.source.string(request_body),
-            sink = socketutil.table_sink(response_body),
-            protocol = "tlsv1_2",
-        })
-    end)
-
-    -- Reset timeout after request
+    socketutil:set_timeout(socketutil.LARGE_BLOCK_TIMEOUT, socketutil.LARGE_TOTAL_TIMEOUT)
+    local code, resp_headers, status = socket.skip(1, http.request(request))
     socketutil:reset_timeout()
 
-    if not network_success then
+    -- Check for network errors first
+    if resp_headers == nil then
+        logger.err("MinifluxAPI: network error", status or code)
         return false, _("Network error occurred")
-    end
-
-    if not result then
-        if status_code == socketutil.TIMEOUT_CODE then
-            return false, _("Request timed out")
-        elseif status_code == socketutil.SSL_HANDSHAKE_CODE then
-            return false, _("SSL handshake failed")
-        else
-            return false, _("Network request failed: ") .. tostring(status_code)
-        end
     end
 
     local response_text = table.concat(response_body)
 
-    -- Handle different status codes
-    if status_code == 200 or status_code == 201 or status_code == 204 then
+    -- Handle successful responses
+    if code == 200 or code == 201 or code == 204 then
         if response_text and response_text ~= "" then
-            local success, data = pcall(json.decode, response_text)
+            local success, data = pcall(JSON.decode, response_text)
             if success then
                 return true, data
             else
+                logger.err("MinifluxAPI: invalid JSON response", response_text)
                 return false, _("Invalid JSON response from server")
             end
         else
             return true, {}
         end
-    elseif status_code == 401 then
+    end
+
+    -- Handle error responses
+    logger.err("MinifluxAPI: HTTP error", status or code, resp_headers)
+
+    if code == 401 then
         return false, _("Unauthorized - please check your API token")
-    elseif status_code == 403 then
+    elseif code == 403 then
         return false, _("Forbidden - access denied")
-    elseif status_code == 400 then
+    elseif code == 400 then
         local error_msg = _("Bad request")
         if response_text and response_text ~= "" then
-            local success, error_data = pcall(json.decode, response_text)
+            local success, error_data = pcall(JSON.decode, response_text)
             if success and error_data.error_message then
                 error_msg = error_data.error_message
             end
         end
         return false, error_msg
-    elseif status_code == 500 then
+    elseif code == 500 then
         return false, _("Server error")
     else
-        return false, _("Unexpected response: ") .. tostring(status_code)
+        return false, _("Unexpected response: ") .. tostring(code)
     end
 end
 
@@ -234,37 +218,4 @@ function MinifluxAPI:testConnection()
     end
 end
 
--- =============================================================================
--- UTILITY METHODS
--- =============================================================================
-
----Get the base URL for API requests
----@return string The base API URL
-function MinifluxAPI:getBaseUrl()
-    return self.base_url or ""
-end
-
----Get the server address
----@return string The server address
-function MinifluxAPI:getServerAddress()
-    return self.server_address or ""
-end
-
----Get the API token (masked for security)
----@return string Masked API token
-function MinifluxAPI:getApiTokenMasked()
-    if not self.api_token or self.api_token == "" then
-        return ""
-    end
-    
-    local token = self.api_token
-    if #token > 8 then
-        return token:sub(1, 4) .. "****" .. token:sub(-4)
-    else
-        return "****"
-    end
-end
-
-
-
-return MinifluxAPI 
+return MinifluxAPI
