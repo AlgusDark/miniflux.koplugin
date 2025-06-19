@@ -1,7 +1,7 @@
 --[[--
 Miniflux Settings Module
 
-Singleton settings management with idiomatic property access using metamethods.
+Settings management with idiomatic property access using metamethods.
 Uses LuaSettings for storage with proper initialization and state management.
 
 @module koplugin.miniflux.settings
@@ -22,7 +22,7 @@ local DEFAULTS = {
 }
 
 -- =============================================================================
--- SINGLETON SETTINGS CLASS
+-- SETTINGS CLASS
 -- =============================================================================
 
 ---@class MinifluxSettings
@@ -35,29 +35,17 @@ local DEFAULTS = {
 ---@field hide_read_entries boolean Whether to hide read entries
 ---@field include_images boolean Whether to include images
 local MinifluxSettings = {}
-
--- Singleton instance storage
-local _instance = nil
+MinifluxSettings.__index = MinifluxSettings
 
 ---Create a new MinifluxSettings instance
 ---@return MinifluxSettings
-local function new()
+function MinifluxSettings:new()
     local self = {
         settings = LuaSettings:open(DataStorage:getSettingsDir() .. "/miniflux.lua")
     }
     
     setmetatable(self, MinifluxSettings)
     return self
-end
-
----Get or create the singleton settings instance
----@return MinifluxSettings
-function MinifluxSettings:getInstance()
-    if not _instance then
-        _instance = new()
-    end
-    
-    return _instance
 end
 
 -- =============================================================================

@@ -45,6 +45,9 @@ function MinifluxBrowser:init()
     -- Initialize data handler
     self.data = BrowserData:new(self.api, self.settings)
     
+    -- Initialize EntryUtils instance with settings dependency
+    self.entry_utils = EntryUtils:new(self.settings)
+    
     -- Navigation state
     self.navigation_paths = {}
     self.current_context = { type = "main" }
@@ -246,12 +249,12 @@ function MinifluxBrowser:openEntry(entry_data)
         NavigationContext.setGlobalContext(entry_data.id)
     end
     
-    -- Show the entry using EntryUtils directly
-    EntryUtils.showEntry({
+    -- Show the entry using EntryUtils instance
+    self.entry_utils:showEntry({
         entry = entry_data,
         api = self.api,
         download_dir = self.download_dir,
-        browser = self
+        browser = self,
     })
 end
 

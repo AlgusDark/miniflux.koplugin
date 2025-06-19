@@ -25,7 +25,6 @@ local _ = require("gettext")
 local T = require("ffi/util").template
 
 -- Move frequently used requires to module level for performance
-local MinifluxSettings = require("settings/settings")
 local time = require("ui/time")
 -- BrowserUtils functionality moved inline to avoid dependency on deleted file
 local ReaderUI = require("apps/reader/readerui")
@@ -68,11 +67,29 @@ local function loadCurrentEntryMetadata(entry_info)
     return nil
 end
 
+---@class EntryUtils
+---@field settings MinifluxSettings The settings instance
+---@field _current_miniflux_entry table|nil Current entry being processed
+---@field _current_end_dialog table|nil Current end of entry dialog
 local EntryUtils = {}
+EntryUtils.__index = EntryUtils
+
+---Create a new EntryUtils instance
+---@param settings MinifluxSettings Settings instance
+---@return EntryUtils
+function EntryUtils:new(settings)
+    local instance = {
+        settings = settings,
+        _current_miniflux_entry = nil,
+        _current_end_dialog = nil,
+    }
+    setmetatable(instance, self)
+    return instance
+end
 
 ---Show an entry by downloading and opening it
 ---@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, browser?: table}
-function EntryUtils.showEntry(params)
+function EntryUtils:showEntry(params)
     local entry = params.entry
     local api = params.api
     local download_dir = params.download_dir
@@ -87,24 +104,20 @@ function EntryUtils.showEntry(params)
     end
     
     -- Direct download without Trapper wrapper since we have our own progress system
-    EntryUtils.downloadEntry({
+    self:downloadEntry({
         entry = entry,
         api = api,
         download_dir = download_dir,
-        browser = browser
+        browser = browser,
     })
 end
 
 ---Download and process an entry with images
----@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, browser?: table, progress_callback?: function, include_images?: boolean}
-function EntryUtils.downloadEntry(params)
+---@param params {entry: MinifluxEntry, api: MinifluxAPI, download_dir: string, browser?: table}
+function EntryUtils:downloadEntry(params)
     local entry = params.entry
-    local api = params.api
     local download_dir = params.download_dir
     local browser = params.browser
-    
-    -- Get settings singleton
-    local settings = MinifluxSettings:getInstance()
     
     local entry_title = entry.title or _("Untitled Entry")
     local entry_id = tostring(entry.id)
@@ -130,7 +143,7 @@ function EntryUtils.downloadEntry(params)
             browser:closeAll()
         end
         
-        EntryUtils.openEntryFile(html_file)
+        self:openEntryFile(html_file)
         return
     end
     
@@ -148,7 +161,7 @@ function EntryUtils.downloadEntry(params)
     end
     
     -- Check if images should be included
-    local include_images = settings.include_images
+    local include_images = self.settings.include_images
     
     progress:update(_("Scanning for images…"))
     
@@ -240,14 +253,14 @@ function EntryUtils.downloadEntry(params)
     progress:update(_("Creating metadata…"))
     
     -- Create metadata
-    local metadata = EntryUtils.createEntryMetadata({
+    local metadata = self:createEntryMetadata({
         entry = entry,
         include_images = include_images,
         images = images
     })
     
     -- Save metadata file
-    local metadata_content = "return " .. EntryUtils.tableToString(metadata)
+    local metadata_content = "return " .. self:tableToString(metadata)
     file = io.open(metadata_file, "w")
     if file then
         file:write(metadata_content)
@@ -270,13 +283,13 @@ function EntryUtils.downloadEntry(params)
     end
     
     -- Open entry immediately after browser close
-    EntryUtils.openEntryFile(html_file)
+    self:openEntryFile(html_file)
 end
 
 ---Create entry metadata
 ---@param params {entry: MinifluxEntry, include_images: boolean, images: ImageInfo[]}
 ---@return EntryMetadata
-function EntryUtils.createEntryMetadata(params)
+function EntryUtils:createEntryMetadata(params)
     local entry = params.entry
     local include_images = params.include_images
     local images = params.images
@@ -307,9 +320,9 @@ end
 ---Open an entry HTML file in KOReader
 ---@param html_file string Path to HTML file to open
 ---@return nil
-function EntryUtils.openEntryFile(html_file)
+function EntryUtils:openEntryFile(html_file)
     -- Close any existing EndOfBook dialog first (prevent stacking like OPDS pattern)
-    EntryUtils.closeEndOfEntryDialog()
+    self:closeEndOfEntryDialog()
     
     -- Check if this is a miniflux entry by looking at the path
     local is_miniflux_entry = html_file:match("/miniflux/") ~= nil
@@ -336,7 +349,7 @@ function EntryUtils.openEntryFile(html_file)
         end
         
         -- Store the entry info for the EndOfBook event handler
-        EntryUtils._current_miniflux_entry = {
+        self._current_miniflux_entry = {
             file_path = html_file,
             entry_id = entry_id
         }
@@ -347,15 +360,16 @@ function EntryUtils.openEntryFile(html_file)
 end
 
 ---Show end of entry dialog with navigation options
+---@param params? table Optional parameters (kept for backward compatibility)
 ---@return nil
-function EntryUtils.showEndOfEntryDialog()
-    local current_entry = EntryUtils._current_miniflux_entry
+function EntryUtils:showEndOfEntryDialog(params)
+    local current_entry = self._current_miniflux_entry
     if not current_entry then
         return
     end
     
     -- Close any existing EndOfBook dialog first (prevent stacking)
-    EntryUtils.closeEndOfEntryDialog()
+    self:closeEndOfEntryDialog()
     
     -- Load entry metadata to check current status with error handling
     local metadata = nil
@@ -375,18 +389,18 @@ function EntryUtils.showEndOfEntryDialog()
     if entry_status == "read" then
         mark_button_text = _("✓ Mark as unread")
         mark_callback = function()
-            EntryUtils.markEntryAsUnread(current_entry)
+            self:markEntryAsUnread(current_entry)
         end
     else
         mark_button_text = _("✓ Mark as read")
         mark_callback = function()
-            EntryUtils.markEntryAsRead(current_entry)
+            self:markEntryAsRead(current_entry)
         end
     end
     
     -- Create dialog and store reference for later cleanup with error handling
     local dialog_success = pcall(function()
-        EntryUtils._current_end_dialog = ButtonDialogTitle:new{
+        self._current_end_dialog = ButtonDialogTitle:new{
             title = _("You've reached the end of the entry."),
             title_align = "center",
             buttons = {
@@ -394,18 +408,18 @@ function EntryUtils.showEndOfEntryDialog()
                     {
                         text = _("← Previous"),
                         callback = function()
-                            EntryUtils.closeEndOfEntryDialog()
+                            self:closeEndOfEntryDialog()
                             pcall(function()
-                                EntryUtils.navigateToPreviousEntry(current_entry)
+                                self:navigateToPreviousEntry(current_entry)
                             end)
                         end,
                     },
                     {
                         text = _("Next →"),
                         callback = function()
-                            EntryUtils.closeEndOfEntryDialog()
+                            self:closeEndOfEntryDialog()
                             pcall(function()
-                                EntryUtils.navigateToNextEntry(current_entry)
+                                self:navigateToNextEntry(current_entry)
                             end)
                         end,
                     },
@@ -414,16 +428,16 @@ function EntryUtils.showEndOfEntryDialog()
                     {
                         text = _("⚠ Delete local entry"),
                         callback = function()
-                            EntryUtils.closeEndOfEntryDialog()
+                            self:closeEndOfEntryDialog()
                             pcall(function()
-                                EntryUtils.deleteLocalEntry(current_entry)
+                                self:deleteLocalEntry(current_entry)
                             end)
                         end,
                     },
                     {
                         text = mark_button_text,
                         callback = function()
-                            EntryUtils.closeEndOfEntryDialog()
+                            self:closeEndOfEntryDialog()
                             pcall(function()
                                 mark_callback()
                             end)
@@ -434,23 +448,23 @@ function EntryUtils.showEndOfEntryDialog()
                     {
                         text = _("⌂ Miniflux folder"),
                         callback = function()
-                            EntryUtils.closeEndOfEntryDialog()
+                            self:closeEndOfEntryDialog()
                             pcall(function()
-                                EntryUtils.openMinifluxFolder(current_entry)
+                                self:openMinifluxFolder(current_entry)
                             end)
                         end,
                     },
                     {
                         text = _("Cancel"),
                         callback = function()
-                            EntryUtils.closeEndOfEntryDialog()
+                            self:closeEndOfEntryDialog()
                         end,
                     },
                 },
             },
         }
         
-        UIManager:show(EntryUtils._current_end_dialog)
+        UIManager:show(self._current_end_dialog)
     end)
     
     if not dialog_success then
@@ -464,21 +478,16 @@ end
 
 ---Close any existing EndOfEntry dialog
 ---@return nil
-function EntryUtils.closeEndOfEntryDialog()
-    if EntryUtils._current_end_dialog then
-        UIManager:close(EntryUtils._current_end_dialog)
-        EntryUtils._current_end_dialog = nil
+function EntryUtils:closeEndOfEntryDialog()
+    if self._current_end_dialog then
+        UIManager:close(self._current_end_dialog)
+        self._current_end_dialog = nil
     end
 end
 
 -- =============================================================================
 -- NAVIGATION FUNCTIONS (moved from NavigationUtils to break circular dependency)
 -- =============================================================================
-
--- Get the singleton settings instance for navigation
-local function getNavigationSettings()
-    return MinifluxSettings:getInstance()
-end
 
 -- Pure-Lua ISO-8601 → Unix timestamp (UTC)
 -- Handles "YYYY-MM-DDTHH:MM:SS±HH:MM"
@@ -520,15 +529,16 @@ local function iso8601_to_unix(s)
     return utc_secs
 end
 
--- Get API options based on settings (moved from NavigationUtils)
-local function getNavigationApiOptions(settings)
+-- Get API options based on settings
+---@return table API options for entries
+function EntryUtils:getNavigationApiOptions()
     local options = {
-        limit = settings.limit,
-        order = settings.order,
-        direction = settings.direction,
+        limit = self.settings.limit,
+        order = self.settings.order,
+        direction = self.settings.direction,
     }
     
-    local hide_read_entries = settings.hide_read_entries
+    local hide_read_entries = self.settings.hide_read_entries
     if hide_read_entries then
         options.status = {"unread"}
     else
@@ -541,7 +551,7 @@ end
 ---Navigate to the previous entry
 ---@param entry_info table Current entry information
 ---@return nil
-function EntryUtils.navigateToPreviousEntry(entry_info)
+function EntryUtils:navigateToPreviousEntry(entry_info)
     local current_entry_id = entry_info.entry_id
     if not current_entry_id then
         UIManager:show(InfoMessage:new{
@@ -551,19 +561,10 @@ function EntryUtils.navigateToPreviousEntry(entry_info)
         return
     end
     
-    local settings_success, settings = pcall(getNavigationSettings)
-    if not settings_success or not settings then
-        UIManager:show(InfoMessage:new{
-            text = _("Cannot navigate: settings not available"),
-            timeout = 3,
-        })
-        return
-    end
-    
     local api_success, api = pcall(function()
         return MinifluxAPI:new({
-            server_address = settings.server_address,
-            api_token = settings.api_token
+            server_address = self.settings.server_address,
+            api_token = self.settings.api_token
         })
     end)
     
@@ -618,7 +619,7 @@ function EntryUtils.navigateToPreviousEntry(entry_info)
         return
     end
     
-    local base_options = getNavigationApiOptions(settings)
+    local base_options = self:getNavigationApiOptions()
     local options_success, options = pcall(function()
         return NavigationContext.getContextAwareOptions(base_options)
     end)
@@ -635,7 +636,7 @@ function EntryUtils.navigateToPreviousEntry(entry_info)
     options.direction = "asc"
     options.published_after = published_unix
     options.limit = 1
-    options.order = settings.order
+    options.order = self.settings.order
     
     local success, result = api.entries:getEntries(options)
     UIManager:close(loading_info)
@@ -650,29 +651,29 @@ function EntryUtils.navigateToPreviousEntry(entry_info)
             local prev_html_file = prev_entry_dir .. "entry.html"
             
             if lfs.attributes(prev_html_file, "mode") == "file" then
-                EntryUtils.openEntryFile(prev_html_file)
+                self:openEntryFile(prev_html_file)
                 return
             end
         end
         
-        EntryUtils.downloadAndShowEntry(prev_entry)
+        self:downloadAndShowEntry(prev_entry)
     else
         local current_context_success, current_context = pcall(function()
             return NavigationContext.getCurrentContext()
         end)
         
         if current_context_success and current_context and current_context.type and current_context.type ~= "global" then
-            local global_options = getNavigationApiOptions(settings)
+            local global_options = self:getNavigationApiOptions()
             global_options.direction = "asc"
             global_options.published_after = published_unix
             global_options.limit = 1
-            global_options.order = settings.order
+            global_options.order = self.settings.order
             
             success, result = api.entries:getEntries(global_options)
             
             if success and result and result.entries and #result.entries > 0 then
                 local prev_entry = result.entries[1]
-                EntryUtils.downloadAndShowEntry(prev_entry)
+                self:downloadAndShowEntry(prev_entry)
                 return
             end
         end
@@ -687,7 +688,7 @@ end
 ---Navigate to the next entry
 ---@param entry_info table Current entry information
 ---@return nil
-function EntryUtils.navigateToNextEntry(entry_info)
+function EntryUtils:navigateToNextEntry(entry_info)
     local current_entry_id = entry_info.entry_id
     if not current_entry_id then
         UIManager:show(InfoMessage:new{
@@ -697,19 +698,10 @@ function EntryUtils.navigateToNextEntry(entry_info)
         return
     end
     
-    local settings_success, settings = pcall(getNavigationSettings)
-    if not settings_success or not settings then
-        UIManager:show(InfoMessage:new{
-            text = _("Cannot navigate: settings not available"),
-            timeout = 3,
-        })
-        return
-    end
-    
     local api_success, api = pcall(function()
         return MinifluxAPI:new({
-            server_address = settings.server_address,
-            api_token = settings.api_token
+            server_address = self.settings.server_address,
+            api_token = self.settings.api_token
         })
     end)
     
@@ -764,7 +756,7 @@ function EntryUtils.navigateToNextEntry(entry_info)
         return
     end
     
-    local base_options = getNavigationApiOptions(settings)
+    local base_options = self:getNavigationApiOptions()
     local options_success, options = pcall(function()
         return NavigationContext.getContextAwareOptions(base_options)
     end)
@@ -781,7 +773,7 @@ function EntryUtils.navigateToNextEntry(entry_info)
     options.direction = "desc"
     options.published_before = published_unix
     options.limit = 1
-    options.order = settings.order
+    options.order = self.settings.order
     
     local success, result = api.entries:getEntries(options)
     UIManager:close(loading_info)
@@ -796,29 +788,29 @@ function EntryUtils.navigateToNextEntry(entry_info)
             local next_html_file = next_entry_dir .. "entry.html"
             
             if lfs.attributes(next_html_file, "mode") == "file" then
-                EntryUtils.openEntryFile(next_html_file)
+                self:openEntryFile(next_html_file)
                 return
             end
         end
         
-        EntryUtils.downloadAndShowEntry(next_entry)
+        self:downloadAndShowEntry(next_entry)
     else
         local current_context_success, current_context = pcall(function()
             return NavigationContext.getCurrentContext()
         end)
         
         if current_context_success and current_context and current_context.type and current_context.type ~= "global" then
-            local global_options = getNavigationApiOptions(settings)
+            local global_options = self:getNavigationApiOptions()
             global_options.direction = "desc"
             global_options.published_before = published_unix
             global_options.limit = 1
-            global_options.order = settings.order
+            global_options.order = self.settings.order
             
             success, result = api.entries:getEntries(global_options)
             
             if success and result and result.entries and #result.entries > 0 then
                 local next_entry = result.entries[1]
-                EntryUtils.downloadAndShowEntry(next_entry)
+                self:downloadAndShowEntry(next_entry)
                 return
             end
         end
@@ -830,10 +822,10 @@ function EntryUtils.navigateToNextEntry(entry_info)
     end
 end
 
----Download and show an entry (moved from NavigationUtils)
+---Download and show an entry
 ---@param entry MinifluxEntry Entry to download and show
 ---@return nil
-function EntryUtils.downloadAndShowEntry(entry)
+function EntryUtils:downloadAndShowEntry(entry)
     if not entry or not entry.id then
         UIManager:show(InfoMessage:new{
             text = _("Cannot download: invalid entry data"),
@@ -852,14 +844,13 @@ function EntryUtils.downloadAndShowEntry(entry)
     
     local download_success = pcall(function()
         local download_dir = ("%s/%s/"):format(DataStorage:getFullDataDir(), "miniflux")
-        local settings = getNavigationSettings()
         
         local api = MinifluxAPI:new({
-            server_address = settings.server_address,
-            api_token = settings.api_token
+            server_address = self.settings.server_address,
+            api_token = self.settings.api_token
         })
         
-        EntryUtils.downloadEntry({
+        self:downloadEntry({
             entry = entry,
             api = api,
             download_dir = download_dir
@@ -874,10 +865,10 @@ function EntryUtils.downloadAndShowEntry(entry)
     end
 end
 
----Mark an entry as read (moved from NavigationUtils)
+---Mark an entry as read
 ---@param entry_info table Current entry information
 ---@return nil
-function EntryUtils.markEntryAsRead(entry_info)
+function EntryUtils:markEntryAsRead(entry_info)
     local entry_id = entry_info.entry_id
     if not entry_id then
         UIManager:show(InfoMessage:new{
@@ -893,20 +884,10 @@ function EntryUtils.markEntryAsRead(entry_info)
     UIManager:show(loading_info)
     UIManager:forceRePaint()
     
-    local settings_success, settings = pcall(getNavigationSettings)
-    if not settings_success or not settings then
-        UIManager:close(loading_info)
-        UIManager:show(InfoMessage:new{
-            text = _("Cannot mark as read: settings not available"),
-            timeout = 3,
-        })
-        return
-    end
-    
     local api_success, api = pcall(function()
         return MinifluxAPI:new({
-            server_address = settings.server_address,
-            api_token = settings.api_token
+            server_address = self.settings.server_address,
+            api_token = self.settings.api_token
         })
     end)
     
@@ -939,12 +920,12 @@ function EntryUtils.markEntryAsRead(entry_info)
         })
         
         pcall(function()
-            EntryUtils.updateLocalEntryStatus(entry_info, "read")
+            self:updateLocalEntryStatus(entry_info, "read")
         end)
         
         UIManager:scheduleIn(0.5, function()
             pcall(function()
-                EntryUtils.deleteLocalEntry(entry_info)
+                self:deleteLocalEntry(entry_info)
             end)
         end)
     else
@@ -955,10 +936,10 @@ function EntryUtils.markEntryAsRead(entry_info)
     end
 end
 
----Mark an entry as unread (moved from NavigationUtils)
+---Mark an entry as unread
 ---@param entry_info table Current entry information
 ---@return nil
-function EntryUtils.markEntryAsUnread(entry_info)
+function EntryUtils:markEntryAsUnread(entry_info)
     local entry_id = entry_info.entry_id
     if not entry_id then
         UIManager:show(InfoMessage:new{
@@ -974,20 +955,10 @@ function EntryUtils.markEntryAsUnread(entry_info)
     UIManager:show(loading_info)
     UIManager:forceRePaint()
     
-    local settings_success, settings = pcall(getNavigationSettings)
-    if not settings_success or not settings then
-        UIManager:close(loading_info)
-        UIManager:show(InfoMessage:new{
-            text = _("Cannot mark as unread: settings not available"),
-            timeout = 3,
-        })
-        return
-    end
-    
     local api_success, api = pcall(function()
         return MinifluxAPI:new({
-            server_address = settings.server_address,
-            api_token = settings.api_token
+            server_address = self.settings.server_address,
+            api_token = self.settings.api_token
         })
     end)
     
@@ -1020,7 +991,7 @@ function EntryUtils.markEntryAsUnread(entry_info)
         })
         
         pcall(function()
-            EntryUtils.updateLocalEntryStatus(entry_info, "unread")
+            self:updateLocalEntryStatus(entry_info, "unread")
         end)
     else
         UIManager:show(InfoMessage:new{
@@ -1030,11 +1001,11 @@ function EntryUtils.markEntryAsUnread(entry_info)
     end
 end
 
----Update local entry metadata status (moved from NavigationUtils)
+---Update local entry metadata status
 ---@param entry_info table Current entry information
 ---@param new_status string New status to set
 ---@return boolean True if successfully updated
-function EntryUtils.updateLocalEntryStatus(entry_info, new_status)
+function EntryUtils:updateLocalEntryStatus(entry_info, new_status)
     local entry_id = entry_info.entry_id
     if not entry_id then
         return false
@@ -1060,7 +1031,7 @@ function EntryUtils.updateLocalEntryStatus(entry_info, new_status)
         
         metadata.status = new_status
         
-        local metadata_content = "return " .. EntryUtils.tableToString(metadata)
+        local metadata_content = "return " .. self:tableToString(metadata)
         
         local file = io.open(metadata_file, "w")
         if file then
@@ -1075,10 +1046,10 @@ function EntryUtils.updateLocalEntryStatus(entry_info, new_status)
     return success or false
 end
 
----Delete a local entry (moved from NavigationUtils)
+---Delete a local entry
 ---@param entry_info table Current entry information
 ---@return nil
-function EntryUtils.deleteLocalEntry(entry_info)
+function EntryUtils:deleteLocalEntry(entry_info)
     local entry_id = entry_info.entry_id
     if not entry_id then
         UIManager:show(InfoMessage:new{
@@ -1117,14 +1088,14 @@ function EntryUtils.deleteLocalEntry(entry_info)
     end
     
     pcall(function()
-        EntryUtils.openMinifluxFolder(entry_info)
+        self:openMinifluxFolder(entry_info)
     end)
 end
 
----Open the Miniflux folder in file manager (moved from NavigationUtils)
+---Open the Miniflux folder in file manager
 ---@param entry_info table Current entry information
 ---@return nil
-function EntryUtils.openMinifluxFolder(entry_info)
+function EntryUtils:openMinifluxFolder(entry_info)
     local folder_success = pcall(function()
         local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
         if not miniflux_dir then
@@ -1154,10 +1125,10 @@ function EntryUtils.openMinifluxFolder(entry_info)
     end
 end
 
----Fetch and show entry by ID (moved from NavigationUtils)
+---Fetch and show entry by ID
 ---@param entry_id number Entry ID to fetch and show
 ---@return nil
-function EntryUtils.fetchAndShowEntry(entry_id)
+function EntryUtils:fetchAndShowEntry(entry_id)
     if not entry_id or type(entry_id) ~= "number" then
         UIManager:show(InfoMessage:new{
             text = _("Cannot fetch: invalid entry ID"),
@@ -1173,17 +1144,16 @@ function EntryUtils.fetchAndShowEntry(entry_id)
     UIManager:forceRePaint()
     
     local fetch_success = pcall(function()
-        local settings = getNavigationSettings()
         local api = MinifluxAPI:new({
-            server_address = settings.server_address,
-            api_token = settings.api_token
+            server_address = self.settings.server_address,
+            api_token = self.settings.api_token
         })
         
         local success, result = api.entries:getEntry(entry_id)
         UIManager:close(loading_info)
         
         if success and result and type(result) == "table" and result.id then
-            EntryUtils.downloadAndShowEntry(result)
+            self:downloadAndShowEntry(result)
         else
             UIManager:show(InfoMessage:new{
                 text = _("Failed to fetch entry: ") .. tostring(result),
@@ -1201,8 +1171,6 @@ function EntryUtils.fetchAndShowEntry(entry_id)
     end
 end
 
--- Navigation functions no longer delegate to NavigationUtils - they're implemented above
-
 -- =============================================================================
 -- UTILITY METHODS (moved from deleted BrowserUtils)
 -- =============================================================================
@@ -1211,7 +1179,7 @@ end
 ---@param tbl table Table to convert
 ---@param indent? number Current indentation level
 ---@return string Lua code representation of table
-function EntryUtils.tableToString(tbl, indent)
+function EntryUtils:tableToString(tbl, indent)
     indent = indent or 0
     local result = {}
     local spaces = string.rep("  ", indent)
@@ -1223,7 +1191,7 @@ function EntryUtils.tableToString(tbl, indent)
         if type(v) == "string" then
             value = string.format('"%s"', v:gsub('"', '\\"'))
         elseif type(v) == "table" then
-            value = EntryUtils.tableToString(v, indent + 1)
+            value = self:tableToString(v, indent + 1)
         else
             value = tostring(v)
         end

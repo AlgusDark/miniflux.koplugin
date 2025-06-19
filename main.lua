@@ -19,6 +19,7 @@ local MinifluxAPI = require("api/miniflux_api")
 local MinifluxSettings = require("settings/settings")
 local BrowserLauncher = require("browser/browser_launcher")
 local MenuManager = require("menu/menu_manager")
+local EntryUtils = require("browser/utils/entry_utils")
 
 ---@class Miniflux : WidgetContainer
 ---@field name string Plugin name identifier
@@ -28,6 +29,7 @@ local MenuManager = require("menu/menu_manager")
 ---@field api MinifluxAPI API client instance
 ---@field browser_launcher BrowserLauncher Browser launcher instance
 ---@field menu_manager MenuManager Menu construction manager
+---@field entry_utils EntryUtils Entry utilities instance
 local Miniflux = WidgetContainer:extend({
     name = "miniflux",
     is_doc_only = false,
@@ -47,14 +49,17 @@ function Miniflux:init()
     end
     self.download_dir = download_dir
 
-    -- Initialize settings singleton
-    self.settings = MinifluxSettings:getInstance()
+    -- Initialize settings instance
+    self.settings = MinifluxSettings:new()
 
     -- Initialize API client
     self.api = MinifluxAPI:new({
         server_address = self.settings.server_address,
         api_token = self.settings.api_token
     })
+
+    -- Initialize EntryUtils instance with settings dependency
+    self.entry_utils = EntryUtils:new(self.settings)
 
     -- Initialize browser launcher with dependency injection
     self.browser_launcher = BrowserLauncher:new()
@@ -143,20 +148,18 @@ function Miniflux:overrideEndOfBookBehavior()
 
         -- Check if this is a miniflux HTML entry
         if file_path:match("/miniflux/") and file_path:match("%.html$") then
-            local EntryUtils = require("browser/utils/entry_utils")
-
             -- Extract entry ID from path
             local entry_id = file_path:match("/miniflux/(%d+)/")
 
             if entry_id then
                 -- Set up entry info for the dialog
-                EntryUtils._current_miniflux_entry = {
+                self.entry_utils._current_miniflux_entry = {
                     file_path = file_path,
                     entry_id = entry_id,
                 }
 
                 -- Show the end of entry dialog instead of default
-                EntryUtils.showEndOfEntryDialog()
+                self.entry_utils:showEndOfEntryDialog()
                 return -- Don't call original handler
             end
         end
