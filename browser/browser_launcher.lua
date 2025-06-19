@@ -43,7 +43,7 @@ end
 ---Show the main Miniflux browser screen
 ---@return nil
 function BrowserLauncher:showMainScreen()
-    if self.settings:getServerAddress() == "" or self.settings:getApiToken() == "" then
+    if self.settings.server_address == "" or self.settings.api_token == "" then
         UIManager:show(InfoMessage:new{
             text = _("Please configure server settings first"),
             timeout = 3,
@@ -62,8 +62,8 @@ function BrowserLauncher:showMainScreen()
     local api_success = pcall(function()
         local MinifluxAPI = require("api/miniflux_api")
         self.api = MinifluxAPI:new({
-            server_address = self.settings:getServerAddress(),
-            api_token = self.settings:getApiToken()
+            server_address = self.settings.server_address,
+            api_token = self.settings.api_token
         })
     end)
     
@@ -129,8 +129,8 @@ end
 function BrowserLauncher:fetchUnreadCount(loading_info)
     -- Use proper settings for API call instead of hardcoded values
     local options = {
-        order = self.settings:getOrder(),
-        direction = self.settings:getDirection(),
+        order = self.settings.order,
+        direction = self.settings.direction,
     }
     options.limit = 1  -- We only need one entry to get the total count
     options.status = {"unread"}  -- Only unread for count

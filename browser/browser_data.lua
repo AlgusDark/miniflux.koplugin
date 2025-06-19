@@ -31,13 +31,13 @@ end
 
 function BrowserData:getApiOptions()
     local options = {
-        limit = self.settings:getLimit(),
-        order = self.settings:getOrder(),
-        direction = self.settings:getDirection(),
+        limit = self.settings.limit,
+        order = self.settings.order,
+        direction = self.settings.direction,
     }
     
     -- Server-side filtering based on settings
-    local hide_read_entries = self.settings:getHideReadEntries()
+    local hide_read_entries = self.settings.hide_read_entries
     if hide_read_entries then
         options.status = {"unread"}
     else
@@ -54,9 +54,9 @@ end
 function BrowserData:getUnreadEntries()
     local options = {
         status = {"unread"}, -- Always unread only for this view
-        order = self.settings:getOrder(),
-        direction = self.settings:getDirection(),
-        limit = self.settings:getLimit(),
+        order = self.settings.order,
+        direction = self.settings.direction,
+        limit = self.settings.limit,
     }
     
     local success, result = self.api.entries:getEntries(options)
@@ -127,7 +127,7 @@ end
 
 function BrowserData:entriesToMenuItems(entries, show_feed_names)
     if not entries or #entries == 0 then
-        local hide_read = self.settings:getHideReadEntries()
+        local hide_read = self.settings.hide_read_entries
         return {
             {
                 text = hide_read and _("There are no unread entries.") or _("There are no entries."),

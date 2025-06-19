@@ -52,8 +52,8 @@ function Miniflux:init()
 
     -- Initialize API client
     self.api = MinifluxAPI:new({
-        server_address = self.settings:getServerAddress(),
-        api_token = self.settings:getApiToken()
+        server_address = self.settings.server_address,
+        api_token = self.settings.api_token
     })
 
     -- Initialize browser launcher with dependency injection

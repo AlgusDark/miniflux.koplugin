@@ -1,7 +1,7 @@
 --[[--
 Miniflux Settings Module
 
-Singleton settings management that provides a clean API for configuration persistence.
+Singleton settings management with idiomatic property access using metamethods.
 Uses LuaSettings for storage with proper initialization and state management.
 
 @module koplugin.miniflux.settings
@@ -9,7 +9,6 @@ Uses LuaSettings for storage with proper initialization and state management.
 
 local DataStorage = require("datastorage")
 local LuaSettings = require("luasettings")
-local logger = require("logger")
 
 -- Default values
 local DEFAULTS = {
@@ -22,36 +21,32 @@ local DEFAULTS = {
     include_images = true
 }
 
--- Valid values for validation
-local VALID_SORT_ORDERS = {
-    "id", "status", "published_at", "category_title", "category_id"
-}
-
-local VALID_SORT_DIRECTIONS = {
-    "asc", "desc"
-}
-
 -- =============================================================================
 -- SINGLETON SETTINGS CLASS
 -- =============================================================================
 
 ---@class MinifluxSettings
 ---@field settings LuaSettings LuaSettings instance
+---@field server_address string Server address
+---@field api_token string API token
+---@field limit number Entries limit (1-1000)
+---@field order "id"|"status"|"published_at"|"category_title"|"category_id" Sort order
+---@field direction "asc"|"desc" Sort direction
+---@field hide_read_entries boolean Whether to hide read entries
+---@field include_images boolean Whether to include images
 local MinifluxSettings = {}
-MinifluxSettings.__index = MinifluxSettings
 
 -- Singleton instance storage
 local _instance = nil
 
 ---Create a new MinifluxSettings instance
 ---@return MinifluxSettings
-local function new(o)
-    local self = setmetatable({
-        settings = nil
-    }, MinifluxSettings)
-
-    self.settings = LuaSettings:open(DataStorage:getSettingsDir() .. "/miniflux.lua")
-
+local function new()
+    local self = {
+        settings = LuaSettings:open(DataStorage:getSettingsDir() .. "/miniflux.lua")
+    }
+    
+    setmetatable(self, MinifluxSettings)
     return self
 end
 
@@ -65,114 +60,58 @@ function MinifluxSettings:getInstance()
     return _instance
 end
 
----Reads a setting, optionally initializing it to a default.
----@param key string Setting key
----@param default any Default value
----@return any Setting value or default
-function MinifluxSettings:get(key, default)
-    return self.settings:readSetting(key, default)
+-- =============================================================================
+-- METAMETHODS FOR PROPERTY ACCESS
+-- =============================================================================
+
+---Handle property reading with automatic defaults
+---@param key string Property name
+---@return any Property value or default
+function MinifluxSettings:__index(key)
+    -- Handle method calls first
+    if rawget(MinifluxSettings, key) then
+        return rawget(MinifluxSettings, key)
+    end
+    
+    -- Handle setting access
+    local default = DEFAULTS[key]
+    if default ~= nil then
+        return self.settings:readSetting(key, default)
+    end
+    
+    -- Fallback to nil for unknown keys
+    return nil
 end
 
----Saves a setting.
----@param key string Setting key
----@param value any Setting value
----@return nil
-function MinifluxSettings:set(key, value)
-    self.settings:saveSetting(key, value)
+---Handle property writing with auto-save
+---@param key string Property name
+---@param value any Property value
+function MinifluxSettings:__newindex(key, value)
+    -- Handle settings
+    if DEFAULTS[key] ~= nil then
+        self.settings:saveSetting(key, value)
+    else
+        -- For unknown keys, set them directly on the object
+        rawset(self, key, value)
+    end
 end
 
----Writes settings to disk.
+-- =============================================================================
+-- UTILITY METHODS
+-- =============================================================================
+
+---Explicitly save settings to disk
 ---@return nil
 function MinifluxSettings:save()
     self.settings:flush()
 end
 
--- =============================================================================
--- SERVER SETTINGS
--- =============================================================================
-
----Get the configured server address
----@return string Server address
-function MinifluxSettings:getServerAddress()
-    return self:get("server_address", DEFAULTS.server_address)
-end
-
----Set the server address
----@param address string Server address URL
-function MinifluxSettings:setServerAddress(address)
-    self:set("server_address", address)
-end
-
----Get the configured API token
----@return string API token
-function MinifluxSettings:getApiToken()
-    return self:get("api_token", DEFAULTS.api_token)
-end
-
----Set the API token
----@param token string API authentication token
-function MinifluxSettings:setApiToken(token)
-    self:set("api_token", token)
-end
-
----Get the configured entries limit
----@return number Maximum number of entries to fetch
-function MinifluxSettings:getLimit()
-    return self:get("limit", DEFAULTS.limit)
-end
-
----Set the entries limit
----@param limit number|string Maximum number of entries to fetch (1-1000)
-function MinifluxSettings:setLimit(limit)
-    self:set("limit", limit)
-end
-
----Get the configured sort order
----@return string Sort order field
-function MinifluxSettings:getOrder()
-    return self:get("order", DEFAULTS.order)
-end
-
----Set the sort order
----@param order string Sort order field ("id", "status", "published_at", "category_title", "category_id")
-function MinifluxSettings:setOrder(order)
-    self:set("order", order)
-end
-
----Get the configured sort direction
----@return string Sort direction ("asc" or "desc")
-function MinifluxSettings:getDirection()
-    return self:get("direction", DEFAULTS.direction)
-end
-
----Set the sort direction
----@param direction string Sort direction ("asc" or "desc")
-function MinifluxSettings:setDirection(direction)
-    self:set("direction", direction)
-end
-
----Get the hide read entries setting
----@return boolean True if read entries should be hidden
-function MinifluxSettings:getHideReadEntries()
-    return self:get("hide_read_entries", DEFAULTS.hide_read_entries)
-end
-
----Toggle the hide read entries setting
+---Toggle hide read entries setting
 ---@return boolean New value after toggle
 function MinifluxSettings:toggleHideReadEntries()
-    return self.settings:toggle("hide_read_entries"):readSetting("hide_read_entries")
-end
-
----Get the include images setting
----@return boolean True if images should be downloaded with entries
-function MinifluxSettings:getIncludeImages()
-    return self:get("include_images", DEFAULTS.include_images)
-end
-
----Set the include images setting
----@param include boolean Whether to download images with entries
-function MinifluxSettings:setIncludeImages(include)
-    self:set("include_images", include)
+    local new_value = not self.hide_read_entries
+    self.hide_read_entries = new_value
+    return new_value
 end
 
 return MinifluxSettings 

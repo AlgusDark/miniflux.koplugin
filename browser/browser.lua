@@ -151,7 +151,7 @@ function MinifluxBrowser:showFeeds(paths_updated, page_info)
     end
     
     local menu_items = self.data:feedsToMenuItems(feeds, counters)
-    local hide_read = self.settings:getHideReadEntries()
+    local hide_read = self.settings.hide_read_entries
     local subtitle = self:buildSubtitle(#feeds, hide_read, false, "feeds")
     
     self.current_context = { type = "feeds" }
@@ -170,7 +170,7 @@ function MinifluxBrowser:showCategories(paths_updated, page_info)
     end
     
     local menu_items = self.data:categoriesToMenuItems(categories)
-    local hide_read = self.settings:getHideReadEntries()
+    local hide_read = self.settings.hide_read_entries
     local subtitle = self:buildSubtitle(#categories, hide_read, false, "categories")
     
     self.current_context = { type = "categories" }
@@ -189,7 +189,7 @@ function MinifluxBrowser:showFeedEntries(feed_id, feed_title, paths_updated)
     end
     
     local menu_items = self.data:entriesToMenuItems(entries, false) -- don't show feed names
-    local hide_read = self.settings:getHideReadEntries()
+    local hide_read = self.settings.hide_read_entries
     local subtitle = self:buildSubtitle(#entries, hide_read, false, "entries")
     
     self.current_context = { 
@@ -217,7 +217,7 @@ function MinifluxBrowser:showCategoryEntries(category_id, category_title, paths_
     end
     
     local menu_items = self.data:entriesToMenuItems(entries, true) -- show feed names
-    local hide_read = self.settings:getHideReadEntries()
+    local hide_read = self.settings.hide_read_entries
     local subtitle = self:buildSubtitle(#entries, hide_read, false, "entries")
     
     self.current_context = { 
@@ -257,7 +257,7 @@ end
 
 function MinifluxBrowser:showMainContent()
     local main_items = self:generateMainMenu()
-    local hide_read = self.settings and self.settings:getHideReadEntries()
+    local hide_read = self.settings and self.settings.hide_read_entries
     local subtitle = hide_read and "⊘ " or "◯ "
     
     self.current_context = { type = "main" }
@@ -379,7 +379,7 @@ end
 -- =============================================================================
 
 function MinifluxBrowser:showConfigDialog()
-    if not self.settings or not self.settings.getHideReadEntries then
+    if not self.settings then
         UIComponents.showErrorMessage(_("Settings not available"))
         return
     end
@@ -391,7 +391,7 @@ function MinifluxBrowser:showConfigDialog()
     
     -- Show toggle only for non-unread entry views
     if is_entry_view and not is_unread_view then
-        local hide_read = self.settings:getHideReadEntries()
+        local hide_read = self.settings.hide_read_entries
         local eye_icon = hide_read and "◯ " or "⊘ "
         local button_text = eye_icon .. (hide_read and _("Show all entries") or _("Show only unread entries"))
         

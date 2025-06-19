@@ -148,7 +148,7 @@ function EntryUtils.downloadEntry(params)
     end
     
     -- Check if images should be included
-    local include_images = settings:getIncludeImages()
+    local include_images = settings.include_images
     
     progress:update(_("Scanning for images…"))
     
@@ -523,12 +523,12 @@ end
 -- Get API options based on settings (moved from NavigationUtils)
 local function getNavigationApiOptions(settings)
     local options = {
-        limit = settings:getLimit(),
-        order = settings:getOrder(),
-        direction = settings:getDirection(),
+        limit = settings.limit,
+        order = settings.order,
+        direction = settings.direction,
     }
     
-    local hide_read_entries = settings:getHideReadEntries()
+    local hide_read_entries = settings.hide_read_entries
     if hide_read_entries then
         options.status = {"unread"}
     else
@@ -562,8 +562,8 @@ function EntryUtils.navigateToPreviousEntry(entry_info)
     
     local api_success, api = pcall(function()
         return MinifluxAPI:new({
-            server_address = settings:getServerAddress(),
-            api_token = settings:getApiToken()
+            server_address = settings.server_address,
+            api_token = settings.api_token
         })
     end)
     
@@ -635,7 +635,7 @@ function EntryUtils.navigateToPreviousEntry(entry_info)
     options.direction = "asc"
     options.published_after = published_unix
     options.limit = 1
-    options.order = settings:getOrder()
+    options.order = settings.order
     
     local success, result = api.entries:getEntries(options)
     UIManager:close(loading_info)
@@ -666,7 +666,7 @@ function EntryUtils.navigateToPreviousEntry(entry_info)
             global_options.direction = "asc"
             global_options.published_after = published_unix
             global_options.limit = 1
-            global_options.order = settings:getOrder()
+            global_options.order = settings.order
             
             success, result = api.entries:getEntries(global_options)
             
@@ -708,8 +708,8 @@ function EntryUtils.navigateToNextEntry(entry_info)
     
     local api_success, api = pcall(function()
         return MinifluxAPI:new({
-            server_address = settings:getServerAddress(),
-            api_token = settings:getApiToken()
+            server_address = settings.server_address,
+            api_token = settings.api_token
         })
     end)
     
@@ -781,7 +781,7 @@ function EntryUtils.navigateToNextEntry(entry_info)
     options.direction = "desc"
     options.published_before = published_unix
     options.limit = 1
-    options.order = settings:getOrder()
+    options.order = settings.order
     
     local success, result = api.entries:getEntries(options)
     UIManager:close(loading_info)
@@ -812,7 +812,7 @@ function EntryUtils.navigateToNextEntry(entry_info)
             global_options.direction = "desc"
             global_options.published_before = published_unix
             global_options.limit = 1
-            global_options.order = settings:getOrder()
+            global_options.order = settings.order
             
             success, result = api.entries:getEntries(global_options)
             
@@ -855,8 +855,8 @@ function EntryUtils.downloadAndShowEntry(entry)
         local settings = getNavigationSettings()
         
         local api = MinifluxAPI:new({
-            server_address = settings:getServerAddress(),
-            api_token = settings:getApiToken()
+            server_address = settings.server_address,
+            api_token = settings.api_token
         })
         
         EntryUtils.downloadEntry({
@@ -905,8 +905,8 @@ function EntryUtils.markEntryAsRead(entry_info)
     
     local api_success, api = pcall(function()
         return MinifluxAPI:new({
-            server_address = settings:getServerAddress(),
-            api_token = settings:getApiToken()
+            server_address = settings.server_address,
+            api_token = settings.api_token
         })
     end)
     
@@ -986,8 +986,8 @@ function EntryUtils.markEntryAsUnread(entry_info)
     
     local api_success, api = pcall(function()
         return MinifluxAPI:new({
-            server_address = settings:getServerAddress(),
-            api_token = settings:getApiToken()
+            server_address = settings.server_address,
+            api_token = settings.api_token
         })
     end)
     
@@ -1175,8 +1175,8 @@ function EntryUtils.fetchAndShowEntry(entry_id)
     local fetch_success = pcall(function()
         local settings = getNavigationSettings()
         local api = MinifluxAPI:new({
-            server_address = settings:getServerAddress(),
-            api_token = settings:getApiToken()
+            server_address = settings.server_address,
+            api_token = settings.api_token
         })
         
         local success, result = api.entries:getEntry(entry_id)
