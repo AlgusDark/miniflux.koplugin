@@ -16,6 +16,7 @@ local socketutil = require("socketutil")
 local _ = require("gettext")
 local logger = require("logger")
 local utils = require("utils/utils")
+local util = require("util")
 
 -- Load specialized API modules
 local Entries = require("api/entries")
@@ -129,14 +130,36 @@ end
 ---@param method "GET"|"POST"|"PUT"|"DELETE" HTTP method to use
 ---@param endpoint string API endpoint path
 ---@param body? table Request body to encode as JSON
+---@param params? table Query parameters to append to URL
 ---@return boolean success, any result_or_error
-function MinifluxAPI:makeRequest(method, endpoint, body)
+function MinifluxAPI:makeRequest(method, endpoint, body, params)
     if not self.server_address or not self.api_token or
         self.server_address == "" or self.api_token == "" then
         return false, _("Server address and API token must be configured")
     end
 
     local url = self.base_url .. endpoint
+
+    -- Build query string from params
+    if params and next(params) then
+        local query_parts = {}
+        for key, value in pairs(params) do
+            if type(value) == "table" then
+                -- Handle array values (like status filters)
+                for _, v in ipairs(value) do
+                    local encoded_key = util.urlEncode(tostring(key))
+                    local encoded_value = util.urlEncode(tostring(v))
+                    table.insert(query_parts, encoded_key .. "=" .. encoded_value)
+                end
+            else
+                local encoded_key = util.urlEncode(tostring(key))
+                local encoded_value = util.urlEncode(tostring(value))
+                table.insert(query_parts, encoded_key .. "=" .. encoded_value)
+            end
+        end
+        url = url .. "?" .. table.concat(query_parts, "&")
+    end
+
     local headers = {
         ["X-Auth-Token"] = self.api_token,
         ["Content-Type"] = "application/json",
@@ -215,32 +238,38 @@ end
 
 ---Make a GET request
 ---@param endpoint string API endpoint path
+---@param config? table Configuration with optional query params
 ---@return boolean success, any result_or_error
-function MinifluxAPI:get(endpoint)
-    return self:makeRequest("GET", endpoint)
+function MinifluxAPI:get(endpoint, config)
+    config = config or {}
+    return self:makeRequest("GET", endpoint, nil, config.query)
 end
 
 ---Make a POST request
 ---@param endpoint string API endpoint path
----@param body? table Request body to encode as JSON
+---@param config? table Configuration with optional body and query params
 ---@return boolean success, any result_or_error
-function MinifluxAPI:post(endpoint, body)
-    return self:makeRequest("POST", endpoint, body)
+function MinifluxAPI:post(endpoint, config)
+    config = config or {}
+    return self:makeRequest("POST", endpoint, config.body, config.query)
 end
 
 ---Make a PUT request
 ---@param endpoint string API endpoint path
----@param body? table Request body to encode as JSON
+---@param config? table Configuration with optional body and query params
 ---@return boolean success, any result_or_error
-function MinifluxAPI:put(endpoint, body)
-    return self:makeRequest("PUT", endpoint, body)
+function MinifluxAPI:put(endpoint, config)
+    config = config or {}
+    return self:makeRequest("PUT", endpoint, config.body, config.query)
 end
 
 ---Make a DELETE request
 ---@param endpoint string API endpoint path
+---@param config? table Configuration with optional query params
 ---@return boolean success, any result_or_error
-function MinifluxAPI:delete(endpoint)
-    return self:makeRequest("DELETE", endpoint)
+function MinifluxAPI:delete(endpoint, config)
+    config = config or {}
+    return self:makeRequest("DELETE", endpoint, nil, config.query)
 end
 
 -- =============================================================================

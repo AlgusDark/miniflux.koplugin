@@ -204,7 +204,7 @@ function BrowserLauncher:fetchCategoriesCount(loading_info)
     -- Get categories count with error handling
     local categories_success, categories_result
     local categories_call_success = pcall(function()
-        categories_success, categories_result = self.api.categories:getCategories()
+        categories_success, categories_result = self.api.categories:getAll()
     end)
 
     -- Close the loading message before returning
