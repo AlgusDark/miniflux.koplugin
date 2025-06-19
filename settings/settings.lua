@@ -35,17 +35,16 @@ local DEFAULTS = {
 ---@field hide_read_entries boolean Whether to hide read entries
 ---@field include_images boolean Whether to include images
 local MinifluxSettings = {}
-MinifluxSettings.__index = MinifluxSettings
 
 ---Create a new MinifluxSettings instance
 ---@return MinifluxSettings
 function MinifluxSettings:new()
-    local self = {
+    local instance = {
         settings = LuaSettings:open(DataStorage:getSettingsDir() .. "/miniflux.lua")
     }
     
-    setmetatable(self, MinifluxSettings)
-    return self
+    setmetatable(instance, self)
+    return instance
 end
 
 -- =============================================================================
