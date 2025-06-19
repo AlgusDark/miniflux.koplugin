@@ -61,10 +61,6 @@ local function buildQueryParams(options)
         params.feed_id = options.feed_id
     end
 
-    if options.starred then
-        params.starred = "true"
-    end
-
     if options.published_before then
         params.published_before = options.published_before
     end

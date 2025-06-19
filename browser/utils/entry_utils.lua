@@ -12,7 +12,6 @@ with KOReader. It delegates specialized tasks to focused utility modules.
 ---@field title string Entry title
 ---@field url? string Entry URL
 ---@field status string Entry status ("read" or "unread")
----@field starred boolean Whether entry is starred/bookmarked
 ---@field published_at? string Publication timestamp
 ---@field images_included boolean Whether images were downloaded
 ---@field images_count number Number of images processed
@@ -303,7 +302,6 @@ function EntryUtils:createEntryMetadata(params)
 
         -- Entry status and properties
         status = entry.status,
-        starred = entry.starred,
         published_at = entry.published_at,
 
         -- Image processing results (minimal info)

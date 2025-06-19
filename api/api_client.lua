@@ -37,7 +37,6 @@ local Categories = require("api/categories")
 ---@field status? EntryStatus[] Entry status filter
 ---@field category_id? number Filter by category ID
 ---@field feed_id? number Filter by feed ID
----@field starred? boolean Filter by starred status
 ---@field published_before? number Filter entries published before this timestamp
 ---@field published_after? number Filter entries published after this timestamp
 
@@ -67,7 +66,6 @@ local Categories = require("api/categories")
 ---@field url? string Entry URL
 ---@field published_at? string Publication timestamp
 ---@field status string Entry status: "read", "unread", "removed"
----@field starred boolean Whether entry is bookmarked/starred
 ---@field feed? MinifluxFeed Feed information
 
 ---@class MinifluxAPI
