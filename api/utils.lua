@@ -1,8 +1,8 @@
 --[[--
 Consolidated Utils Module
 
-This utility module combines query building and request helpers into a single
-module to eliminate duplication and simplify the API structure.
+This utility module provides query building and higher-level request helpers
+for the Miniflux API. Basic HTTP methods are now part of the API client.
 
 @module koplugin.miniflux.api.utils
 --]] --
@@ -144,42 +144,8 @@ function Utils.buildNavigationQuery(entry_id, direction, options)
 end
 
 -- =============================================================================
--- REQUEST HELPER FUNCTIONS
+-- HIGHER-LEVEL REQUEST HELPER FUNCTIONS
 -- =============================================================================
-
----Make a simple GET request
----@param api MinifluxAPI API client instance
----@param endpoint string API endpoint path
----@return boolean success, any result_or_error
-function Utils.get(api, endpoint)
-    return api:makeRequest("GET", endpoint)
-end
-
----Make a simple PUT request
----@param api MinifluxAPI API client instance
----@param endpoint string API endpoint path
----@param body? table Request body
----@return boolean success, any result_or_error
-function Utils.put(api, endpoint, body)
-    return api:makeRequest("PUT", endpoint, body)
-end
-
----Make a simple POST request
----@param api MinifluxAPI API client instance
----@param endpoint string API endpoint path
----@param body? table Request body
----@return boolean success, any result_or_error
-function Utils.post(api, endpoint, body)
-    return api:makeRequest("POST", endpoint, body)
-end
-
----Make a simple DELETE request
----@param api MinifluxAPI API client instance
----@param endpoint string API endpoint path
----@return boolean success, any result_or_error
-function Utils.delete(api, endpoint)
-    return api:makeRequest("DELETE", endpoint)
-end
 
 ---Get entries with query options
 ---@param api MinifluxAPI API client instance
@@ -189,17 +155,7 @@ end
 function Utils.getEntriesWithOptions(api, base_endpoint, options)
     local query_string = Utils.buildFromOptions(options)
     local endpoint = base_endpoint .. query_string
-    return api:makeRequest("GET", endpoint)
-end
-
----Get resource by ID
----@param api MinifluxAPI API client instance
----@param base_endpoint string Base endpoint path (e.g., "/entries", "/feeds")
----@param resource_id number Resource ID
----@return boolean success, any result_or_error
-function Utils.getById(api, base_endpoint, resource_id)
-    local endpoint = base_endpoint .. "/" .. tostring(resource_id)
-    return api:makeRequest("GET", endpoint)
+    return api:get(endpoint)
 end
 
 ---Mark entries with status
@@ -213,7 +169,7 @@ function Utils.markEntries(api, entry_ids, status)
         entry_ids = ids_array,
         status = status,
     }
-    return api:makeRequest("PUT", "/entries", body)
+    return api:put("/entries", body)
 end
 
 ---Get entries for a resource (feed or category) with options
@@ -247,7 +203,7 @@ end
 ---@return boolean success, any result_or_error
 function Utils.markResourceAsRead(api, resource_type, resource_id)
     local endpoint = "/" .. resource_type .. "/" .. tostring(resource_id) .. "/mark-all-as-read"
-    return api:makeRequest("PUT", endpoint)
+    return api:put(endpoint)
 end
 
 return Utils

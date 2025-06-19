@@ -5,7 +5,7 @@ This module handles all category-related operations including category listing,
 category entries retrieval, and category management.
 
 @module koplugin.miniflux.api.categories
---]]--
+--]] --
 
 local Utils = require("api/utils")
 
@@ -37,21 +37,21 @@ function Categories:getCategories(include_counts)
     if include_counts then
         endpoint = endpoint .. "?counts=true"
     end
-    return Utils.get(self.api, endpoint)
+    return self.api:get(endpoint)
 end
 
 ---Get a specific category by ID
 ---@param category_id number The category ID
 ---@return boolean success, MinifluxCategory|string result_or_error
 function Categories:getCategory(category_id)
-    return Utils.getById(self.api, "/categories", category_id)
+    return self.api:get("/categories/" .. tostring(category_id))
 end
 
 ---Get feeds in a specific category
 ---@param category_id number The category ID
 ---@return boolean success, MinifluxFeed[]|string result_or_error
 function Categories:getFeeds(category_id)
-    return Utils.get(self.api, "/categories/" .. tostring(category_id) .. "/feeds")
+    return self.api:get("/categories/" .. tostring(category_id) .. "/feeds")
 end
 
 -- =============================================================================
@@ -71,7 +71,7 @@ end
 ---@param options? ApiOptions Query options for filtering and sorting
 ---@return boolean success, EntriesResponse|string result_or_error
 function Categories:getUnreadEntries(category_id, options)
-    return Utils.getResourceEntriesByStatus(self.api, "categories", category_id, {"unread"}, options)
+    return Utils.getResourceEntriesByStatus(self.api, "categories", category_id, { "unread" }, options)
 end
 
 ---Get read entries for a specific category (convenience method)
@@ -79,7 +79,7 @@ end
 ---@param options? ApiOptions Query options for filtering and sorting
 ---@return boolean success, EntriesResponse|string result_or_error
 function Categories:getReadEntries(category_id, options)
-    return Utils.getResourceEntriesByStatus(self.api, "categories", category_id, {"read"}, options)
+    return Utils.getResourceEntriesByStatus(self.api, "categories", category_id, { "read" }, options)
 end
 
 ---Mark all entries in a category as read
@@ -100,7 +100,7 @@ function Categories:create(title)
     local body = {
         title = title
     }
-    return Utils.post(self.api, "/categories", body)
+    return self.api:post("/categories", body)
 end
 
 ---Update a category
@@ -111,16 +111,14 @@ function Categories:update(category_id, title)
     local body = {
         title = title
     }
-    return Utils.put(self.api, "/categories/" .. tostring(category_id), body)
+    return self.api:put("/categories/" .. tostring(category_id), body)
 end
 
 ---Delete a category
 ---@param category_id number The category ID
 ---@return boolean success, any result_or_error
 function Categories:delete(category_id)
-    return Utils.delete(self.api, "/categories/" .. tostring(category_id))
+    return self.api:delete("/categories/" .. tostring(category_id))
 end
 
-
-
-return Categories 
+return Categories

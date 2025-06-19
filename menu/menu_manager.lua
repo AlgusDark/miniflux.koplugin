@@ -13,7 +13,7 @@ local MultiInputDialog = require("ui/widget/multiinputdialog")
 local UIManager = require("ui/uimanager")
 local _ = require("gettext")
 local T = require("ffi/util").template
-local MinifluxAPI = require("api/miniflux_api")
+local MinifluxAPI = require("api/api_client")
 
 ---@class MenuManager
 ---@field browser_launcher BrowserLauncher Browser launcher instance

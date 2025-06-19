@@ -15,7 +15,7 @@ local Dispatcher = require("dispatcher")
 local _ = require("gettext")
 
 -- Import specialized modules
-local MinifluxAPI = require("api/miniflux_api")
+local MinifluxAPI = require("api/api_client")
 local MinifluxSettings = require("settings/settings")
 local BrowserLauncher = require("browser/browser_launcher")
 local MenuManager = require("menu/menu_manager")

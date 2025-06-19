@@ -2,10 +2,10 @@
 Miniflux API Client
 
 This is the main API client that handles HTTP communication and coordinates
-with specialized API modules. It consolidates the functionality from base_client
-and api_client into a single, more maintainable class.
+with specialized API modules. It provides convenient HTTP methods and manages
+the connection to the Miniflux server.
 
-@module koplugin.miniflux.api.miniflux_api
+@module koplugin.miniflux.api.api_client
 --]] --
 
 local http = require("socket.http")
@@ -22,9 +22,7 @@ local Entries = require("api/entries")
 local Feeds = require("api/feeds")
 local Categories = require("api/categories")
 
----@alias HttpMethod "GET"|"POST"|"PUT"|"DELETE"
 ---@alias EntryStatus "read"|"unread"|"removed"
----@alias SortOrder "id"|"status"|"published_at"|"category_title"|"category_id"
 ---@alias SortDirection "asc"|"desc"
 
 ---@class MinifluxConfig
@@ -33,7 +31,7 @@ local Categories = require("api/categories")
 
 ---@class ApiOptions
 ---@field limit? number Maximum number of entries to return
----@field order? SortOrder Field to sort by
+---@field order? "id"|"status"|"published_at"|"category_title"|"category_id" Field to sort by
 ---@field direction? SortDirection Sort direction
 ---@field status? EntryStatus[] Entry status filter
 ---@field category_id? number Filter by category ID
@@ -102,7 +100,7 @@ function MinifluxAPI:new(config)
 end
 
 -- =============================================================================
--- HTTP CLIENT FUNCTIONALITY (Consolidated from base_client)
+-- CONFIGURATION MANAGEMENT
 -- =============================================================================
 
 ---Update the API configuration with new server address and/or API token
@@ -123,8 +121,12 @@ function MinifluxAPI:updateConfig(config)
     end
 end
 
+-- =============================================================================
+-- PRIMITIVE HTTP CLIENT
+-- =============================================================================
+
 ---Make an HTTP request to the API
----@param method HttpMethod HTTP method to use
+---@param method "GET"|"POST"|"PUT"|"DELETE" HTTP method to use
 ---@param endpoint string API endpoint path
 ---@param body? table Request body to encode as JSON
 ---@return boolean success, any result_or_error
@@ -207,10 +209,48 @@ function MinifluxAPI:makeRequest(method, endpoint, body)
     end
 end
 
+-- =============================================================================
+-- HTTP METHODS
+-- =============================================================================
+
+---Make a GET request
+---@param endpoint string API endpoint path
+---@return boolean success, any result_or_error
+function MinifluxAPI:get(endpoint)
+    return self:makeRequest("GET", endpoint)
+end
+
+---Make a POST request
+---@param endpoint string API endpoint path
+---@param body? table Request body to encode as JSON
+---@return boolean success, any result_or_error
+function MinifluxAPI:post(endpoint, body)
+    return self:makeRequest("POST", endpoint, body)
+end
+
+---Make a PUT request
+---@param endpoint string API endpoint path
+---@param body? table Request body to encode as JSON
+---@return boolean success, any result_or_error
+function MinifluxAPI:put(endpoint, body)
+    return self:makeRequest("PUT", endpoint, body)
+end
+
+---Make a DELETE request
+---@param endpoint string API endpoint path
+---@return boolean success, any result_or_error
+function MinifluxAPI:delete(endpoint)
+    return self:makeRequest("DELETE", endpoint)
+end
+
+-- =============================================================================
+-- CONNECTION TESTING
+-- =============================================================================
+
 ---Test connection to the Miniflux server
 ---@return boolean success, string message
 function MinifluxAPI:testConnection()
-    local success, result = self:makeRequest("GET", "/me")
+    local success, result = self:get("/me")
     if success then
         return true, _("Connection successful! Logged in as: ") .. result.username
     else

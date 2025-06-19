@@ -40,7 +40,7 @@ end
 ---@param entry_id number The entry ID
 ---@return boolean success, MinifluxEntry|string result_or_error
 function Entries:getEntry(entry_id)
-    return Utils.getById(self.api, "/entries", entry_id)
+    return self.api:get("/entries/" .. tostring(entry_id))
 end
 
 ---Get unread entries (convenience method)
@@ -97,7 +97,7 @@ end
 ---@param entry_id number The entry ID to toggle bookmark
 ---@return boolean success, any result_or_error
 function Entries:toggleBookmark(entry_id)
-    return Utils.put(self.api, "/entries/" .. tostring(entry_id) .. "/bookmark")
+    return self.api:put("/entries/" .. tostring(entry_id) .. "/bookmark")
 end
 
 -- =============================================================================
@@ -111,7 +111,7 @@ end
 function Entries:getPrevious(entry_id, options)
     local query_string = Utils.buildNavigationQuery(entry_id, "before", options)
     local endpoint = "/entries" .. query_string
-    return self.api:makeRequest("GET", endpoint)
+    return self.api:get(endpoint)
 end
 
 ---Get the entry after a given entry ID
@@ -121,7 +121,7 @@ end
 function Entries:getNext(entry_id, options)
     local query_string = Utils.buildNavigationQuery(entry_id, "after", options)
     local endpoint = "/entries" .. query_string
-    return self.api:makeRequest("GET", endpoint)
+    return self.api:get(endpoint)
 end
 
 return Entries
