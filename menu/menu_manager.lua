@@ -261,6 +261,7 @@ function MenuManager:showLimitSettings(refresh_callback)
         },
     }
     UIManager:show(limit_dialog)
+    limit_dialog:onShowKeyboard()
 end
 
 ---Test connection to Miniflux server
