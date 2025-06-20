@@ -1,8 +1,12 @@
 --[[--
-Miniflux Browser - Consolidated Implementation
+Miniflux Browser - Main Coordinator
 
-Single-file browser that handles all browsing functionality for Miniflux.
-Combines what was previously split across 10+ files into one maintainable module.
+Browser component that coordinates between various services to provide a unified
+browsing experience for Miniflux. Delegates specific responsibilities to:
+- ViewService: Content display and view state management
+- PathService: Navigation path management and back button logic
+- DialogService: User dialog interactions (via EntryUtils)
+- NavigationService: Complex entry navigation logic (via EntryUtils)
 
 @module miniflux.browser.browser
 --]] --
@@ -14,6 +18,8 @@ local MenuBuilder = require("browser/menu_builder")
 local EntryUtils = require("browser/utils/entry_utils")
 local NavigationContext = require("utils/navigation_context")
 local UIComponents = require("utils/ui_components")
+local ViewService = require("services/view_service")
+local PathService = require("services/path_service")
 local _ = require("gettext")
 
 ---@class MinfluxBrowser : Menu
@@ -21,6 +27,10 @@ local _ = require("gettext")
 ---@field unread_count number|nil Number of unread entries
 ---@field feeds_count number|nil Number of feeds
 ---@field categories_count number|nil Number of categories
+---@field view_service ViewService Service handling content display and view state
+---@field path_service PathService Service handling navigation paths and back button
+---@field entry_utils EntryUtils Utility handling entry display and dialog management
+---@field data MenuBuilder Data layer for menu item generation
 local MinifluxBrowser = Menu:extend {
     title_shrink_font_to_fit = true,
     is_popout = false,
@@ -47,6 +57,13 @@ function MinifluxBrowser:init()
 
     -- Initialize EntryUtils instance with settings dependency
     self.entry_utils = EntryUtils:new(self.settings)
+
+    -- Initialize ViewService
+    self.view_service = ViewService:new(self, self.data, self.settings)
+
+    -- Initialize PathService and wire it up
+    self.path_service = PathService:new(self, self.view_service)
+    self.view_service:setPathService(self.path_service)
 
     -- Navigation state
     self.navigation_paths = {}
@@ -99,20 +116,20 @@ function MinifluxBrowser:onMenuSelect(item)
     end
 
     if item.action_type == "unread" then
-        self:showUnreadEntries()
+        self.view_service:showUnreadEntries()
     elseif item.action_type == "feeds" then
-        self:showFeeds()
+        self.view_service:showFeeds()
     elseif item.action_type == "categories" then
-        self:showCategories()
+        self.view_service:showCategories()
     elseif item.action_type == "feed_entries" then
         local feed_data = item.feed_data
         if feed_data and feed_data.id and feed_data.title then
-            self:showFeedEntries(feed_data.id, feed_data.title)
+            self.view_service:showFeedEntries(feed_data.id, feed_data.title)
         end
     elseif item.action_type == "category_entries" then
         local category_data = item.category_data
         if category_data and category_data.id and category_data.title then
-            self:showCategoryEntries(category_data.id, category_data.title)
+            self.view_service:showCategoryEntries(category_data.id, category_data.title)
         end
     elseif item.action_type == "read_entry" then
         local entry_data = item.entry_data
@@ -123,119 +140,8 @@ function MinifluxBrowser:onMenuSelect(item)
 end
 
 -- =============================================================================
--- CONTENT DISPLAY METHODS
+-- CONTENT DISPLAY METHODS (delegated to ViewService)
 -- =============================================================================
-
-function MinifluxBrowser:showUnreadEntries(paths_updated)
-    local loading_info = UIComponents.showLoadingMessage(_("Fetching unread entries..."))
-
-    local entries = self.data:getUnreadEntries()
-    UIComponents.closeLoadingMessage(loading_info)
-
-    if not entries then
-        return
-    end
-
-    local menu_items = self.data:entriesToMenuItems(entries, true) -- show feed names
-    local subtitle = self:buildSubtitle(#entries, false, true)     -- unread only
-
-    self.current_context = { type = "unread_entries" }
-    self:updateBrowser(_("Unread Entries"), menu_items, subtitle, self:createNavData(paths_updated, "main"))
-end
-
-function MinifluxBrowser:showFeeds(paths_updated, page_info)
-    local loading_info = UIComponents.showLoadingMessage(_("Fetching feeds..."))
-
-    local feeds, counters = self.data:getFeedsWithCounters()
-    UIComponents.closeLoadingMessage(loading_info)
-
-    if not feeds then
-        return
-    end
-
-    local menu_items = self.data:feedsToMenuItems(feeds, counters)
-    local hide_read = self.settings.hide_read_entries
-    local subtitle = self:buildSubtitle(#feeds, hide_read, false, "feeds")
-
-    self.current_context = { type = "feeds" }
-    local nav_data = self:createNavData(paths_updated, "main", nil, page_info)
-    self:updateBrowser(_("Feeds"), menu_items, subtitle, nav_data)
-end
-
-function MinifluxBrowser:showCategories(paths_updated, page_info)
-    local loading_info = UIComponents.showLoadingMessage(_("Fetching categories..."))
-
-    local categories = self.data:getCategories()
-    UIComponents.closeLoadingMessage(loading_info)
-
-    if not categories then
-        return
-    end
-
-    local menu_items = self.data:categoriesToMenuItems(categories)
-    local hide_read = self.settings.hide_read_entries
-    local subtitle = self:buildSubtitle(#categories, hide_read, false, "categories")
-
-    self.current_context = { type = "categories" }
-    local nav_data = self:createNavData(paths_updated, "main", nil, page_info)
-    self:updateBrowser(_("Categories"), menu_items, subtitle, nav_data)
-end
-
-function MinifluxBrowser:showFeedEntries(feed_id, feed_title, paths_updated)
-    local loading_info = UIComponents.showLoadingMessage(_("Fetching feed entries..."))
-
-    local entries = self.data:getFeedEntries(feed_id)
-    UIComponents.closeLoadingMessage(loading_info)
-
-    if not entries then
-        return
-    end
-
-    local menu_items = self.data:entriesToMenuItems(entries, false) -- don't show feed names
-    local hide_read = self.settings.hide_read_entries
-    local subtitle = self:buildSubtitle(#entries, hide_read, false, "entries")
-
-    self.current_context = {
-        type = "feed_entries",
-        feed_id = feed_id,
-        feed_title = feed_title
-    }
-
-    local nav_data = self:createNavData(paths_updated, "feeds", {
-        feed_id = feed_id,
-        feed_title = feed_title
-    })
-
-    self:updateBrowser(feed_title, menu_items, subtitle, nav_data)
-end
-
-function MinifluxBrowser:showCategoryEntries(category_id, category_title, paths_updated)
-    local loading_info = UIComponents.showLoadingMessage(_("Fetching category entries..."))
-
-    local entries = self.data:getCategoryEntries(category_id)
-    UIComponents.closeLoadingMessage(loading_info)
-
-    if not entries then
-        return
-    end
-
-    local menu_items = self.data:entriesToMenuItems(entries, true) -- show feed names
-    local hide_read = self.settings.hide_read_entries
-    local subtitle = self:buildSubtitle(#entries, hide_read, false, "entries")
-
-    self.current_context = {
-        type = "category_entries",
-        category_id = category_id,
-        category_title = category_title
-    }
-
-    local nav_data = self:createNavData(paths_updated, "categories", {
-        category_id = category_id,
-        category_title = category_title
-    })
-
-    self:updateBrowser(category_title, menu_items, subtitle, nav_data)
-end
 
 function MinifluxBrowser:openEntry(entry_data)
     -- Set navigation context directly using NavigationContext
@@ -259,122 +165,23 @@ function MinifluxBrowser:openEntry(entry_data)
 end
 
 function MinifluxBrowser:showMainContent()
-    local main_items = self:generateMainMenu()
-    local hide_read = self.settings and self.settings.hide_read_entries
-    local subtitle = hide_read and "⊘ " or "◯ "
-
-    self.current_context = { type = "main" }
-    self:updateBrowser(_("Miniflux"), main_items, subtitle, { paths_updated = true })
+    self.view_service:showMainContent()
 end
 
 -- =============================================================================
--- NAVIGATION MANAGEMENT
+-- NAVIGATION MANAGEMENT (delegated to PathService)
 -- =============================================================================
 
 function MinifluxBrowser:createNavData(paths_updated, parent_type, current_data, page_info)
-    local nav_data = {
-        paths_updated = paths_updated or false,
-        current_type = parent_type,
-        current_data = current_data,
-    }
-
-    -- Capture current page info for back navigation
-    if not paths_updated then
-        nav_data.page_info = {
-            page = self.page or 1,
-            perpage = self.perpage or 20,
-        }
-        nav_data.current_title = self.title
-    end
-
-    -- Add page restoration if provided
-    if page_info then
-        nav_data.restore_page_info = page_info
-    end
-
-    return nav_data
-end
-
-function MinifluxBrowser:updateBrowser(title, items, subtitle, nav_data)
-    -- Handle navigation paths
-    if nav_data and not nav_data.paths_updated then
-        -- Add current location to navigation history
-        local current_path = {
-            title = nav_data.current_title or self.title,
-            type = nav_data.current_type or "main",
-            page_info = nav_data.page_info,
-            nav_data = nav_data.current_data
-        }
-        table.insert(self.navigation_paths, current_path)
-    end
-
-    -- Update back navigation
-    self:updateBackButton()
-
-    -- Handle page restoration for back navigation
-    local select_number = 1
-    if nav_data and nav_data.restore_page_info then
-        local target_page = nav_data.restore_page_info.page
-        if target_page and target_page >= 1 then
-            local perpage = self.perpage or 20
-            select_number = (target_page - 1) * perpage + 1
-            if select_number > #items then
-                select_number = #items > 0 and #items or 1
-            end
-        end
-    end
-
-    -- Update browser content
-    self.title = title
-    self.subtitle = subtitle or ""
-    self:switchItemTable(title, items, select_number, nil, subtitle)
+    return self.path_service:createNavData(paths_updated, parent_type, current_data, page_info)
 end
 
 function MinifluxBrowser:updateBackButton()
-    if #self.navigation_paths > 0 then
-        self.onReturn = function()
-            return self:goBack()
-        end
-        -- Sync with Menu widget's paths for back button
-        if not self.paths then
-            self.paths = {}
-        end
-        while #self.paths < #self.navigation_paths do
-            table.insert(self.paths, true)
-        end
-    else
-        self.onReturn = nil
-        if self.paths then
-            self.paths = {}
-        end
-    end
-
-    -- Update page info to show/hide back button
-    if self.updatePageInfo then
-        pcall(function()
-            self:updatePageInfo()
-        end)
-    end
+    self.path_service:updateBackButton()
 end
 
 function MinifluxBrowser:goBack()
-    if #self.navigation_paths == 0 then
-        return false
-    end
-
-    local target_path = table.remove(self.navigation_paths)
-
-    if target_path.type == "main" then
-        self:showMainContent()
-    elseif target_path.type == "categories" then
-        self:showCategories(true, target_path.page_info)
-    elseif target_path.type == "feeds" then
-        self:showFeeds(true, target_path.page_info)
-    else
-        self:showMainContent()
-    end
-
-    return true
+    return self.path_service:goBack()
 end
 
 -- =============================================================================
@@ -387,7 +194,7 @@ function MinifluxBrowser:showConfigDialog()
         return
     end
 
-    local is_entry_view = self:isInEntryView()
+    local is_entry_view = self.view_service:isInEntryView()
     local is_unread_view = self.current_context.type == "unread_entries"
 
     local buttons = {}
@@ -433,72 +240,12 @@ function MinifluxBrowser:toggleReadEntriesVisibility()
     UIComponents.showInfoMessage(message, 2)
 
     -- Refresh current view
-    self:refreshCurrentView()
-end
-
-function MinifluxBrowser:isInEntryView()
-    if not self.title then
-        return false
-    end
-
-    local main_titles = {
-        [_("Miniflux")] = true,
-        [_("Feeds")] = true,
-        [_("Categories")] = true
-    }
-
-    return not main_titles[self.title]
-end
-
-function MinifluxBrowser:refreshCurrentView()
-    local context = self.current_context
-    if not context or not context.type then
-        self:showMainContent()
-        return
-    end
-
-    if context.type == "main" then
-        self:showMainContent()
-    elseif context.type == "feeds" then
-        self:showFeeds(true)
-    elseif context.type == "categories" then
-        self:showCategories(true)
-    elseif context.type == "feed_entries" then
-        self:showFeedEntries(context.feed_id, context.feed_title, true)
-    elseif context.type == "category_entries" then
-        self:showCategoryEntries(context.category_id, context.category_title, true)
-    elseif context.type == "unread_entries" then
-        self:showUnreadEntries(true)
-    else
-        self:showMainContent()
-    end
+    self.view_service:refreshCurrentView()
 end
 
 -- =============================================================================
 -- UTILITIES
 -- =============================================================================
-
-function MinifluxBrowser:buildSubtitle(count, hide_read, is_unread_only, item_type)
-    if is_unread_only then
-        return "⊘ " .. count .. " " .. _("unread entries")
-    end
-
-    local icon = hide_read and "⊘ " or "◯ "
-
-    if item_type == "entries" then
-        if hide_read then
-            return icon .. count .. " " .. _("unread entries")
-        else
-            return icon .. count .. " " .. _("entries")
-        end
-    elseif item_type == "feeds" then
-        return icon .. count .. " " .. _("feeds")
-    elseif item_type == "categories" then
-        return icon .. count .. " " .. _("categories")
-    else
-        return icon .. count .. " " .. _("items")
-    end
-end
 
 function MinifluxBrowser:closeAll()
     if self.close_callback then
