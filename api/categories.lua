@@ -9,6 +9,11 @@ category entries retrieval, and category management.
 
 local apiUtils = require("api/utils")
 
+---@class MinifluxCategory
+---@field id number Category ID
+---@field title string Category title
+---@field total_unread? number Total unread entries in category
+
 ---@class Categories
 ---@field api MinifluxAPI Reference to the main API client
 local Categories = {}

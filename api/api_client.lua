@@ -23,51 +23,6 @@ local Entries = require("api/entries")
 local Feeds = require("api/feeds")
 local Categories = require("api/categories")
 
----@alias EntryStatus "read"|"unread"|"removed"
----@alias SortDirection "asc"|"desc"
-
----@class MinifluxConfig
----@field server_address string The Miniflux server address
----@field api_token string The API authentication token
-
----@class ApiOptions
----@field limit? number Maximum number of entries to return
----@field order? "id"|"status"|"published_at"|"category_title"|"category_id" Field to sort by
----@field direction? SortDirection Sort direction
----@field status? EntryStatus[] Entry status filter
----@field category_id? number Filter by category ID
----@field feed_id? number Filter by feed ID
----@field published_before? number Filter entries published before this timestamp
----@field published_after? number Filter entries published after this timestamp
-
----@class EntriesResponse
----@field entries MinifluxEntry[] Array of entries
----@field total? number Total number of entries available
-
----@class FeedCounters
----@field reads table<string, number> Read counts per feed ID
----@field unreads table<string, number> Unread counts per feed ID
-
----@class MinifluxCategory
----@field id number Category ID
----@field title string Category title
----@field total_unread? number Total unread entries in category
-
----@class MinifluxFeed
----@field id number Feed ID
----@field title string Feed title
----@field category_id? number Category ID this feed belongs to
-
----@class MinifluxEntry
----@field id number Entry ID
----@field title string Entry title
----@field content? string Entry content (HTML)
----@field summary? string Entry summary/excerpt
----@field url? string Entry URL
----@field published_at? string Publication timestamp
----@field status string Entry status: "read", "unread", "removed"
----@field feed? MinifluxFeed Feed information
-
 ---@class MinifluxAPI
 ---@field server_address string Server base URL
 ---@field api_token string API authentication token
@@ -76,6 +31,10 @@ local Categories = require("api/categories")
 ---@field feeds Feeds Feed operations module
 ---@field categories Categories Category operations module
 local MinifluxAPI = {}
+
+---@class MinifluxConfig
+---@field server_address string The Miniflux server address
+---@field api_token string The API authentication token
 
 ---Create a new API instance
 ---@param config MinifluxConfig Configuration table with server_address and api_token

@@ -9,6 +9,16 @@ main API client and uses its HTTP methods for communication.
 
 local apiUtils = require("api/utils")
 
+---@class MinifluxEntry
+---@field id number Entry ID
+---@field title string Entry title
+---@field content? string Entry content (HTML)
+---@field summary? string Entry summary/excerpt
+---@field url? string Entry URL
+---@field published_at? string Publication timestamp
+---@field status string Entry status: "read", "unread", "removed"
+---@field feed? MinifluxFeed Feed information
+
 ---@class Entries
 ---@field api MinifluxAPI Reference to the main API client
 local Entries = {}
@@ -26,56 +36,12 @@ function Entries:new(api)
 end
 
 -- =============================================================================
--- HELPER FUNCTIONS
+-- ENTRY OPERATIONS
 -- =============================================================================
 
----Build navigation query parameters
----@param entry_id number The reference entry ID
----@param direction string Either "before" or "after"
----@param options? ApiOptions Additional query options
----@return table Query parameters table
-local function buildNavigationParams(entry_id, direction, options)
-    local params = {}
-
-    -- Add navigation parameter
-    if direction == "before" then
-        params.before_entry_id = entry_id
-    elseif direction == "after" then
-        params.after_entry_id = entry_id
-    end
-
-    -- We only want 1 entry (the immediate previous/next)
-    params.limit = 1
-
-    -- Add other filter options if provided
-    if options then
-        if options.status then
-            params.status = options.status
-        end
-
-        if options.order then
-            params.order = options.order
-        end
-
-        if options.direction then
-            params.direction = options.direction
-        end
-
-        if options.category_id then
-            params.category_id = options.category_id
-        end
-
-        if options.feed_id then
-            params.feed_id = options.feed_id
-        end
-    end
-
-    return params
-end
-
--- =============================================================================
--- ENTRY CRUD OPERATIONS
--- =============================================================================
+---@class EntriesResponse
+---@field entries MinifluxEntry[] Array of entries
+---@field total? number Total number of entries available
 
 ---Get entries from the server
 ---@param options? ApiOptions Query options for filtering and sorting
@@ -98,15 +64,6 @@ end
 function Entries:getUnreadEntries(options)
     options = options or {}
     options.status = { "unread" }
-    return self:getEntries(options)
-end
-
----Get read entries (convenience method)
----@param options? ApiOptions Query options for filtering and sorting
----@return boolean success, EntriesResponse|string result_or_error
-function Entries:getReadEntries(options)
-    options = options or {}
-    options.status = { "read" }
     return self:getEntries(options)
 end
 
@@ -139,49 +96,6 @@ end
 ---@return boolean success, any result_or_error
 function Entries:markAsUnread(entry_id)
     return markEntries(self.api, entry_id, "unread")
-end
-
----Mark multiple entries as read
----@param entry_ids number[] Array of entry IDs to mark as read
----@return boolean success, any result_or_error
-function Entries:markMultipleAsRead(entry_ids)
-    return markEntries(self.api, entry_ids, "read")
-end
-
----Mark multiple entries as unread
----@param entry_ids number[] Array of entry IDs to mark as unread
----@return boolean success, any result_or_error
-function Entries:markMultipleAsUnread(entry_ids)
-    return markEntries(self.api, entry_ids, "unread")
-end
-
----Toggle bookmark status of an entry
----@param entry_id number The entry ID to toggle bookmark
----@return boolean success, any result_or_error
-function Entries:toggleBookmark(entry_id)
-    return self.api:put("/entries/" .. tostring(entry_id) .. "/bookmark")
-end
-
--- =============================================================================
--- ENTRY NAVIGATION
--- =============================================================================
-
----Get the entry before a given entry ID
----@param entry_id number The reference entry ID
----@param options? ApiOptions Query options for filtering and sorting
----@return boolean success, EntriesResponse|string result_or_error
-function Entries:getPrevious(entry_id, options)
-    local query_params = buildNavigationParams(entry_id, "before", options)
-    return self.api:get("/entries", { query = query_params })
-end
-
----Get the entry after a given entry ID
----@param entry_id number The reference entry ID
----@param options? ApiOptions Query options for filtering and sorting
----@return boolean success, EntriesResponse|string result_or_error
-function Entries:getNext(entry_id, options)
-    local query_params = buildNavigationParams(entry_id, "after", options)
-    return self.api:get("/entries", { query = query_params })
 end
 
 return Entries

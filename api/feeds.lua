@@ -9,6 +9,11 @@ feed entries retrieval, and feed statistics management.
 
 local apiUtils = require("api/utils")
 
+---@class MinifluxFeed
+---@field id number Feed ID
+---@field title string Feed title
+---@field category_id? number Category ID this feed belongs to
+
 ---@class Feeds
 ---@field api MinifluxAPI Reference to the main API client
 local Feeds = {}
@@ -34,6 +39,10 @@ end
 function Feeds:getAll()
     return self.api:get("/feeds")
 end
+
+---@class FeedCounters
+---@field reads table<string, number> Read counts per feed ID
+---@field unreads table<string, number> Unread counts per feed ID
 
 ---Get feed counters (read/unread counts)
 ---@return boolean success, FeedCounters|string result_or_error

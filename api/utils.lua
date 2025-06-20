@@ -8,6 +8,20 @@ This module contains shared utility functions used across the Miniflux API modul
 
 local apiUtils = {}
 
+
+---@alias EntryStatus "read"|"unread"|"removed"
+---@alias SortDirection "asc"|"desc"
+
+---@class ApiOptions
+---@field limit? number Maximum number of entries to return
+---@field order? "id"|"status"|"published_at"|"category_title"|"category_id" Field to sort by
+---@field direction? SortDirection Sort direction
+---@field status? EntryStatus[] Entry status filter
+---@field category_id? number Filter by category ID
+---@field feed_id? number Filter by feed ID
+---@field published_before? number Filter entries published before this timestamp
+---@field published_after? number Filter entries published after this timestamp
+
 ---Convert ApiOptions to query parameters
 ---@param options? ApiOptions Query options for filtering and sorting
 ---@return table Query parameters table
