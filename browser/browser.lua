@@ -10,7 +10,7 @@ Combines what was previously split across 10+ files into one maintainable module
 local Menu = require("ui/widget/menu")
 local UIManager = require("ui/uimanager")
 local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
-local BrowserData = require("browser/browser_data")
+local MenuBuilder = require("browser/menu_builder")
 local EntryUtils = require("browser/utils/entry_utils")
 local NavigationContext = require("utils/navigation_context")
 local UIComponents = require("utils/ui_components")
@@ -42,8 +42,8 @@ function MinifluxBrowser:init()
     self.api = self.api or {}
     self.download_dir = self.download_dir
 
-    -- Initialize data handler
-    self.data = BrowserData:new(self.api, self.settings)
+    -- Initialize menu builder
+    self.data = MenuBuilder:new(self.api, self.settings)
 
     -- Initialize EntryUtils instance with settings dependency
     self.entry_utils = EntryUtils:new(self.settings)

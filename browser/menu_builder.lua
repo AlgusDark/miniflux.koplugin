@@ -1,25 +1,25 @@
 --[[--
-Browser Data Handler - Consolidated Implementation
+Menu Builder for Miniflux Browser
 
-Single-file data handler that combines all data providers and related utilities.
-Handles all API calls and data formatting for the browser.
+This module handles menu item creation and data formatting for the browser.
+Fetches data from API and transforms it into menu structures for display.
 
-@module miniflux.browser.browser_data
+@module miniflux.browser.menu_builder
 --]] --
 
 local UIComponents = require("utils/ui_components")
 local _ = require("gettext")
 
----@class BrowserData
+---@class MenuBuilder
 ---@field api MinifluxAPI
 ---@field settings MinifluxSettings
-local BrowserData = {}
+local MenuBuilder = {}
 
----Create a new BrowserData instance
+---Create a new MenuBuilder instance
 ---@param api MinifluxAPI The API client instance
 ---@param settings MinifluxSettings The settings instance
----@return BrowserData
-function BrowserData:new(api, settings)
+---@return MenuBuilder
+function MenuBuilder:new(api, settings)
     local obj = {
         api = api,
         settings = settings
@@ -33,7 +33,7 @@ end
 -- API OPTIONS BUILDING
 -- =============================================================================
 
-function BrowserData:getApiOptions()
+function MenuBuilder:getApiOptions()
     local options = {
         limit = self.settings.limit,
         order = self.settings.order,
@@ -55,7 +55,7 @@ end
 -- DATA FETCHING METHODS
 -- =============================================================================
 
-function BrowserData:getUnreadEntries()
+function MenuBuilder:getUnreadEntries()
     local options = {
         status = { "unread" }, -- Always unread only for this view
         order = self.settings.order,
@@ -72,7 +72,7 @@ function BrowserData:getUnreadEntries()
     return result.entries or {}
 end
 
-function BrowserData:getFeedsWithCounters()
+function MenuBuilder:getFeedsWithCounters()
     -- Get feeds
     local success, feeds = self.api.feeds:getAll()
     if not success then
@@ -89,7 +89,7 @@ function BrowserData:getFeedsWithCounters()
     return feeds, counters
 end
 
-function BrowserData:getCategories()
+function MenuBuilder:getCategories()
     local success, categories = self.api.categories:getAll(true) -- include counts
     if not success then
         UIComponents.showErrorMessage(_("Failed to fetch categories: ") .. tostring(categories))
@@ -99,7 +99,7 @@ function BrowserData:getCategories()
     return categories
 end
 
-function BrowserData:getFeedEntries(feed_id)
+function MenuBuilder:getFeedEntries(feed_id)
     local options = self:getApiOptions()
     options.feed_id = feed_id
 
@@ -112,7 +112,7 @@ function BrowserData:getFeedEntries(feed_id)
     return result.entries or {}
 end
 
-function BrowserData:getCategoryEntries(category_id)
+function MenuBuilder:getCategoryEntries(category_id)
     local options = self:getApiOptions()
     options.category_id = category_id
 
@@ -126,10 +126,10 @@ function BrowserData:getCategoryEntries(category_id)
 end
 
 -- =============================================================================
--- DATA FORMATTING METHODS
+-- MENU ITEM BUILDING METHODS
 -- =============================================================================
 
-function BrowserData:entriesToMenuItems(entries, show_feed_names)
+function MenuBuilder:entriesToMenuItems(entries, show_feed_names)
     if not entries or #entries == 0 then
         local hide_read = self.settings.hide_read_entries
         return {
@@ -168,7 +168,7 @@ function BrowserData:entriesToMenuItems(entries, show_feed_names)
     return menu_items
 end
 
-function BrowserData:feedsToMenuItems(feeds, feed_counters)
+function MenuBuilder:feedsToMenuItems(feeds, feed_counters)
     local menu_items = {}
 
     for _, feed in ipairs(feeds) do
@@ -207,7 +207,7 @@ function BrowserData:feedsToMenuItems(feeds, feed_counters)
     return menu_items
 end
 
-function BrowserData:categoriesToMenuItems(categories)
+function MenuBuilder:categoriesToMenuItems(categories)
     local menu_items = {}
 
     for _, category in ipairs(categories) do
@@ -239,7 +239,7 @@ end
 -- SORTING UTILITIES
 -- =============================================================================
 
-function BrowserData:sortByUnreadCount(items)
+function MenuBuilder:sortByUnreadCount(items)
     table.sort(items, function(a, b)
         local a_unread = self:getUnreadCountFromItem(a)
         local b_unread = self:getUnreadCountFromItem(b)
@@ -263,7 +263,7 @@ function BrowserData:sortByUnreadCount(items)
     end)
 end
 
-function BrowserData:getUnreadCountFromItem(item)
+function MenuBuilder:getUnreadCountFromItem(item)
     -- Handle feeds (direct unread_count property)
     if item.unread_count then
         return item.unread_count
@@ -282,7 +282,7 @@ function BrowserData:getUnreadCountFromItem(item)
     return 0
 end
 
-function BrowserData:getTitleFromItem(item)
+function MenuBuilder:getTitleFromItem(item)
     -- Try category data first
     if item.category_data and item.category_data.title then
         return item.category_data.title
@@ -297,4 +297,4 @@ function BrowserData:getTitleFromItem(item)
     return item.text or ""
 end
 
-return BrowserData
+return MenuBuilder
