@@ -19,29 +19,25 @@ the end-of-entry dialog and navigation between entries.
 
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
-local lfs = require("libs/libkoreader-lfs")
 local _ = require("gettext")
-local T = require("ffi/util").template
 
 -- UI coordination imports
 local ReaderUI = require("apps/reader/readerui")
-local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
 
 -- Navigation functionality (for legacy navigation methods)
 local NavigationContext = require("utils/navigation_context")
 
--- Import the Entry entity and service
-local Entry = require("entities/entry/entry")
+-- Import services
 local EntryService = require("entities/entry/entry_service")
 local NavigationService = require("services/navigation_service")
-local MetadataLoader = require("utils/metadata_loader")
+local DialogService = require("services/dialog_service")
 
 ---@class EntryUtils UI coordination for entry operations and navigation
 ---@field settings MinifluxSettings Settings instance
 ---@field entry_service EntryService Entry service for business logic
 ---@field navigation_service NavigationService Navigation service for entry navigation
+---@field dialog_service DialogService Dialog service for end-of-entry dialogs
 ---@field _current_miniflux_entry table|nil Current entry info for dialogs
----@field _current_end_dialog table|nil Current end-of-entry dialog
 local EntryUtils = {}
 EntryUtils.__index = EntryUtils
 
@@ -53,8 +49,8 @@ function EntryUtils:new(settings)
         settings = settings,
         entry_service = EntryService:new(settings),
         navigation_service = NavigationService:new(settings),
+        dialog_service = DialogService:new(),
         _current_miniflux_entry = nil,
-        _current_end_dialog = nil,
     }
     setmetatable(instance, self)
     return instance
@@ -79,7 +75,7 @@ end
 ---@return nil
 function EntryUtils:openEntryFile(html_file)
     -- Close any existing EndOfBook dialog first (prevent stacking like OPDS pattern)
-    self:closeEndOfEntryDialog()
+    self.dialog_service:closeEndOfEntryDialog()
 
     -- Check if this is a miniflux entry by looking at the path
     local is_miniflux_entry = html_file:match("/miniflux/") ~= nil
@@ -116,7 +112,7 @@ function EntryUtils:openEntryFile(html_file)
     ReaderUI:showReader(html_file)
 end
 
----Show end of entry dialog with navigation options
+---Show end of entry dialog with navigation options (delegates to DialogService)
 ---@param params? table Optional parameters (kept for backward compatibility)
 ---@return nil
 function EntryUtils:showEndOfEntryDialog(params)
@@ -125,125 +121,15 @@ function EntryUtils:showEndOfEntryDialog(params)
         return
     end
 
-    -- Close any existing EndOfBook dialog first (prevent stacking)
-    self:closeEndOfEntryDialog()
-
-    -- Load entry metadata to check current status with error handling
-    local metadata = nil
-    local metadata_success = pcall(function()
-        metadata = MetadataLoader.loadCurrentEntryMetadata(current_entry)
-    end)
-
-    if not metadata_success then
-        -- If metadata loading fails, assume unread status
-        metadata = { status = "unread" }
-    end
-
-    -- Create Entry entity from metadata for business logic
-    local entry_status = metadata and metadata.status or "unread"
-    local entry = Entry:new({
-        id = current_entry.entry_id and tonumber(current_entry.entry_id),
-        status = entry_status
-    })
-
-    -- Use entity logic for button text and callback
-    local mark_button_text = entry:getToggleButtonText()
-    local mark_callback
-    if entry:isRead() then
-        mark_callback = function()
-            self:markEntryAsUnread(current_entry)
-        end
-    else
-        mark_callback = function()
-            self:markEntryAsRead(current_entry)
-        end
-    end
-
-    -- Create dialog and store reference for later cleanup with error handling
-    local dialog_success = pcall(function()
-        self._current_end_dialog = ButtonDialogTitle:new {
-            title = _("You've reached the end of the entry."),
-            title_align = "center",
-            buttons = {
-                {
-                    {
-                        text = _("← Previous"),
-                        callback = function()
-                            self:closeEndOfEntryDialog()
-                            pcall(function()
-                                self:navigateToPreviousEntry(current_entry)
-                            end)
-                        end,
-                    },
-                    {
-                        text = _("Next →"),
-                        callback = function()
-                            self:closeEndOfEntryDialog()
-                            pcall(function()
-                                self:navigateToNextEntry(current_entry)
-                            end)
-                        end,
-                    },
-                },
-                {
-                    {
-                        text = _("⚠ Delete local entry"),
-                        callback = function()
-                            self:closeEndOfEntryDialog()
-                            pcall(function()
-                                self:deleteLocalEntry(current_entry)
-                            end)
-                        end,
-                    },
-                    {
-                        text = mark_button_text,
-                        callback = function()
-                            self:closeEndOfEntryDialog()
-                            pcall(function()
-                                mark_callback()
-                            end)
-                        end,
-                    },
-                },
-                {
-                    {
-                        text = _("⌂ Miniflux folder"),
-                        callback = function()
-                            self:closeEndOfEntryDialog()
-                            pcall(function()
-                                self:openMinifluxFolder(current_entry)
-                            end)
-                        end,
-                    },
-                    {
-                        text = _("Cancel"),
-                        callback = function()
-                            self:closeEndOfEntryDialog()
-                        end,
-                    },
-                },
-            },
-        }
-
-        UIManager:show(self._current_end_dialog)
-    end)
-
-    if not dialog_success then
-        -- If dialog creation fails, show a simple error message
-        UIManager:show(InfoMessage:new {
-            text = _("Failed to create end of entry dialog"),
-            timeout = 3,
-        })
-    end
+    -- Delegate to DialogService for dialog creation and management
+    self.dialog_service:showEndOfEntryDialog(current_entry, self)
 end
 
----Close any existing EndOfEntry dialog
+---Close any existing EndOfEntry dialog (delegates to DialogService)
 ---@return nil
 function EntryUtils:closeEndOfEntryDialog()
-    if self._current_end_dialog then
-        UIManager:close(self._current_end_dialog)
-        self._current_end_dialog = nil
-    end
+    -- Delegate to DialogService for dialog lifecycle management
+    self.dialog_service:closeEndOfEntryDialog()
 end
 
 -- =============================================================================
