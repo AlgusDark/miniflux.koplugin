@@ -5,7 +5,7 @@ This utility module handles image discovery, downloading, and HTML processing
 for offline viewing of RSS entries with embedded images.
 
 @module miniflux.browser.utils.image_utils
---]]--
+--]] --
 
 local http = require("socket.http")
 local ltn12 = require("ltn12")
@@ -32,33 +32,33 @@ function ImageUtils.discoverImages(content, base_url)
     local images = {}
     local seen_images = {}
     local image_count = 0
-    
+
     -- Collect all images from HTML content
     local collectImg = function(img_tag)
         local src = img_tag:match([[src="([^"]*)"]])
         if src == nil or src == "" then
             return img_tag -- Keep original tag
         end
-        
+
         -- Skip data URLs
-        if src and src:sub(1,5) == "data:" then
+        if src and src:sub(1, 5) == "data:" then
             return img_tag -- Keep original tag
         end
-        
+
         -- Normalize URL
         local normalized_src = ImageUtils.normalizeImageUrl(src or "", base_url)
-        
+
         if not seen_images[normalized_src] then
             image_count = image_count + 1
-            
+
             -- Get file extension
             local ext = ImageUtils.getImageExtension(normalized_src)
             local filename = string.format("image_%03d.%s", image_count, ext)
-            
+
             -- Extract dimensions if available
             local width = tonumber(img_tag:match([[width="([^"]*)"]]))
             local height = tonumber(img_tag:match([[height="([^"]*)"]]))
-            
+
             local image_info = {
                 src = normalized_src,
                 original_tag = img_tag,
@@ -67,23 +67,23 @@ function ImageUtils.discoverImages(content, base_url)
                 height = height,
                 downloaded = false
             }
-            
+
             table.insert(images, image_info)
             seen_images[normalized_src] = image_info
         end
-        
+
         return img_tag -- Keep original tag for now
     end
-    
+
     -- Scan content for images
     local scan_success = pcall(function()
         content:gsub("(<%s*img [^>]*>)", collectImg)
     end)
-    
+
     if not scan_success then
         return {}, {} -- Return empty tables if scanning failed
     end
-    
+
     return images, seen_images
 end
 
@@ -93,9 +93,9 @@ end
 ---@return string Normalized absolute URL
 function ImageUtils.normalizeImageUrl(src, base_url)
     -- Handle different URL types
-    if src:sub(1,2) == "//" then
+    if src:sub(1, 2) == "//" then
         return "https:" .. src -- Use HTTPS for protocol-relative URLs
-    elseif src:sub(1,1) == "/" and base_url then
+    elseif src:sub(1, 1) == "/" and base_url then
         -- Absolute path, relative to domain
         return socket_url.absolute(base_url, src)
     elseif not src:match("^https?://") and base_url then
@@ -116,20 +116,20 @@ function ImageUtils.getImageExtension(url)
     if clean_url:find("?") then
         clean_url = clean_url:match("(.-)%?")
     end
-    
+
     -- Extract extension (2 to 5 characters)
     local ext = clean_url:match(".*%.(%S%S%S?%S?%S?)$")
     if ext == nil then
         ext = "jpg" -- default extension
     end
     ext = ext:lower()
-    
+
     -- Valid image extensions
-    local valid_exts = {jpg=true, jpeg=true, png=true, gif=true, webp=true, svg=true}
+    local valid_exts = { jpg = true, jpeg = true, png = true, gif = true, webp = true, svg = true }
     if not valid_exts[ext] then
         ext = "jpg" -- fallback to jpg
     end
-    
+
     return ext
 end
 
@@ -141,29 +141,29 @@ end
 function ImageUtils.downloadImage(url, entry_dir, filename)
     local filepath = entry_dir .. filename
     local response_body = {}
-    
+
     -- Add robust timeout handling using socketutil
     local timeout, maxtime = 10, 30
     socketutil:set_timeout(timeout, maxtime)
-    
+
     local result, status_code
     local network_success = pcall(function()
-        result, status_code = http.request{
+        result, status_code = http.request {
             url = url,
             sink = ltn12.sink.table(response_body),
         }
     end)
-    
+
     socketutil:reset_timeout()
-    
+
     if not network_success then
         return false
     end
-    
+
     if not result then
         return false
     end
-    
+
     if status_code == 200 then
         local content = table.concat(response_body)
         if content and #content > 0 then
@@ -190,26 +190,26 @@ end
 ---@return number Number of successfully downloaded images
 function ImageUtils.downloadImages(images, entry_dir, progress_callback)
     local downloaded_count = 0
-    
+
     for i, img in ipairs(images) do
         -- Call progress callback if provided
         if progress_callback then
             progress_callback(i - 1, #images, nil) -- Before download
         end
-        
+
         local success = ImageUtils.downloadImage(img.src, entry_dir, img.filename)
         img.downloaded = success
-        
+
         if success then
             downloaded_count = downloaded_count + 1
         end
-        
+
         -- Call progress callback after download
         if progress_callback then
             progress_callback(i, #images, success)
         end
     end
-    
+
     return downloaded_count
 end
 
@@ -227,22 +227,22 @@ function ImageUtils.processHtmlImages(content, seen_images, include_images, base
             if include_images then
                 return img_tag -- Keep original if we can't identify it
             else
-                return "" -- Remove if include_images is false
+                return ""      -- Remove if include_images is false
             end
         end
-        
+
         -- Skip data URLs
-        if src and src:sub(1,5) == "data:" then
+        if src and src:sub(1, 5) == "data:" then
             if include_images then
                 return img_tag -- Keep data URLs as-is
             else
-                return "" -- Remove if include_images is false
+                return ""      -- Remove if include_images is false
             end
         end
-        
+
         -- Normalize the URL to match what we stored
         local normalized_src = ImageUtils.normalizeImageUrl(src or "", base_url)
-        
+
         local img_info = seen_images[normalized_src]
         if img_info then
             if include_images and img_info.downloaded then
@@ -257,21 +257,21 @@ function ImageUtils.processHtmlImages(content, seen_images, include_images, base
             if include_images then
                 return img_tag -- Keep original
             else
-                return "" -- Remove
+                return ""      -- Remove
             end
         end
     end
-    
+
     -- Replace img tags in HTML content
     local processed_content
     local process_success = pcall(function()
         processed_content = content:gsub("(<%s*img [^>]*>)", replaceImg)
     end)
-    
+
     if not process_success then
         return content -- Use original content if processing failed
     end
-    
+
     return processed_content
 end
 
@@ -280,14 +280,14 @@ end
 ---@return string HTML img tag for local image
 function ImageUtils.createLocalImageTag(img_info)
     local style_props = {}
-    
+
     if img_info.width then
         table.insert(style_props, string.format("width: %spx", img_info.width))
     end
     if img_info.height then
         table.insert(style_props, string.format("height: %spx", img_info.height))
     end
-    
+
     local style = table.concat(style_props, "; ")
     if style ~= "" then
         return string.format([[<img src="%s" style="%s" alt=""/>]], img_info.filename, style)
@@ -301,15 +301,15 @@ end
 ---@return string Cleaned HTML content
 function ImageUtils.cleanHtmlContent(content)
     local cleaned_content = content
-    
+
     -- Remove iframe tags since they won't work in offline HTML files
     pcall(function()
         -- Remove iframe tags (both self-closing and with content)
-        cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*>.-<%s*/%s*iframe%s*>", "")  -- iframe with content
-        cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*/%s*>", "")  -- self-closing iframe
-        cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*>", "")  -- opening iframe tag without closing
+        cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*>.-<%s*/%s*iframe%s*>", "") -- iframe with content
+        cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*/%s*>", "")                 -- self-closing iframe
+        cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*>", "")                     -- opening iframe tag without closing
     end)
-    
+
     return cleaned_content
 end
 
@@ -326,9 +326,9 @@ function ImageUtils.createDownloadSummary(include_images, images)
             end
         end
     end
-    
+
     local summary_parts = {}
-    
+
     if include_images and #images > 0 then
         if images_downloaded == #images then
             table.insert(summary_parts, _("All images downloaded successfully"))
@@ -342,8 +342,8 @@ function ImageUtils.createDownloadSummary(include_images, images)
     else
         table.insert(summary_parts, string.format(_("%d images found (skipped - disabled in settings)"), #images))
     end
-    
+
     return table.concat(summary_parts, "\n")
 end
 
-return ImageUtils 
+return ImageUtils

@@ -22,10 +22,10 @@ local T = require("ffi/util").template
 -- Import dependencies
 local Entry = require("entities/entry/entry")
 local MinifluxAPI = require("api/api_client")
-local NavigationContext = require("browser/utils/navigation_context")
-local ProgressUtils = require("browser/utils/progress_utils")
-local ImageUtils = require("browser/utils/image_utils")
-local HtmlUtils = require("browser/utils/html_utils")
+local NavigationContext = require("utils/navigation_context")
+local ProgressUtils = require("utils/progress_utils")
+local ImageUtils = require("utils/image_utils")
+local HtmlUtils = require("utils/html_utils")
 
 ---@class EntryService
 ---@field settings MinifluxSettings Settings instance

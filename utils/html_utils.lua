@@ -5,7 +5,7 @@ This utility module handles HTML document creation and processing for offline
 viewing of RSS entries in KOReader.
 
 @module miniflux.browser.utils.html_utils
---]]--
+--]] --
 
 local _ = require("gettext")
 
@@ -17,30 +17,30 @@ local HtmlUtils = {}
 ---@return string Complete HTML document
 function HtmlUtils.createHtmlDocument(entry, content)
     local entry_title = entry.title or _("Untitled Entry")
-    
+
     -- Build metadata sections
     local metadata_sections = {}
-    
+
     -- Feed information
     if entry.feed and entry.feed.title then
-        table.insert(metadata_sections, string.format('<p><strong>%s:</strong> %s</p>', 
+        table.insert(metadata_sections, string.format('<p><strong>%s:</strong> %s</p>',
             _("Feed"), entry.feed.title))
     end
-    
+
     -- Publication date
     if entry.published_at then
-        table.insert(metadata_sections, string.format('<p><strong>%s:</strong> %s</p>', 
+        table.insert(metadata_sections, string.format('<p><strong>%s:</strong> %s</p>',
             _("Published"), entry.published_at))
     end
-    
+
     -- Original URL
     if entry.url then
-        table.insert(metadata_sections, string.format('<p><strong>%s:</strong> <a href="%s">%s</a></p>', 
+        table.insert(metadata_sections, string.format('<p><strong>%s:</strong> <a href="%s">%s</a></p>',
             _("URL"), entry.url, entry.url))
     end
-    
+
     local metadata_html = table.concat(metadata_sections, "\n        ")
-    
+
     return string.format([[<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -48,9 +48,9 @@ function HtmlUtils.createHtmlDocument(entry, content)
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>%s</title>
     <style>
-        img { 
-            max-width: 100%%; 
-            height: auto; 
+        img {
+            max-width: 100%%;
+            height: auto;
             display: block;
             margin: 10px 0;
         }
@@ -99,11 +99,11 @@ function HtmlUtils.createHtmlDocument(entry, content)
         %s
     </div>
 </body>
-</html>]], 
-        HtmlUtils.escapeHtml(entry_title),  -- Title in head
-        HtmlUtils.escapeHtml(entry_title),  -- Title in body
+</html>]],
+        HtmlUtils.escapeHtml(entry_title), -- Title in head
+        HtmlUtils.escapeHtml(entry_title), -- Title in body
         metadata_html,
-        content  -- Content is already processed, don't escape it
+        content                            -- Content is already processed, don't escape it
     )
 end
 
@@ -114,7 +114,7 @@ function HtmlUtils.escapeHtml(text)
     if not text then
         return ""
     end
-    
+
     local escape_map = {
         ['&'] = '&amp;',
         ['<'] = '&lt;',
@@ -122,7 +122,7 @@ function HtmlUtils.escapeHtml(text)
         ['"'] = '&quot;',
         ["'"] = '&#39;'
     }
-    
+
     return (text:gsub('[&<>"\']', escape_map))
 end
 
@@ -133,13 +133,13 @@ end
 function HtmlUtils.createSimpleHtmlDocument(title, content)
     local escaped_title = HtmlUtils.escapeHtml(title)
     local escaped_content = HtmlUtils.escapeHtml(content)
-    
+
     -- Convert line breaks to paragraphs
     local formatted_content = escaped_content:gsub('\n\n+', '</p><p>'):gsub('\n', '<br>')
     if formatted_content ~= "" then
         formatted_content = '<p>' .. formatted_content .. '</p>'
     end
-    
+
     return string.format([[<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -147,11 +147,11 @@ function HtmlUtils.createSimpleHtmlDocument(title, content)
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>%s</title>
     <style>
-        body { 
-            font-family: serif; 
-            line-height: 1.6; 
-            max-width: 800px; 
-            margin: 0 auto; 
+        body {
+            font-family: serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
             padding: 20px;
         }
         p {
@@ -163,7 +163,7 @@ function HtmlUtils.createSimpleHtmlDocument(title, content)
     <h1>%s</h1>
     %s
 </body>
-</html>]], 
+</html>]],
         escaped_title,
         escaped_title,
         formatted_content
@@ -175,30 +175,30 @@ end
 ---@return string Cleaned HTML content
 function HtmlUtils.cleanHtmlContent(content)
     local cleaned_content = content
-    
+
     -- Remove potentially problematic elements that don't work offline
     pcall(function()
         -- Remove script tags (security and functionality)
         cleaned_content = cleaned_content:gsub("<%s*script[^>]*>.-<%s*/%s*script%s*>", "")
         cleaned_content = cleaned_content:gsub("<%s*script[^>]*>", "")
-        
+
         -- Remove iframe tags (won't work offline)
         cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*>.-<%s*/%s*iframe%s*>", "")
         cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*/%s*>", "")
         cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*>", "")
-        
+
         -- Remove object and embed tags (multimedia that won't work offline)
         cleaned_content = cleaned_content:gsub("<%s*object[^>]*>.-<%s*/%s*object%s*>", "")
         cleaned_content = cleaned_content:gsub("<%s*embed[^>]*>", "")
-        
+
         -- Remove form elements (won't work offline)
         cleaned_content = cleaned_content:gsub("<%s*form[^>]*>.-<%s*/%s*form%s*>", "")
-        
+
         -- Remove style blocks that might interfere with our styling
         -- Note: We keep inline styles on elements, just remove style blocks
         cleaned_content = cleaned_content:gsub("<%s*style[^>]*>.-<%s*/%s*style%s*>", "")
     end)
-    
+
     return cleaned_content
 end
 
@@ -209,12 +209,12 @@ function HtmlUtils.extractTextContent(html)
     if not html then
         return ""
     end
-    
+
     local text = html
-    
+
     -- Remove all HTML tags
     text = text:gsub("<%s*[^>]*>", "")
-    
+
     -- Decode common HTML entities
     local entity_map = {
         ['&amp;'] = '&',
@@ -227,14 +227,14 @@ function HtmlUtils.extractTextContent(html)
         ['&ndash;'] = '–',
         ['&hellip;'] = '…'
     }
-    
+
     for entity, char in pairs(entity_map) do
         text = text:gsub(entity, char)
     end
-    
+
     -- Clean up whitespace
     text = text:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
-    
+
     return text
 end
 
@@ -245,22 +245,20 @@ end
 function HtmlUtils.getTextSummary(html, max_length)
     max_length = max_length or 200
     local text = HtmlUtils.extractTextContent(html)
-    
+
     if #text <= max_length then
         return text
     end
-    
+
     -- Truncate at word boundary
     local truncated = text:sub(1, max_length)
     local last_space = truncated:find("%s[^%s]*$")
-    
+
     if last_space then
         truncated = truncated:sub(1, last_space - 1)
     end
-    
+
     return truncated .. "…"
 end
 
-
-
-return HtmlUtils 
+return HtmlUtils

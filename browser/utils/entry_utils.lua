@@ -29,7 +29,7 @@ local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
 
 -- Navigation functionality (for legacy navigation methods)
 local MinifluxAPI = require("api/api_client")
-local NavigationContext = require("browser/utils/navigation_context")
+local NavigationContext = require("utils/navigation_context")
 
 -- Import the Entry entity and service
 local Entry = require("entities/entry/entry")
@@ -113,7 +113,7 @@ function EntryUtils:openEntryFile(html_file)
             -- Update global navigation context with this entry
             -- Note: We don't have browsing context when opening existing files,
             -- so navigation will be global unless the user came from a browser session
-            local NavigationContext = require("browser/utils/navigation_context")
+            local NavigationContext = require("utils/navigation_context")
             local entry_id_num = tonumber(entry_id)
             if entry_id_num then
                 if not NavigationContext.hasValidContext() then

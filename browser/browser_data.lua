@@ -7,7 +7,7 @@ Handles all API calls and data formatting for the browser.
 @module miniflux.browser.browser_data
 --]] --
 
-local UIComponents = require("browser/ui_components")
+local UIComponents = require("utils/ui_components")
 local _ = require("gettext")
 
 ---@class BrowserData

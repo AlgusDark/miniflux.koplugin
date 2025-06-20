@@ -6,17 +6,17 @@ It tracks what the user is currently browsing (feed, category, or global)
 and provides this context for navigation between entries.
 
 @module miniflux.browser.utils.navigation_context
---]]--
+--]] --
 
 local NavigationContext = {}
 
 -- Global navigation context state
 local _current_context = {
-    type = nil,          -- "feed", "category", or "global" 
-    feed_id = nil,       -- Current feed ID if browsing a feed
-    category_id = nil,   -- Current category ID if browsing a category
-    entry_id = nil,      -- Currently viewed entry ID
-    timestamp = nil      -- When context was set (for debugging)
+    type = nil,        -- "feed", "category", or "global"
+    feed_id = nil,     -- Current feed ID if browsing a feed
+    category_id = nil, -- Current category ID if browsing a category
+    entry_id = nil,    -- Currently viewed entry ID
+    timestamp = nil    -- When context was set (for debugging)
 }
 
 ---Set the global navigation context when opening an entry from a feed
@@ -86,12 +86,12 @@ end
 ---@return ApiOptions Context-aware options with feed_id/category_id filters
 function NavigationContext.getContextAwareOptions(base_options)
     local options = {}
-    
+
     -- Copy base options
     for k, v in pairs(base_options) do
         options[k] = v
     end
-    
+
     -- Add context-aware filtering based on current browsing context
     if _current_context.type == "feed" and _current_context.feed_id then
         options.feed_id = _current_context.feed_id
@@ -99,7 +99,7 @@ function NavigationContext.getContextAwareOptions(base_options)
         options.category_id = _current_context.category_id
     end
     -- For "global" type, no additional filtering (browse all entries)
-    
+
     return options
 end
 
@@ -128,7 +128,7 @@ function NavigationContext.getContextDescription()
     if not context.type then
         return "No navigation context set"
     end
-    
+
     local desc = "Context: " .. context.type
     if context.feed_id then
         desc = desc .. " (feed " .. context.feed_id .. ")"
@@ -141,4 +141,4 @@ function NavigationContext.getContextDescription()
     return desc
 end
 
-return NavigationContext 
+return NavigationContext
