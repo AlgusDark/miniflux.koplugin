@@ -297,31 +297,4 @@ function BrowserData:getTitleFromItem(item)
     return item.text or ""
 end
 
--- =============================================================================
--- UTILITY METHODS
--- =============================================================================
-
-function BrowserData:tableToString(tbl, indent)
-    indent = indent or 0
-    local result = {}
-    local spaces = string.rep("  ", indent)
-
-    table.insert(result, "{\n")
-    for k, v in pairs(tbl) do
-        local key = type(k) == "string" and string.format('"%s"', k) or tostring(k)
-        local value
-        if type(v) == "string" then
-            value = string.format('"%s"', v:gsub('"', '\\"'))
-        elseif type(v) == "table" then
-            value = self:tableToString(v, indent + 1)
-        else
-            value = tostring(v)
-        end
-        table.insert(result, string.format("%s  [%s] = %s,\n", spaces, key, value))
-    end
-    table.insert(result, spaces .. "}")
-
-    return table.concat(result)
-end
-
 return BrowserData

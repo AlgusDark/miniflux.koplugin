@@ -5,7 +5,7 @@ This utility module provides progress tracking and user feedback for long-runnin
 particularly entry downloading with image processing.
 
 @module miniflux.browser.utils.progress_utils
---]]--
+--]] --
 
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
@@ -49,19 +49,19 @@ end
 ---@return boolean True if user wants to continue, false to cancel
 function EntryDownloadProgress:update(step, image_progress, can_cancel)
     self.current_step = step
-    
+
     if image_progress then
         self.downloaded_images = image_progress.current
         self.total_images = image_progress.total
     end
-    
+
     -- Build progress message
     local message_parts = {
         T(_("Downloading: %1"), self.title),
         "",
         self.current_step
     }
-    
+
     -- Add image progress if relevant
     if self.include_images and self.total_images > 0 then
         table.insert(message_parts, "")
@@ -74,30 +74,30 @@ function EntryDownloadProgress:update(step, image_progress, can_cancel)
         table.insert(message_parts, "")
         table.insert(message_parts, T(_("Images: %1 found (skipped)"), self.total_images))
     end
-    
+
     local message = table.concat(message_parts, "\n")
-    
+
     -- Close previous dialog if exists
     if self.dialog then
         UIManager:close(self.dialog)
     end
-    
+
     -- Create new progress dialog
-    self.dialog = InfoMessage:new{
+    self.dialog = InfoMessage:new {
         text = message,
         timeout = can_cancel and 30 or nil, -- Allow longer timeout for cancellable operations
     }
-    
+
     UIManager:show(self.dialog)
     UIManager:forceRePaint()
-    
+
     -- For cancellable operations, check if user wants to continue
     if can_cancel then
-        -- This is a simplified approach - in a real implementation, 
+        -- This is a simplified approach - in a real implementation,
         -- we might want to add proper cancel button support
         return true
     end
-    
+
     return true
 end
 
@@ -125,33 +125,6 @@ function EntryDownloadProgress:close()
     end
 end
 
----Show completion message
----@param summary string Completion summary message
----@return nil
-function EntryDownloadProgress:showCompletion(summary)
-    self:close()
-    
-    local completion_dialog = InfoMessage:new{
-        text = summary,
-        -- No timeout - we'll close it manually when opening the entry
-    }
-    
-    UIManager:show(completion_dialog)
-    UIManager:forceRePaint()
-    
-    -- Store reference to close it later
-    self.completion_dialog = completion_dialog
-end
-
----Close completion dialog
----@return nil
-function EntryDownloadProgress:closeCompletion()
-    if self.completion_dialog then
-        UIManager:close(self.completion_dialog)
-        self.completion_dialog = nil
-    end
-end
-
 -- Export the class through the module
 ProgressUtils.EntryDownloadProgress = EntryDownloadProgress
 
@@ -162,25 +135,4 @@ function ProgressUtils.createEntryProgress(entry_title)
     return EntryDownloadProgress:new(entry_title)
 end
 
----Create a simple progress dialog for quick operations
----@param message string Progress message
----@return InfoMessage Progress dialog instance
-function ProgressUtils.showSimpleProgress(message)
-    local dialog = InfoMessage:new{
-        text = message,
-    }
-    UIManager:show(dialog)
-    UIManager:forceRePaint()
-    return dialog
-end
-
----Close a simple progress dialog
----@param dialog InfoMessage Dialog to close
----@return nil
-function ProgressUtils.closeSimpleProgress(dialog)
-    if dialog then
-        UIManager:close(dialog)
-    end
-end
-
-return ProgressUtils 
+return ProgressUtils
