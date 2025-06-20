@@ -22,7 +22,7 @@ local ViewService = require("services/view_service")
 local PathService = require("services/path_service")
 local _ = require("gettext")
 
----@class MinfluxBrowser : Menu
+---@class MinifluxBrowser : Menu
 ---@field close_callback function|nil Callback function to execute when closing the browser
 ---@field unread_count number|nil Number of unread entries
 ---@field feeds_count number|nil Number of feeds

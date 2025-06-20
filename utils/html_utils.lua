@@ -12,7 +12,7 @@ local _ = require("gettext")
 local HtmlUtils = {}
 
 ---Create a complete HTML document for an entry
----@param entry MinifluxEntry Entry data
+---@param entry Entry Entry data
 ---@param content string Processed HTML content
 ---@return string Complete HTML document
 function HtmlUtils.createHtmlDocument(entry, content)
