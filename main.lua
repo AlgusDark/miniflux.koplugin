@@ -19,7 +19,7 @@ local MinifluxAPI = require("api/api_client")
 local MinifluxSettings = require("settings/settings")
 local BrowserLauncher = require("browser/browser_launcher")
 local MenuManager = require("menu/menu_manager")
-local EntryUtils = require("browser/utils/entry_utils")
+local EntryService = require("services/entry_service")
 
 ---@class Miniflux : WidgetContainer
 ---@field name string Plugin name identifier
@@ -29,7 +29,7 @@ local EntryUtils = require("browser/utils/entry_utils")
 ---@field api MinifluxAPI API client instance
 ---@field browser_launcher BrowserLauncher Browser launcher instance
 ---@field menu_manager MenuManager Menu construction manager
----@field entry_utils EntryUtils Entry utilities instance
+---@field entry_service EntryService Entry service instance
 local Miniflux = WidgetContainer:extend({
     name = "miniflux",
     is_doc_only = false,
@@ -58,8 +58,8 @@ function Miniflux:init()
         api_token = self.settings.api_token
     })
 
-    -- Initialize EntryUtils instance with settings dependency
-    self.entry_utils = EntryUtils:new(self.settings)
+    -- Initialize EntryService instance with settings dependency
+    self.entry_service = EntryService:new(self.settings)
 
     -- Initialize browser launcher with dependency injection
     self.browser_launcher = BrowserLauncher:new()
@@ -152,14 +152,11 @@ function Miniflux:overrideEndOfBookBehavior()
             local entry_id = file_path:match("/miniflux/(%d+)/")
 
             if entry_id then
-                -- Set up entry info for the dialog
-                self.entry_utils._current_miniflux_entry = {
+                -- Show the end of entry dialog with entry info as parameter
+                self.entry_service:showEndOfEntryDialog({
                     file_path = file_path,
                     entry_id = entry_id,
-                }
-
-                -- Show the end of entry dialog instead of default
-                self.entry_utils:showEndOfEntryDialog()
+                })
                 return -- Don't call original handler
             end
         end

@@ -3,9 +3,10 @@ Entry Service
 
 This service handles complex entry workflows and orchestration.
 It coordinates between the Entry entity, repositories, and infrastructure services
-to provide high-level entry operations.
+to provide high-level entry operations including UI coordination, navigation,
+and dialog management.
 
-@module koplugin.miniflux.entities.entry.entry_service
+@module koplugin.miniflux.services.entry_service
 --]] --
 
 local lfs = require("libs/libkoreader-lfs")
@@ -16,6 +17,7 @@ local UIManager = require("ui/uimanager")
 local ReaderUI = require("apps/reader/readerui")
 local FFIUtil = require("ffi/util")
 local FileManager = require("apps/filemanager/filemanager")
+local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
@@ -26,10 +28,13 @@ local NavigationContext = require("utils/navigation_context")
 local ProgressUtils = require("utils/progress_utils")
 local ImageUtils = require("utils/image_utils")
 local HtmlUtils = require("utils/html_utils")
+local NavigationService = require("services/navigation_service")
+local MetadataLoader = require("utils/metadata_loader")
 
 ---@class EntryService
 ---@field settings MinifluxSettings Settings instance
 ---@field download_dir string Download directory path
+---@field navigation_service NavigationService Navigation service for entry navigation
 local EntryService = {}
 
 ---Create a new EntryService instance
@@ -38,7 +43,8 @@ local EntryService = {}
 function EntryService:new(settings)
     local instance = {
         settings = settings,
-        download_dir = ("%s/%s/"):format(DataStorage:getFullDataDir(), "miniflux")
+        download_dir = ("%s/%s/"):format(DataStorage:getFullDataDir(), "miniflux"),
+        navigation_service = NavigationService:new(settings),
     }
     setmetatable(instance, self)
     self.__index = self
@@ -314,7 +320,243 @@ function EntryService:_onEntryStatusChanged(entry_id, new_status)
 end
 
 -- =============================================================================
--- FILE OPERATIONS
+-- UI COORDINATION & FILE OPERATIONS
+-- =============================================================================
+
+---Open an entry HTML file in KOReader
+---@param html_file string Path to HTML file to open
+---@return nil
+function EntryService:openEntryFile(html_file)
+    -- Check if this is a miniflux entry by looking at the path
+    local is_miniflux_entry = html_file:match("/miniflux/") ~= nil
+
+    if is_miniflux_entry then
+        -- Extract entry ID from path for navigation context
+        local entry_id = html_file:match("/miniflux/(%d+)/")
+
+        if entry_id then
+            -- Update global navigation context with this entry
+            -- Note: We don't have browsing context when opening existing files,
+            -- so navigation will be global unless the user came from a browser session
+            local entry_id_num = tonumber(entry_id)
+            if entry_id_num then
+                if not NavigationContext.hasValidContext() then
+                    -- Set global context if no context exists
+                    NavigationContext.setGlobalContext(entry_id_num)
+                else
+                    -- Update current entry in existing context
+                    NavigationContext.updateCurrentEntry(entry_id_num)
+                end
+            end
+        end
+    end
+
+    -- Open the file - EndOfBook event handler will detect miniflux entries automatically
+    ReaderUI:showReader(html_file)
+end
+
+---Show end of entry dialog with navigation options
+---@param entry_info table Entry information with file_path and entry_id
+---@return table|nil Dialog reference for caller management or nil if failed
+function EntryService:showEndOfEntryDialog(entry_info)
+    if not entry_info or not entry_info.file_path or not entry_info.entry_id then
+        return nil
+    end
+
+    -- Load entry metadata to check current status with error handling
+    local metadata = nil
+    local metadata_success = pcall(function()
+        metadata = MetadataLoader.loadCurrentEntryMetadata(entry_info)
+    end)
+
+    if not metadata_success then
+        -- If metadata loading fails, assume unread status
+        metadata = { status = "unread" }
+    end
+
+    -- Create Entry entity from metadata for business logic
+    local entry_status = metadata and metadata.status or "unread"
+    local entry = Entry:new({
+        id = entry_info.entry_id and tonumber(entry_info.entry_id),
+        status = entry_status
+    })
+
+    -- Use entity logic for button text and callback
+    local mark_button_text = entry:getToggleButtonText()
+    local mark_callback
+    if entry:isRead() then
+        mark_callback = function()
+            self:markEntryAsUnread(entry_info)
+        end
+    else
+        mark_callback = function()
+            self:markEntryAsRead(entry_info)
+        end
+    end
+
+    -- Create dialog and return reference for caller management
+    local dialog = nil
+    local dialog_success = pcall(function()
+        dialog = ButtonDialogTitle:new {
+            title = _("You've reached the end of the entry."),
+            title_align = "center",
+            buttons = {
+                {
+                    {
+                        text = _("← Previous"),
+                        callback = function()
+                            UIManager:close(dialog)
+                            pcall(function()
+                                self:navigateToPreviousEntry(entry_info)
+                            end)
+                        end,
+                    },
+                    {
+                        text = _("Next →"),
+                        callback = function()
+                            UIManager:close(dialog)
+                            pcall(function()
+                                self:navigateToNextEntry(entry_info)
+                            end)
+                        end,
+                    },
+                },
+                {
+                    {
+                        text = _("⚠ Delete local entry"),
+                        callback = function()
+                            UIManager:close(dialog)
+                            pcall(function()
+                                self:deleteLocalEntryFromInfo(entry_info)
+                            end)
+                        end,
+                    },
+                    {
+                        text = mark_button_text,
+                        callback = function()
+                            UIManager:close(dialog)
+                            pcall(function()
+                                mark_callback()
+                            end)
+                        end,
+                    },
+                },
+                {
+                    {
+                        text = _("⌂ Miniflux folder"),
+                        callback = function()
+                            UIManager:close(dialog)
+                            pcall(function()
+                                self:openMinifluxFolder()
+                            end)
+                        end,
+                    },
+                    {
+                        text = _("Cancel"),
+                        callback = function()
+                            UIManager:close(dialog)
+                        end,
+                    },
+                },
+            },
+        }
+    end)
+
+    if dialog_success and dialog then
+        -- Show dialog and return reference for caller management
+        UIManager:show(dialog)
+        return dialog
+    else
+        -- If dialog creation fails, show a simple error message
+        UIManager:show(InfoMessage:new {
+            text = _("Failed to create end of entry dialog"),
+            timeout = 3,
+        })
+        return nil
+    end
+end
+
+-- =============================================================================
+-- NAVIGATION FUNCTIONS (DELEGATES TO NAVIGATION SERVICE)
+-- =============================================================================
+
+---Navigate to the previous entry (delegates to NavigationService)
+---@param entry_info table Current entry information
+---@return nil
+function EntryService:navigateToPreviousEntry(entry_info)
+    -- Delegate to NavigationService for complex navigation logic
+    self.navigation_service:navigateToPreviousEntry(entry_info, self)
+end
+
+---Navigate to the next entry (delegates to NavigationService)
+---@param entry_info table Current entry information
+---@return nil
+function EntryService:navigateToNextEntry(entry_info)
+    -- Delegate to NavigationService for complex navigation logic
+    self.navigation_service:navigateToNextEntry(entry_info, self)
+end
+
+---Entry operations with parameter transformation
+---@param entry_info table Current entry information
+---@return nil
+function EntryService:markEntryAsRead(entry_info)
+    local entry_id = entry_info.entry_id
+    local entry_id_num = tonumber(entry_id)
+    self:markAsRead(entry_id_num)
+end
+
+---Mark an entry as unread (with parameter transformation)
+---@param entry_info table Current entry information
+---@return nil
+function EntryService:markEntryAsUnread(entry_info)
+    local entry_id = entry_info.entry_id
+    local entry_id_num = tonumber(entry_id)
+    self:markAsUnread(entry_id_num)
+end
+
+---Delete a local entry (with parameter transformation and validation)
+---@param entry_info table Current entry information
+---@return nil
+function EntryService:deleteLocalEntryFromInfo(entry_info)
+    local entry_id = entry_info.entry_id
+    local entry_id_num = tonumber(entry_id)
+
+    if not entry_id_num then
+        UIManager:show(InfoMessage:new {
+            text = _("Cannot delete: invalid entry ID"),
+            timeout = 3,
+        })
+        return
+    end
+
+    self:deleteLocalEntry(entry_id_num)
+end
+
+-- =============================================================================
+-- LEGACY SUPPORT METHODS
+-- =============================================================================
+
+---Legacy method aliases for backward compatibility
+---@param params {entry: MinifluxEntry, browser?: table}
+function EntryService:showEntry(params)
+    return self:readEntry(params.entry, params.browser)
+end
+
+---Legacy method aliases for backward compatibility
+---@param params {entry: MinifluxEntry, browser?: table}
+function EntryService:downloadEntry(params)
+    return self:readEntry(params.entry, params.browser)
+end
+
+---Legacy method aliases for backward compatibility
+---@param entry MinifluxEntry Entry to download and show
+---@return nil
+function EntryService:downloadAndShowEntry(entry)
+    self:readEntry(entry)
+end
+
+-- =============================================================================
+-- PRIVATE HELPER METHODS
 -- =============================================================================
 
 ---Update local entry metadata status
@@ -371,10 +613,6 @@ function EntryService:_deleteLocalEntry(entry_id)
         return false
     end
 end
-
--- =============================================================================
--- HELPER METHODS
--- =============================================================================
 
 ---Update navigation context
 ---@param entry_id number Entry ID

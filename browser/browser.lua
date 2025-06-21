@@ -5,8 +5,8 @@ Browser component that coordinates between various services to provide a unified
 browsing experience for Miniflux. Delegates specific responsibilities to:
 - ViewService: Content display and view state management
 - PathService: Navigation path management and back button logic
-- DialogService: User dialog interactions (via EntryUtils)
-- NavigationService: Complex entry navigation logic (via EntryUtils)
+- Dialog Management: User dialog interactions (integrated in EntryService)
+- NavigationService: Complex entry navigation logic (via EntryService)
 
 @module miniflux.browser.browser
 --]] --
@@ -15,7 +15,7 @@ local Menu = require("ui/widget/menu")
 local UIManager = require("ui/uimanager")
 local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
 local MenuBuilder = require("browser/menu_builder")
-local EntryUtils = require("browser/utils/entry_utils")
+local EntryService = require("services/entry_service")
 local NavigationContext = require("utils/navigation_context")
 local UIComponents = require("utils/ui_components")
 local ViewService = require("services/view_service")
@@ -29,7 +29,7 @@ local _ = require("gettext")
 ---@field categories_count number|nil Number of categories
 ---@field view_service ViewService Service handling content display and view state
 ---@field path_service PathService Service handling navigation paths and back button
----@field entry_utils EntryUtils Utility handling entry display and dialog management
+---@field entry_service EntryService Service handling entry display and dialog management
 ---@field data MenuBuilder Data layer for menu item generation
 local MinifluxBrowser = Menu:extend {
     title_shrink_font_to_fit = true,
@@ -55,8 +55,8 @@ function MinifluxBrowser:init()
     -- Initialize menu builder
     self.data = MenuBuilder:new(self.api, self.settings)
 
-    -- Initialize EntryUtils instance with settings dependency
-    self.entry_utils = EntryUtils:new(self.settings)
+    -- Initialize EntryService instance with settings dependency
+    self.entry_service = EntryService:new(self.settings)
 
     -- Initialize ViewService
     self.view_service = ViewService:new(self, self.data, self.settings)
@@ -155,8 +155,8 @@ function MinifluxBrowser:openEntry(entry_data)
         NavigationContext.setGlobalContext(entry_data.id)
     end
 
-    -- Show the entry using EntryUtils instance
-    self.entry_utils:showEntry({
+    -- Show the entry using EntryService instance
+    self.entry_service:showEntry({
         entry = entry_data,
         api = self.api,
         download_dir = self.download_dir,

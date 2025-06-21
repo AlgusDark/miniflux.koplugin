@@ -44,28 +44,10 @@ end
 -- STATUS MANAGEMENT
 -- =============================================================================
 
----Check if entry can be marked as read
----@return boolean
-function Entry:canMarkAsRead()
-    return self.status ~= "removed" and self.status ~= "read"
-end
-
----Check if entry can be marked as unread
----@return boolean
-function Entry:canMarkAsUnread()
-    return self.status ~= "removed" and self.status ~= "unread"
-end
-
 ---Check if entry is read
 ---@return boolean
 function Entry:isRead()
     return self.status == "read"
-end
-
----Check if entry is unread
----@return boolean
-function Entry:isUnread()
-    return self.status == "unread"
 end
 
 ---Get the appropriate toggle button text for current status
@@ -76,12 +58,6 @@ function Entry:getToggleButtonText()
     else
         return _("✓ Mark as read")
     end
-end
-
----Get the next status when toggling
----@return string Next status ("read" or "unread")
-function Entry:getToggleStatus()
-    return self:isRead() and "unread" or "read"
 end
 
 -- =============================================================================
@@ -148,13 +124,6 @@ function Entry:isDownloaded(download_dir)
     return lfs.attributes(html_file, "mode") == "file"
 end
 
----Check if entry can be deleted locally
----@param download_dir string Base download directory
----@return boolean
-function Entry:canDeleteLocal(download_dir)
-    return self:isRead() and self:isDownloaded(download_dir)
-end
-
 -- =============================================================================
 -- METADATA OPERATIONS
 -- =============================================================================
@@ -178,24 +147,6 @@ function Entry:createMetadata(include_images, images_count)
         images_included = include_images or false,
         images_count = images_count or 0
     }
-end
-
----Load metadata from local file
----@param download_dir string Base download directory
----@return table? metadata or nil if not found
-function Entry:loadLocalMetadata(download_dir)
-    local metadata_file = self:getLocalMetadataPath(download_dir)
-
-    if lfs.attributes(metadata_file, "mode") ~= "file" then
-        return nil
-    end
-
-    local success, metadata = pcall(dofile, metadata_file)
-    if success and metadata then
-        return metadata
-    end
-
-    return nil
 end
 
 return Entry

@@ -98,9 +98,9 @@ end
 
 ---Navigate to the previous entry
 ---@param entry_info table Current entry information with file_path and entry_id
----@param entry_utils table EntryUtils instance for callbacks
+---@param entry_service table EntryService instance for callbacks
 ---@return nil
-function NavigationService:navigateToPreviousEntry(entry_info, entry_utils)
+function NavigationService:navigateToPreviousEntry(entry_info, entry_service)
     local current_entry_id = entry_info.entry_id
     if not current_entry_id then
         UIManager:show(InfoMessage:new {
@@ -200,12 +200,12 @@ function NavigationService:navigateToPreviousEntry(entry_info, entry_utils)
             local prev_html_file = prev_entry_dir .. "entry.html"
 
             if lfs.attributes(prev_html_file, "mode") == "file" then
-                entry_utils:openEntryFile(prev_html_file)
+                entry_service:openEntryFile(prev_html_file)
                 return
             end
         end
 
-        self:downloadAndShowEntry(prev_entry, entry_utils)
+        self:downloadAndShowEntry(prev_entry, entry_service)
     else
         local current_context_success, current_context = pcall(function()
             return NavigationContext.getCurrentContext()
@@ -222,7 +222,7 @@ function NavigationService:navigateToPreviousEntry(entry_info, entry_utils)
 
             if success and result and result.entries and #result.entries > 0 then
                 local prev_entry = result.entries[1]
-                self:downloadAndShowEntry(prev_entry, entry_utils)
+                self:downloadAndShowEntry(prev_entry, entry_service)
                 return
             end
         end
@@ -236,9 +236,9 @@ end
 
 ---Navigate to the next entry
 ---@param entry_info table Current entry information with file_path and entry_id
----@param entry_utils table EntryUtils instance for callbacks
+---@param entry_service table EntryService instance for callbacks
 ---@return nil
-function NavigationService:navigateToNextEntry(entry_info, entry_utils)
+function NavigationService:navigateToNextEntry(entry_info, entry_service)
     local current_entry_id = entry_info.entry_id
     if not current_entry_id then
         UIManager:show(InfoMessage:new {
@@ -338,12 +338,12 @@ function NavigationService:navigateToNextEntry(entry_info, entry_utils)
             local next_html_file = next_entry_dir .. "entry.html"
 
             if lfs.attributes(next_html_file, "mode") == "file" then
-                entry_utils:openEntryFile(next_html_file)
+                entry_service:openEntryFile(next_html_file)
                 return
             end
         end
 
-        self:downloadAndShowEntry(next_entry, entry_utils)
+        self:downloadAndShowEntry(next_entry, entry_service)
     else
         local current_context_success, current_context = pcall(function()
             return NavigationContext.getCurrentContext()
@@ -360,7 +360,7 @@ function NavigationService:navigateToNextEntry(entry_info, entry_utils)
 
             if success and result and result.entries and #result.entries > 0 then
                 local next_entry = result.entries[1]
-                self:downloadAndShowEntry(next_entry, entry_utils)
+                self:downloadAndShowEntry(next_entry, entry_service)
                 return
             end
         end
@@ -376,13 +376,13 @@ end
 -- HELPER METHODS
 -- =============================================================================
 
----Download and show an entry (delegates to EntryUtils)
+---Download and show an entry (delegates to EntryService)
 ---@param entry MinifluxEntry Entry to download and show
----@param entry_utils table EntryUtils instance for delegation
+---@param entry_service table EntryService instance for delegation
 ---@return nil
-function NavigationService:downloadAndShowEntry(entry, entry_utils)
-    -- Delegate back to EntryUtils which will use EntryService
-    entry_utils:downloadAndShowEntry(entry)
+function NavigationService:downloadAndShowEntry(entry, entry_service)
+    -- Delegate back to EntryService
+    entry_service:downloadAndShowEntry(entry)
 end
 
 return NavigationService
