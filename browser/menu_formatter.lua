@@ -1,27 +1,23 @@
 --[[--
-Menu Builder for Miniflux Browser
+Menu Formatter for Miniflux Browser
 
-This module handles menu item creation and data formatting for the browser.
-Fetches data from API and transforms it into menu structures for display.
+This module handles menu item formatting and presentation logic only.
+Transforms data into menu structures for display without handling data access.
 
-@module miniflux.browser.menu_builder
+@module miniflux.browser.menu_formatter
 --]] --
 
-local UIComponents = require("utils/ui_components")
 local _ = require("gettext")
 
----@class MenuBuilder
----@field api MinifluxAPI
----@field settings MinifluxSettings
-local MenuBuilder = {}
+---@class MenuFormatter
+---@field settings MinifluxSettings Settings instance
+local MenuFormatter = {}
 
----Create a new MenuBuilder instance
----@param api MinifluxAPI The API client instance
+---Create a new MenuFormatter instance
 ---@param settings MinifluxSettings The settings instance
----@return MenuBuilder
-function MenuBuilder:new(api, settings)
+---@return MenuFormatter
+function MenuFormatter:new(settings)
     local obj = {
-        api = api,
         settings = settings
     }
     setmetatable(obj, self)
@@ -30,106 +26,14 @@ function MenuBuilder:new(api, settings)
 end
 
 -- =============================================================================
--- API OPTIONS BUILDING
+-- MENU ITEM FORMATTING METHODS
 -- =============================================================================
 
-function MenuBuilder:getApiOptions()
-    local options = {
-        limit = self.settings.limit,
-        order = self.settings.order,
-        direction = self.settings.direction,
-    }
-
-    -- Server-side filtering based on settings
-    local hide_read_entries = self.settings.hide_read_entries
-    if hide_read_entries then
-        options.status = { "unread" }
-    else
-        options.status = { "unread", "read" }
-    end
-
-    return options
-end
-
--- =============================================================================
--- DATA FETCHING METHODS
--- =============================================================================
-
-function MenuBuilder:getUnreadEntries()
-    local options = {
-        status = { "unread" }, -- Always unread only for this view
-        order = self.settings.order,
-        direction = self.settings.direction,
-        limit = self.settings.limit,
-    }
-
-    local success, result = self.api.entries:getEntries(options)
-    if not success then
-        UIComponents.showErrorMessage(_("Failed to fetch unread entries: ") .. tostring(result))
-        return nil
-    end
-
-    return result.entries or {}
-end
-
-function MenuBuilder:getFeedsWithCounters()
-    -- Get feeds
-    local success, feeds = self.api.feeds:getAll()
-    if not success then
-        UIComponents.showErrorMessage(_("Failed to fetch feeds: ") .. tostring(feeds))
-        return nil
-    end
-
-    -- Get counters (optional)
-    local counters_success, counters = self.api.feeds:getCounters()
-    if not counters_success then
-        counters = { reads = {}, unreads = {} } -- Empty counters on failure
-    end
-
-    return feeds, counters
-end
-
-function MenuBuilder:getCategories()
-    local success, categories = self.api.categories:getAll(true) -- include counts
-    if not success then
-        UIComponents.showErrorMessage(_("Failed to fetch categories: ") .. tostring(categories))
-        return nil
-    end
-
-    return categories
-end
-
-function MenuBuilder:getFeedEntries(feed_id)
-    local options = self:getApiOptions()
-    options.feed_id = feed_id
-
-    local success, result = self.api.feeds:getEntries(feed_id, options)
-    if not success then
-        UIComponents.showErrorMessage(_("Failed to fetch feed entries: ") .. tostring(result))
-        return nil
-    end
-
-    return result.entries or {}
-end
-
-function MenuBuilder:getCategoryEntries(category_id)
-    local options = self:getApiOptions()
-    options.category_id = category_id
-
-    local success, result = self.api.categories:getEntries(category_id, options)
-    if not success then
-        UIComponents.showErrorMessage(_("Failed to fetch category entries: ") .. tostring(result))
-        return nil
-    end
-
-    return result.entries or {}
-end
-
--- =============================================================================
--- MENU ITEM BUILDING METHODS
--- =============================================================================
-
-function MenuBuilder:entriesToMenuItems(entries, show_feed_names)
+---Convert entries to menu items
+---@param entries table[] Array of entry data
+---@param show_feed_names boolean Whether to show feed names in entries
+---@return table[] Array of menu items
+function MenuFormatter:entriesToMenuItems(entries, show_feed_names)
     if not entries or #entries == 0 then
         local hide_read = self.settings.hide_read_entries
         return {
@@ -168,7 +72,11 @@ function MenuBuilder:entriesToMenuItems(entries, show_feed_names)
     return menu_items
 end
 
-function MenuBuilder:feedsToMenuItems(feeds, feed_counters)
+---Convert feeds to menu items
+---@param feeds table[] Array of feed data
+---@param feed_counters table Feed counters with reads/unreads maps
+---@return table[] Array of menu items
+function MenuFormatter:feedsToMenuItems(feeds, feed_counters)
     local menu_items = {}
 
     for _, feed in ipairs(feeds) do
@@ -207,7 +115,10 @@ function MenuBuilder:feedsToMenuItems(feeds, feed_counters)
     return menu_items
 end
 
-function MenuBuilder:categoriesToMenuItems(categories)
+---Convert categories to menu items
+---@param categories table[] Array of category data
+---@return table[] Array of menu items
+function MenuFormatter:categoriesToMenuItems(categories)
     local menu_items = {}
 
     for _, category in ipairs(categories) do
@@ -239,7 +150,10 @@ end
 -- SORTING UTILITIES
 -- =============================================================================
 
-function MenuBuilder:sortByUnreadCount(items)
+---Sort menu items by unread count
+---@param items table[] Array of menu items to sort
+---@return nil
+function MenuFormatter:sortByUnreadCount(items)
     table.sort(items, function(a, b)
         local a_unread = self:getUnreadCountFromItem(a)
         local b_unread = self:getUnreadCountFromItem(b)
@@ -263,7 +177,10 @@ function MenuBuilder:sortByUnreadCount(items)
     end)
 end
 
-function MenuBuilder:getUnreadCountFromItem(item)
+---Get unread count from menu item
+---@param item table Menu item
+---@return number Unread count
+function MenuFormatter:getUnreadCountFromItem(item)
     -- Handle feeds (direct unread_count property)
     if item.unread_count then
         return item.unread_count
@@ -282,7 +199,10 @@ function MenuBuilder:getUnreadCountFromItem(item)
     return 0
 end
 
-function MenuBuilder:getTitleFromItem(item)
+---Get title from menu item
+---@param item table Menu item
+---@return string Title text
+function MenuFormatter:getTitleFromItem(item)
     -- Try category data first
     if item.category_data and item.category_data.title then
         return item.category_data.title
@@ -297,4 +217,4 @@ function MenuBuilder:getTitleFromItem(item)
     return item.text or ""
 end
 
-return MenuBuilder
+return MenuFormatter

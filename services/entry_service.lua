@@ -613,13 +613,17 @@ end
 ---@param html_file string HTML file path
 ---@return nil
 function EntryService:_closeBrowserAndOpenEntry(browser, html_file)
+    -- Close browser first and ensure it's fully closed before opening Reader
     if browser and browser.closeAll then
         browser:closeAll()
     end
 
-    -- Open entry file
-    pcall(function()
-        ReaderUI:showReader(html_file)
+    -- Add a small delay to ensure browser is fully closed before opening Reader
+    -- This prevents the browser from remaining in the UI stack
+    UIManager:scheduleIn(0.1, function()
+        pcall(function()
+            ReaderUI:showReader(html_file)
+        end)
     end)
 end
 

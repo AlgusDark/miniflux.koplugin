@@ -17,7 +17,6 @@ local _ = require("gettext")
 -- Import specialized modules
 local MinifluxAPI = require("api/api_client")
 local MinifluxSettings = require("settings/settings")
-local BrowserLauncher = require("browser/browser_launcher")
 local MenuManager = require("menu/menu_manager")
 local EntryService = require("services/entry_service")
 local EntryUtils = require("utils/entry_utils")
@@ -28,7 +27,6 @@ local EntryUtils = require("utils/entry_utils")
 ---@field download_dir string Full path to download directory
 ---@field settings MinifluxSettings Settings instance
 ---@field api MinifluxAPI API client instance
----@field browser_launcher BrowserLauncher Browser launcher instance
 ---@field menu_manager MenuManager Menu construction manager
 ---@field entry_service EntryService Entry service instance
 local Miniflux = WidgetContainer:extend({
@@ -62,13 +60,11 @@ function Miniflux:init()
     -- Initialize EntryService instance with settings dependency
     self.entry_service = EntryService:new(self.settings)
 
-    -- Initialize browser launcher with dependency injection
-    self.browser_launcher = BrowserLauncher:new()
-    self.browser_launcher:init(self.settings, self.api, download_dir)
-
     -- Create menu manager with proper dependency injection
     self.menu_manager = MenuManager:new({
-        browser_launcher = self.browser_launcher,
+        browser_factory = function()
+            return self:createBrowser()
+        end,
         settings = self.settings,
         api = self.api
     })
@@ -121,9 +117,24 @@ end
 ---Handle the read entries dispatcher event
 ---@return nil
 function Miniflux:onReadMinifluxEntries()
-    if self.browser_launcher then
-        self.browser_launcher:showMainScreen()
-    end
+    local browser = self:createBrowser()
+    browser:showMainScreen()
+end
+
+---Create and return a new browser instance
+---@return MinifluxBrowser Browser instance
+function Miniflux:createBrowser()
+    local MinifluxBrowser = require("browser/browser")
+    local browser = MinifluxBrowser:new {
+        title = _("Miniflux"),
+        settings = self.settings,
+        api = self.api,
+        download_dir = self.download_dir,
+        -- No close_callback needed since browser is created on-demand
+        -- UIManager:close(self) in closeAll() is sufficient
+    }
+    ---@cast browser MinifluxBrowser
+    return browser
 end
 
 ---Override ReaderStatus EndOfBook behavior to handle miniflux entries
