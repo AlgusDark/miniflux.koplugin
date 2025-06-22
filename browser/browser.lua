@@ -68,8 +68,8 @@ function MinifluxBrowser:init()
     -- Initialize menu formatter
     self.menu_formatter = MenuFormatter:new(self.settings)
 
-    -- Initialize EntryService instance with settings dependency
-    self.entry_service = EntryService:new(self.settings)
+    -- Initialize EntryService instance with settings and API dependencies
+    self.entry_service = EntryService:new(self.settings, self.api)
 
     -- Initialize ViewService with repositories and formatter
     self.view_service = ViewService:new(
@@ -244,23 +244,6 @@ function MinifluxBrowser:showMainScreen()
     })
     UIManager:show(loading_info)
     UIManager:forceRePaint() -- Force immediate display before API calls
-
-    -- Update API with current settings
-    local api_success = pcall(function()
-        self.api:updateConfig({
-            server_address = self.settings.server_address,
-            api_token = self.settings.api_token,
-        })
-    end)
-
-    if not api_success then
-        UIManager:close(loading_info)
-        UIManager:show(InfoMessage:new({
-            text = _("Failed to initialize API connection"),
-            timeout = 5,
-        }))
-        return
-    end
 
     -- Fetch initial data for browser
     local unread_count, feeds_count, categories_count = self:fetchInitialData(loading_info)

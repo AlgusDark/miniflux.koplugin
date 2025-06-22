@@ -22,7 +22,6 @@ local T = require("ffi/util").template
 
 -- Import dependencies
 local EntryUtils = require("utils/entry_utils")
-local MinifluxAPI = require("api/api_client")
 local NavigationContext = require("utils/navigation_context")
 local ProgressUtils = require("utils/progress_utils")
 local ImageUtils = require("utils/image_utils")
@@ -32,16 +31,19 @@ local MetadataLoader = require("utils/metadata_loader")
 
 ---@class EntryService
 ---@field settings MinifluxSettings Settings instance
+---@field api MinifluxAPI API client instance
 ---@field navigation_service NavigationService Navigation service for entry navigation
 local EntryService = {}
 
 ---Create a new EntryService instance
 ---@param settings MinifluxSettings Settings instance
+---@param api MinifluxAPI API client instance
 ---@return EntryService
-function EntryService:new(settings)
+function EntryService:new(settings, api)
     local instance = {
         settings = settings,
-        navigation_service = NavigationService:new(settings),
+        api = api,
+        navigation_service = NavigationService:new(settings, api),
     }
     setmetatable(instance, self)
     self.__index = self
@@ -233,15 +235,8 @@ function EntryService:changeEntryStatus(entry_id, new_status)
     UIManager:show(loading_info)
     UIManager:forceRePaint()
 
-    -- Create API client
-    local api_success, api = pcall(function()
-        return MinifluxAPI:new({
-            server_address = self.settings.server_address,
-            api_token = self.settings.api_token,
-        })
-    end)
-
-    if not api_success or not api then
+    -- Use injected API client
+    if not self.api then
         UIManager:close(loading_info)
         self:_showError(_("API not available"))
         return false
@@ -250,9 +245,9 @@ function EntryService:changeEntryStatus(entry_id, new_status)
     -- Call appropriate API method
     local success, result
     if new_status == "read" then
-        success, result = api.entries:markAsRead(entry_id)
+        success, result = self.api.entries:markAsRead(entry_id)
     else
-        success, result = api.entries:markAsUnread(entry_id)
+        success, result = self.api.entries:markAsUnread(entry_id)
     end
 
     UIManager:close(loading_info)

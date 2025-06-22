@@ -13,20 +13,22 @@ local lfs = require("libs/libkoreader-lfs")
 local _ = require("gettext")
 
 -- Import dependencies
-local MinifluxAPI = require("api/api_client")
 local NavigationContext = require("utils/navigation_context")
 local MetadataLoader = require("utils/metadata_loader")
 
 ---@class NavigationService
 ---@field settings MinifluxSettings Settings instance
+---@field api MinifluxAPI API client instance
 local NavigationService = {}
 
 ---Create a new NavigationService instance
 ---@param settings MinifluxSettings Settings instance
+---@param api MinifluxAPI API client instance
 ---@return NavigationService
-function NavigationService:new(settings)
+function NavigationService:new(settings, api)
     local instance = {
         settings = settings,
+        api = api,
     }
     setmetatable(instance, self)
     self.__index = self
@@ -106,14 +108,7 @@ function NavigationService:navigateToPreviousEntry(entry_info, entry_service)
         return
     end
 
-    local api_success, api = pcall(function()
-        return MinifluxAPI:new({
-            server_address = self.settings.server_address,
-            api_token = self.settings.api_token,
-        })
-    end)
-
-    if not api_success or not api then
+    if not self.api then
         UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: API not available"),
             timeout = 3,
@@ -183,7 +178,7 @@ function NavigationService:navigateToPreviousEntry(entry_info, entry_service)
     options.limit = 1
     options.order = self.settings.order
 
-    local success, result = api.entries:getEntries(options)
+    local success, result = self.api.entries:getEntries(options)
     UIManager:close(loading_info)
 
     if success and result and result.entries and #result.entries > 0 then
@@ -219,7 +214,7 @@ function NavigationService:navigateToPreviousEntry(entry_info, entry_service)
             global_options.limit = 1
             global_options.order = self.settings.order
 
-            success, result = api.entries:getEntries(global_options)
+            success, result = self.api.entries:getEntries(global_options)
 
             if success and result and result.entries and #result.entries > 0 then
                 local prev_entry = result.entries[1]
@@ -249,14 +244,7 @@ function NavigationService:navigateToNextEntry(entry_info, entry_service)
         return
     end
 
-    local api_success, api = pcall(function()
-        return MinifluxAPI:new({
-            server_address = self.settings.server_address,
-            api_token = self.settings.api_token,
-        })
-    end)
-
-    if not api_success or not api then
+    if not self.api then
         UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: API not available"),
             timeout = 3,
@@ -326,7 +314,7 @@ function NavigationService:navigateToNextEntry(entry_info, entry_service)
     options.limit = 1
     options.order = self.settings.order
 
-    local success, result = api.entries:getEntries(options)
+    local success, result = self.api.entries:getEntries(options)
     UIManager:close(loading_info)
 
     if success and result and result.entries and #result.entries > 0 then
@@ -362,7 +350,7 @@ function NavigationService:navigateToNextEntry(entry_info, entry_service)
             global_options.limit = 1
             global_options.order = self.settings.order
 
-            success, result = api.entries:getEntries(global_options)
+            success, result = self.api.entries:getEntries(global_options)
 
             if success and result and result.entries and #result.entries > 0 then
                 local next_entry = result.entries[1]

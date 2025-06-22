@@ -183,26 +183,12 @@ function MenuManager:showServerSettings()
                             self.settings.api_token = fields[2]
                         end
                         self.settings:save() -- Update API with new settings (with error handling)
-                        local api_success = pcall(function()
-                            self.api:updateConfig({
-                                server_address = self.settings.server_address,
-                                api_token = self.settings.api_token,
-                            })
-                        end)
+                        UIManager:show(InfoMessage:new({
+                            text = _("Settings saved"),
+                            timeout = 2,
+                        }))
 
                         UIManager:close(settings_dialog)
-
-                        if api_success then
-                            UIManager:show(InfoMessage:new({
-                                text = _("Settings saved"),
-                                timeout = 2,
-                            }))
-                        else
-                            UIManager:show(InfoMessage:new({
-                                text = _("Settings saved (API initialization will be done when needed)"),
-                                timeout = 3,
-                            }))
-                        end
                     end,
                 },
             },
@@ -277,12 +263,6 @@ function MenuManager:testConnection()
     })
     UIManager:show(connection_info)
     UIManager:forceRePaint() -- Force immediate display before API call
-
-    -- Update API with current settings
-    self.api:updateConfig({
-        server_address = self.settings.server_address,
-        api_token = self.settings.api_token,
-    })
 
     local success, result = self.api:testConnection()
 

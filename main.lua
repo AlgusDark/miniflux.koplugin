@@ -52,12 +52,12 @@ function Miniflux:init()
 
     -- Initialize API client
     self.api = MinifluxAPI:new({
-        server_address = self.settings.server_address,
-        api_token = self.settings.api_token,
+        getServerAddress = function() return self.settings.server_address end,
+        getAPIToken = function() return self.settings.api_token end,
     })
 
-    -- Initialize EntryService instance with settings dependency
-    self.entry_service = EntryService:new(self.settings)
+    -- Initialize EntryService instance with settings and API dependencies
+    self.entry_service = EntryService:new(self.settings, self.api)
 
     -- Create menu manager with proper dependency injection
     self.menu_manager = MenuManager:new({
@@ -168,7 +168,7 @@ function Miniflux:overrideEndOfBookBehavior()
                     file_path = file_path,
                     entry_id = entry_id, -- Now a number
                 })
-                return -- Don't call original handler
+                return                   -- Don't call original handler
             end
         end
 

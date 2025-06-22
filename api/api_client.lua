@@ -24,30 +24,28 @@ local Feeds = require("api/feeds")
 local Categories = require("api/categories")
 
 ---@class MinifluxAPI
----@field server_address string Server base URL
----@field api_token string API authentication token
----@field base_url string Complete API base URL
+---@field getServerAddress function Function to get server address
+---@field getAPIToken function Function to get API token
 ---@field entries Entries Entry operations module
 ---@field feeds Feeds Feed operations module
 ---@field categories Categories Category operations module
 local MinifluxAPI = {}
 
 ---@class MinifluxConfig
----@field server_address string The Miniflux server address
----@field api_token string The API authentication token
+---@field getServerAddress fun(): string Server base URL
+---@field getAPIToken fun(): string API authentication token
 
 ---Create a new API instance
----@param config MinifluxConfig Configuration table with server_address and api_token
+---@param config MinifluxConfig Configuration table with getter functions
 ---@return MinifluxAPI
 function MinifluxAPI:new(config)
-    config = config or {}
-
     local instance = {}
     setmetatable(instance, self)
     self.__index = self
 
-    -- Use updateConfig to set configuration (eliminates duplication)
-    instance:updateConfig(config)
+    -- Store getter functions
+    instance.getServerAddress = config.getServerAddress
+    instance.getAPIToken = config.getAPIToken
 
     -- Create module instances
     instance.entries = Entries:new(instance)
@@ -55,28 +53,6 @@ function MinifluxAPI:new(config)
     instance.categories = Categories:new(instance)
 
     return instance
-end
-
--- =============================================================================
--- CONFIGURATION MANAGEMENT
--- =============================================================================
-
----Update the API configuration with new server address and/or API token
----@param config MinifluxConfig Configuration table with server_address and/or api_token
----@return nil
-function MinifluxAPI:updateConfig(config)
-    config = config or {}
-
-    -- Update server address if provided
-    if config.server_address then
-        self.server_address = utils.rtrim_slashes(config.server_address)
-        self.base_url = self.server_address .. "/v1"
-    end
-
-    -- Update API token if provided
-    if config.api_token then
-        self.api_token = config.api_token
-    end
 end
 
 -- =============================================================================
@@ -91,11 +67,17 @@ end
 ---@return boolean success True if request succeeded
 ---@return table|string result_or_error Decoded JSON table on success, error string on failure
 function MinifluxAPI:makeRequest(method, endpoint, body, params)
-    if not self.server_address or not self.api_token or self.server_address == "" or self.api_token == "" then
+    -- Get fresh configuration values
+    local server_address = self.getServerAddress()
+    local api_token = self.getAPIToken()
+
+    if not server_address or not api_token or
+        server_address == "" or api_token == "" then
         return false, _("Server address and API token must be configured")
     end
 
-    local url = self.base_url .. endpoint
+    local base_url = utils.rtrim_slashes(server_address) .. "/v1"
+    local url = base_url .. endpoint
 
     -- Build query string from params
     if params and next(params) then
@@ -118,7 +100,7 @@ function MinifluxAPI:makeRequest(method, endpoint, body, params)
     end
 
     local headers = {
-        ["X-Auth-Token"] = self.api_token,
+        ["X-Auth-Token"] = api_token,
         ["Content-Type"] = "application/json",
         ["User-Agent"] = "KOReader-Miniflux/1.0",
     }
