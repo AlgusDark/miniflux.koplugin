@@ -6,7 +6,7 @@ with specialized API modules. It provides convenient HTTP methods and manages
 the connection to the Miniflux server.
 
 @module koplugin.miniflux.api.api_client
---]] --
+--]]
 
 local http = require("socket.http")
 local JSON = require("json")
@@ -91,8 +91,7 @@ end
 ---@return boolean success True if request succeeded
 ---@return table|string result_or_error Decoded JSON table on success, error string on failure
 function MinifluxAPI:makeRequest(method, endpoint, body, params)
-    if not self.server_address or not self.api_token or
-        self.server_address == "" or self.api_token == "" then
+    if not self.server_address or not self.api_token or self.server_address == "" or self.api_token == "" then
         return false, _("Server address and API token must be configured")
     end
 

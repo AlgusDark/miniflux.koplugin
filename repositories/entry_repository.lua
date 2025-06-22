@@ -5,7 +5,7 @@ Handles all entry-related data access and API interactions.
 Provides a clean interface for entry data without UI concerns.
 
 @module miniflux.browser.repositories.entry_repository
---]] --
+--]]
 
 ---@class EntryRepository
 ---@field api MinifluxAPI API client instance
@@ -19,7 +19,7 @@ local EntryRepository = {}
 function EntryRepository:new(api, settings)
     local obj = {
         api = api,
-        settings = settings
+        settings = settings,
     }
     setmetatable(obj, self)
     self.__index = self
@@ -112,8 +112,8 @@ function EntryRepository:getUnreadCount()
     local options = {
         order = self.settings.order,
         direction = self.settings.direction,
-        limit = 1,            -- We only need one entry to get the total count
-        status = { "unread" } -- Only unread for count
+        limit = 1, -- We only need one entry to get the total count
+        status = { "unread" }, -- Only unread for count
     }
 
     local success, result = self.api.entries:getEntries(options)

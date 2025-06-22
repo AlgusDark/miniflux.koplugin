@@ -5,7 +5,7 @@ This utility handles loading entry metadata from the filesystem for
 various entry operations and navigation.
 
 @module miniflux.utils.metadata_loader
---]] --
+--]]
 
 local lfs = require("libs/libkoreader-lfs")
 

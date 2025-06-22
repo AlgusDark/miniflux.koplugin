@@ -5,7 +5,7 @@ This service handles complex entry navigation logic including timestamp-based
 previous/next navigation, API coordination, and context-aware filtering.
 
 @module miniflux.services.navigation_service
---]] --
+--]]
 
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
@@ -26,7 +26,7 @@ local NavigationService = {}
 ---@return NavigationService
 function NavigationService:new(settings)
     local instance = {
-        settings = settings
+        settings = settings,
     }
     setmetatable(instance, self)
     self.__index = self
@@ -39,11 +39,8 @@ end
 
 -- ISO-8601 to Unix timestamp conversion
 local function iso8601_to_unix(s)
-    local Y, M, D, h, m, sec, sign, tzh, tzm = s:match(
-        "(%d+)%-(%d+)%-(%d+)T" ..
-        "(%d+):(%d+):(%d+)" ..
-        "([%+%-])(%d%d):(%d%d)$"
-    )
+    local Y, M, D, h, m, sec, sign, tzh, tzm =
+        s:match("(%d+)%-(%d+)%-(%d+)T" .. "(%d+):(%d+):(%d+)" .. "([%+%-])(%d%d):(%d%d)$")
     if not Y then
         error("Bad ISO-8601 string: " .. tostring(s))
     end
@@ -60,8 +57,7 @@ local function iso8601_to_unix(s)
     local era = math.floor(y / 400)
     local yoe = y - era * 400
     local doy = math.floor((153 * (mo - 3) + 2) / 5) + D - 1
-    local doe = yoe * 365 + math.floor(yoe / 4)
-        - math.floor(yoe / 100) + doy
+    local doe = yoe * 365 + math.floor(yoe / 4) - math.floor(yoe / 100) + doy
     local days = era * 146097 + doe - 719468
 
     local utc_secs = days * 86400 + h * 3600 + m * 60 + sec
@@ -87,7 +83,7 @@ function NavigationService:getNavigationApiOptions()
         limit = self.settings.limit,
         order = self.settings.order,
         direction = self.settings.direction,
-        status = self.settings.hide_read_entries and { "unread" } or { "unread", "read" }
+        status = self.settings.hide_read_entries and { "unread" } or { "unread", "read" },
     }
     return options
 end
@@ -103,31 +99,31 @@ end
 function NavigationService:navigateToPreviousEntry(entry_info, entry_service)
     local current_entry_id = entry_info.entry_id
     if not current_entry_id then
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: missing entry ID"),
             timeout = 3,
-        })
+        }))
         return
     end
 
     local api_success, api = pcall(function()
         return MinifluxAPI:new({
             server_address = self.settings.server_address,
-            api_token = self.settings.api_token
+            api_token = self.settings.api_token,
         })
     end)
 
     if not api_success or not api then
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: API not available"),
             timeout = 3,
-        })
+        }))
         return
     end
 
-    local loading_info = InfoMessage:new {
+    local loading_info = InfoMessage:new({
         text = _("Finding previous entry..."),
-    }
+    })
     UIManager:show(loading_info)
     UIManager:forceRePaint()
 
@@ -137,20 +133,20 @@ function NavigationService:navigateToPreviousEntry(entry_info, entry_service)
 
     if not context_success or not has_context then
         UIManager:close(loading_info)
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: no browsing context available"),
             timeout = 3,
-        })
+        }))
         return
     end
 
     local metadata = MetadataLoader.loadCurrentEntryMetadata(entry_info)
     if not metadata or not metadata.published_at then
         UIManager:close(loading_info)
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: missing timestamp information"),
             timeout = 3,
-        })
+        }))
         return
     end
 
@@ -161,10 +157,10 @@ function NavigationService:navigateToPreviousEntry(entry_info, entry_service)
 
     if not ok or not published_unix then
         UIManager:close(loading_info)
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: invalid timestamp format"),
             timeout = 3,
-        })
+        }))
         return
     end
 
@@ -175,10 +171,10 @@ function NavigationService:navigateToPreviousEntry(entry_info, entry_service)
 
     if not options_success or not options then
         UIManager:close(loading_info)
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: failed to get context options"),
             timeout = 3,
-        })
+        }))
         return
     end
 
@@ -211,7 +207,12 @@ function NavigationService:navigateToPreviousEntry(entry_info, entry_service)
             return NavigationContext.getCurrentContext()
         end)
 
-        if current_context_success and current_context and current_context.type and current_context.type ~= "global" then
+        if
+            current_context_success
+            and current_context
+            and current_context.type
+            and current_context.type ~= "global"
+        then
             local global_options = self:getNavigationApiOptions()
             global_options.direction = "asc"
             global_options.published_after = published_unix
@@ -227,10 +228,10 @@ function NavigationService:navigateToPreviousEntry(entry_info, entry_service)
             end
         end
 
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("No previous entry available"),
             timeout = 3,
-        })
+        }))
     end
 end
 
@@ -241,31 +242,31 @@ end
 function NavigationService:navigateToNextEntry(entry_info, entry_service)
     local current_entry_id = entry_info.entry_id
     if not current_entry_id then
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: missing entry ID"),
             timeout = 3,
-        })
+        }))
         return
     end
 
     local api_success, api = pcall(function()
         return MinifluxAPI:new({
             server_address = self.settings.server_address,
-            api_token = self.settings.api_token
+            api_token = self.settings.api_token,
         })
     end)
 
     if not api_success or not api then
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: API not available"),
             timeout = 3,
-        })
+        }))
         return
     end
 
-    local loading_info = InfoMessage:new {
+    local loading_info = InfoMessage:new({
         text = _("Finding next entry..."),
-    }
+    })
     UIManager:show(loading_info)
     UIManager:forceRePaint()
 
@@ -275,20 +276,20 @@ function NavigationService:navigateToNextEntry(entry_info, entry_service)
 
     if not context_success or not has_context then
         UIManager:close(loading_info)
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: no browsing context available"),
             timeout = 3,
-        })
+        }))
         return
     end
 
     local metadata = MetadataLoader.loadCurrentEntryMetadata(entry_info)
     if not metadata or not metadata.published_at then
         UIManager:close(loading_info)
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: missing timestamp information"),
             timeout = 3,
-        })
+        }))
         return
     end
 
@@ -299,10 +300,10 @@ function NavigationService:navigateToNextEntry(entry_info, entry_service)
 
     if not ok or not published_unix then
         UIManager:close(loading_info)
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: invalid timestamp format"),
             timeout = 3,
-        })
+        }))
         return
     end
 
@@ -313,10 +314,10 @@ function NavigationService:navigateToNextEntry(entry_info, entry_service)
 
     if not options_success or not options then
         UIManager:close(loading_info)
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: failed to get context options"),
             timeout = 3,
-        })
+        }))
         return
     end
 
@@ -349,7 +350,12 @@ function NavigationService:navigateToNextEntry(entry_info, entry_service)
             return NavigationContext.getCurrentContext()
         end)
 
-        if current_context_success and current_context and current_context.type and current_context.type ~= "global" then
+        if
+            current_context_success
+            and current_context
+            and current_context.type
+            and current_context.type ~= "global"
+        then
             local global_options = self:getNavigationApiOptions()
             global_options.direction = "desc"
             global_options.published_before = published_unix
@@ -365,10 +371,10 @@ function NavigationService:navigateToNextEntry(entry_info, entry_service)
             end
         end
 
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("No next entry available"),
             timeout = 3,
-        })
+        }))
     end
 end
 

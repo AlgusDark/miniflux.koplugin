@@ -7,11 +7,10 @@ to provide high-level entry operations including UI coordination, navigation,
 and dialog management.
 
 @module koplugin.miniflux.services.entry_service
---]] --
+--]]
 
 local lfs = require("libs/libkoreader-lfs")
 local socket_url = require("socket.url")
-local DataStorage = require("datastorage")
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 local ReaderUI = require("apps/reader/readerui")
@@ -142,7 +141,7 @@ function EntryService:_downloadEntryContent(entry_data, browser)
     local metadata = EntryUtils.createMetadata({
         entry_data = entry_data,
         include_images = include_images,
-        images_count = #images
+        images_count = #images,
     })
     local metadata_file = EntryUtils.getEntryMetadataPath(entry_data.id)
     local metadata_content = "return " .. self:_tableToString(metadata)
@@ -152,10 +151,10 @@ function EntryService:_downloadEntryContent(entry_data, browser)
 
     -- Show completion summary
     local image_summary = ImageUtils.createDownloadSummary(include_images, images)
-    UIManager:show(InfoMessage:new {
+    UIManager:show(InfoMessage:new({
         text = _("Download completed!") .. "\n\n" .. image_summary,
         timeout = 1,
-    })
+    }))
 
     -- Close browser and open entry
     self:_closeBrowserAndOpenEntry(browser, html_file)
@@ -173,11 +172,7 @@ function EntryService:_downloadImages(images, entry_dir, progress)
 
     for i, img in ipairs(images) do
         -- Update progress for each image
-        progress:update(
-            T(_("Downloading image %1 of %2…"), i, #images),
-            { current = i - 1, total = #images },
-            true
-        )
+        progress:update(T(_("Downloading image %1 of %2…"), i, #images), { current = i - 1, total = #images }, true)
 
         -- Process can be interrupted every second
         if time.to_ms(time.since(time_prev)) > 1000 then
@@ -201,10 +196,7 @@ function EntryService:_downloadImages(images, entry_dir, progress)
     end
 
     -- Final update
-    progress:update(
-        _("Image downloads completed"),
-        { current = progress.downloaded_images, total = #images }
-    )
+    progress:update(_("Image downloads completed"), { current = progress.downloaded_images, total = #images })
 end
 
 -- =============================================================================
@@ -237,7 +229,7 @@ function EntryService:changeEntryStatus(entry_id, new_status)
 
     -- Show loading message
     local action_text = new_status == "read" and _("Marking entry as read...") or _("Marking entry as unread...")
-    local loading_info = InfoMessage:new { text = action_text }
+    local loading_info = InfoMessage:new({ text = action_text })
     UIManager:show(loading_info)
     UIManager:forceRePaint()
 
@@ -245,7 +237,7 @@ function EntryService:changeEntryStatus(entry_id, new_status)
     local api_success, api = pcall(function()
         return MinifluxAPI:new({
             server_address = self.settings.server_address,
-            api_token = self.settings.api_token
+            api_token = self.settings.api_token,
         })
     end)
 
@@ -270,15 +262,14 @@ function EntryService:changeEntryStatus(entry_id, new_status)
         self:onEntryStatusChanged(entry_id, new_status)
 
         local success_text = new_status == "read" and _("Entry marked as read") or _("Entry marked as unread")
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = success_text,
             timeout = 2,
-        })
+        }))
         return true
     else
-        local error_text = new_status == "read" and
-            _("Failed to mark entry as read: ") .. tostring(result) or
-            _("Failed to mark entry as unread: ") .. tostring(result)
+        local error_text = new_status == "read" and _("Failed to mark entry as read: ") .. tostring(result)
+            or _("Failed to mark entry as unread: ") .. tostring(result)
         self:_showError(error_text)
         return false
     end
@@ -376,7 +367,7 @@ function EntryService:showEndOfEntryDialog(entry_info)
     -- Create dialog and return reference for caller management
     local dialog = nil
     local dialog_success = pcall(function()
-        dialog = ButtonDialogTitle:new {
+        dialog = ButtonDialogTitle:new({
             title = _("You've reached the end of the entry."),
             title_align = "center",
             buttons = {
@@ -438,7 +429,7 @@ function EntryService:showEndOfEntryDialog(entry_info)
                     },
                 },
             },
-        }
+        })
     end)
 
     if dialog_success and dialog then
@@ -447,10 +438,10 @@ function EntryService:showEndOfEntryDialog(entry_info)
         return dialog
     else
         -- If dialog creation fails, show a simple error message
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("Failed to create end of entry dialog"),
             timeout = 3,
-        })
+        }))
         return nil
     end
 end
@@ -496,10 +487,10 @@ function EntryService:deleteLocalEntryFromInfo(entry_info)
     local entry_id = entry_info.entry_id
 
     if not EntryUtils.isValidId(entry_id) then
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("Cannot delete: invalid entry ID"),
             timeout = 3,
-        })
+        }))
         return
     end
 
@@ -569,10 +560,10 @@ function EntryService:deleteLocalEntry(entry_id)
     end)
 
     if success then
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("Local entry deleted successfully"),
             timeout = 2,
-        })
+        }))
 
         -- Open Miniflux folder
         pcall(function()
@@ -645,10 +636,10 @@ end
 ---@param message string Error message
 ---@return nil
 function EntryService:_showError(message)
-    UIManager:show(InfoMessage:new {
+    UIManager:show(InfoMessage:new({
         text = message,
         timeout = 5,
-    })
+    }))
 end
 
 ---Convert table to Lua string representation

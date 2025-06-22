@@ -6,17 +6,17 @@ It tracks what the user is currently browsing (feed, category, or global)
 and provides this context for navigation between entries.
 
 @module miniflux.browser.utils.navigation_context
---]] --
+--]]
 
 local NavigationContext = {}
 
 -- Global navigation context state
 local _current_context = {
-    type = nil,        -- "feed", "category", or "global"
-    feed_id = nil,     -- Current feed ID if browsing a feed
+    type = nil, -- "feed", "category", or "global"
+    feed_id = nil, -- Current feed ID if browsing a feed
     category_id = nil, -- Current category ID if browsing a category
-    entry_id = nil,    -- Currently viewed entry ID
-    timestamp = nil    -- When context was set (for debugging)
+    entry_id = nil, -- Currently viewed entry ID
+    timestamp = nil, -- When context was set (for debugging)
 }
 
 ---Set the global navigation context when opening an entry from a feed
@@ -29,7 +29,7 @@ function NavigationContext.setFeedContext(feed_id, entry_id)
         feed_id = feed_id,
         category_id = nil,
         entry_id = entry_id,
-        timestamp = os.time()
+        timestamp = os.time(),
     }
 end
 
@@ -43,7 +43,7 @@ function NavigationContext.setCategoryContext(category_id, entry_id)
         feed_id = nil,
         category_id = category_id,
         entry_id = entry_id,
-        timestamp = os.time()
+        timestamp = os.time(),
     }
 end
 
@@ -56,7 +56,7 @@ function NavigationContext.setGlobalContext(entry_id)
         feed_id = nil,
         category_id = nil,
         entry_id = entry_id,
-        timestamp = os.time()
+        timestamp = os.time(),
     }
 end
 
@@ -77,7 +77,7 @@ function NavigationContext.getCurrentContext()
         feed_id = _current_context.feed_id,
         category_id = _current_context.category_id,
         entry_id = _current_context.entry_id,
-        timestamp = _current_context.timestamp
+        timestamp = _current_context.timestamp,
     }
 end
 
@@ -117,7 +117,7 @@ function NavigationContext.clear()
         feed_id = nil,
         category_id = nil,
         entry_id = nil,
-        timestamp = nil
+        timestamp = nil,
     }
 end
 

@@ -5,7 +5,7 @@ Pure utility functions for entry operations, validation, and file management.
 Replaces the Entry entity with simpler, more maintainable functions.
 
 @module koplugin.miniflux.utils.entry_utils
---]] --
+--]]
 
 local DataStorage = require("datastorage")
 local lfs = require("libs/libkoreader-lfs")
@@ -136,7 +136,7 @@ function EntryUtils.createMetadata(params)
 
         -- Image processing results
         images_included = include_images,
-        images_count = images_count
+        images_count = images_count,
     }
 end
 

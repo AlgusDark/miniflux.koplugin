@@ -5,7 +5,7 @@ This utility module handles HTML document creation and processing for offline
 viewing of RSS entries in KOReader.
 
 @module miniflux.browser.utils.html_utils
---]] --
+--]]
 
 local _ = require("gettext")
 
@@ -23,25 +23,29 @@ function HtmlUtils.createHtmlDocument(entry, content)
 
     -- Feed information
     if entry.feed and entry.feed.title then
-        table.insert(metadata_sections, string.format('<p><strong>%s:</strong> %s</p>',
-            _("Feed"), entry.feed.title))
+        table.insert(metadata_sections, string.format("<p><strong>%s:</strong> %s</p>", _("Feed"), entry.feed.title))
     end
 
     -- Publication date
     if entry.published_at then
-        table.insert(metadata_sections, string.format('<p><strong>%s:</strong> %s</p>',
-            _("Published"), entry.published_at))
+        table.insert(
+            metadata_sections,
+            string.format("<p><strong>%s:</strong> %s</p>", _("Published"), entry.published_at)
+        )
     end
 
     -- Original URL
     if entry.url then
-        table.insert(metadata_sections, string.format('<p><strong>%s:</strong> <a href="%s">%s</a></p>',
-            _("URL"), entry.url, entry.url))
+        table.insert(
+            metadata_sections,
+            string.format('<p><strong>%s:</strong> <a href="%s">%s</a></p>', _("URL"), entry.url, entry.url)
+        )
     end
 
     local metadata_html = table.concat(metadata_sections, "\n        ")
 
-    return string.format([[<!DOCTYPE html>
+    return string.format(
+        [[<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -103,7 +107,7 @@ function HtmlUtils.createHtmlDocument(entry, content)
         HtmlUtils.escapeHtml(entry_title), -- Title in head
         HtmlUtils.escapeHtml(entry_title), -- Title in body
         metadata_html,
-        content                            -- Content is already processed, don't escape it
+        content -- Content is already processed, don't escape it
     )
 end
 
@@ -116,14 +120,14 @@ function HtmlUtils.escapeHtml(text)
     end
 
     local escape_map = {
-        ['&'] = '&amp;',
-        ['<'] = '&lt;',
-        ['>'] = '&gt;',
-        ['"'] = '&quot;',
-        ["'"] = '&#39;'
+        ["&"] = "&amp;",
+        ["<"] = "&lt;",
+        [">"] = "&gt;",
+        ['"'] = "&quot;",
+        ["'"] = "&#39;",
     }
 
-    return (text:gsub('[&<>"\']', escape_map))
+    return (text:gsub("[&<>\"']", escape_map))
 end
 
 ---Create a simple HTML template for plain text content
@@ -135,12 +139,13 @@ function HtmlUtils.createSimpleHtmlDocument(title, content)
     local escaped_content = HtmlUtils.escapeHtml(content)
 
     -- Convert line breaks to paragraphs
-    local formatted_content = escaped_content:gsub('\n\n+', '</p><p>'):gsub('\n', '<br>')
+    local formatted_content = escaped_content:gsub("\n\n+", "</p><p>"):gsub("\n", "<br>")
     if formatted_content ~= "" then
-        formatted_content = '<p>' .. formatted_content .. '</p>'
+        formatted_content = "<p>" .. formatted_content .. "</p>"
     end
 
-    return string.format([[<!DOCTYPE html>
+    return string.format(
+        [[<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -217,15 +222,15 @@ function HtmlUtils.extractTextContent(html)
 
     -- Decode common HTML entities
     local entity_map = {
-        ['&amp;'] = '&',
-        ['&lt;'] = '<',
-        ['&gt;'] = '>',
-        ['&quot;'] = '"',
-        ['&#39;'] = "'",
-        ['&nbsp;'] = ' ',
-        ['&mdash;'] = '—',
-        ['&ndash;'] = '–',
-        ['&hellip;'] = '…'
+        ["&amp;"] = "&",
+        ["&lt;"] = "<",
+        ["&gt;"] = ">",
+        ["&quot;"] = '"',
+        ["&#39;"] = "'",
+        ["&nbsp;"] = " ",
+        ["&mdash;"] = "—",
+        ["&ndash;"] = "–",
+        ["&hellip;"] = "…",
     }
 
     for entity, char in pairs(entity_map) do

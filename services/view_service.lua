@@ -53,7 +53,7 @@ function ViewService:showUnreadEntries(paths_updated)
     end
 
     local menu_items = self.menu_formatter:entriesToMenuItems(entries, true) -- show feed names
-    local subtitle = self:buildSubtitle(#entries, false, true)               -- unread only
+    local subtitle = self:buildSubtitle(#entries, false, true) -- unread only
 
     self.browser.current_context = { type = "unread_entries" }
     local nav_data = self.path_service and self.path_service:createNavData(paths_updated, "main") or {}
@@ -118,13 +118,15 @@ function ViewService:showFeedEntries(feed_id, feed_title, paths_updated)
     self.browser.current_context = {
         type = "feed_entries",
         feed_id = feed_id,
-        feed_title = feed_title
+        feed_title = feed_title,
     }
 
-    local nav_data = self.path_service and self.path_service:createNavData(paths_updated, "feeds", {
-        feed_id = feed_id,
-        feed_title = feed_title
-    }) or {}
+    local nav_data = self.path_service
+            and self.path_service:createNavData(paths_updated, "feeds", {
+                feed_id = feed_id,
+                feed_title = feed_title,
+            })
+        or {}
 
     self:updateBrowser(feed_title, menu_items, subtitle, nav_data)
 end
@@ -147,13 +149,15 @@ function ViewService:showCategoryEntries(category_id, category_title, paths_upda
     self.browser.current_context = {
         type = "category_entries",
         category_id = category_id,
-        category_title = category_title
+        category_title = category_title,
     }
 
-    local nav_data = self.path_service and self.path_service:createNavData(paths_updated, "categories", {
-        category_id = category_id,
-        category_title = category_title
-    }) or {}
+    local nav_data = self.path_service
+            and self.path_service:createNavData(paths_updated, "categories", {
+                category_id = category_id,
+                category_title = category_title,
+            })
+        or {}
 
     self:updateBrowser(category_title, menu_items, subtitle, nav_data)
 end
@@ -169,18 +173,18 @@ function ViewService:showMainContent()
         {
             text = _("Unread"),
             mandatory = tostring(self.browser.unread_count),
-            action_type = "unread"
+            action_type = "unread",
         },
         {
             text = _("Feeds"),
             mandatory = tostring(self.browser.feeds_count),
-            action_type = "feeds"
+            action_type = "feeds",
         },
         {
             text = _("Categories"),
             mandatory = tostring(self.browser.categories_count),
-            action_type = "categories"
-        }
+            action_type = "categories",
+        },
     }
 
     self:updateBrowser(_("Miniflux"), main_items, subtitle, { paths_updated = true })
@@ -252,7 +256,7 @@ function ViewService:isInEntryView()
     local main_titles = {
         [_("Miniflux")] = true,
         [_("Feeds")] = true,
-        [_("Categories")] = true
+        [_("Categories")] = true,
     }
 
     return not main_titles[self.browser.title]

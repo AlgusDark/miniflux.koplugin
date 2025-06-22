@@ -5,7 +5,7 @@ This module handles all category-related operations including category listing,
 category entries retrieval, and category management.
 
 @module koplugin.miniflux.api.categories
---]] --
+--]]
 
 local apiUtils = require("api/utils")
 
@@ -23,7 +23,7 @@ local Categories = {}
 ---@return Categories
 function Categories:new(api)
     local o = {
-        api = api
+        api = api,
     }
     setmetatable(o, self)
     self.__index = self

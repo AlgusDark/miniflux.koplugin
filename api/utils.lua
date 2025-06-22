@@ -4,10 +4,9 @@ API Utilities
 This module contains shared utility functions used across the Miniflux API modules.
 
 @module koplugin.miniflux.api.utils
---]] --
+--]]
 
 local apiUtils = {}
-
 
 ---@alias EntryStatus "read"|"unread"|"removed"
 ---@alias SortDirection "asc"|"desc"

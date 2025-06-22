@@ -5,7 +5,7 @@ This module provides reusable UI components for the browser layer, including
 standardized message dialogs, loading indicators, and progress tracking.
 
 @module miniflux.browser.lib.ui_components
---]] --
+--]]
 
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
@@ -21,9 +21,9 @@ local UIComponents = {}
 ---@param text? string Loading message text (defaults to "Loading...")
 ---@return InfoMessage Loading message widget for cleanup
 function UIComponents.showLoadingMessage(text)
-    local loading_info = InfoMessage:new {
+    local loading_info = InfoMessage:new({
         text = text or _("Loading..."),
-    }
+    })
     UIManager:show(loading_info)
     UIManager:forceRePaint() -- Force immediate display before API call blocks
     return loading_info
@@ -43,10 +43,10 @@ end
 ---@param timeout? number Message timeout in seconds (default: 5)
 ---@return nil
 function UIComponents.showErrorMessage(message, timeout)
-    UIManager:show(InfoMessage:new {
+    UIManager:show(InfoMessage:new({
         text = message,
         timeout = timeout or 5,
-    })
+    }))
 end
 
 ---Show a success message with timeout
@@ -54,10 +54,10 @@ end
 ---@param timeout? number Message timeout in seconds (default: 3)
 ---@return nil
 function UIComponents.showSuccessMessage(message, timeout)
-    UIManager:show(InfoMessage:new {
+    UIManager:show(InfoMessage:new({
         text = message,
         timeout = timeout or 3,
-    })
+    }))
 end
 
 ---Show an info message with timeout
@@ -65,10 +65,10 @@ end
 ---@param timeout? number Message timeout in seconds (default: 3)
 ---@return nil
 function UIComponents.showInfoMessage(message, timeout)
-    UIManager:show(InfoMessage:new {
+    UIManager:show(InfoMessage:new({
         text = message,
         timeout = timeout or 3,
-    })
+    }))
 end
 
 ---Show a warning message with timeout
@@ -76,10 +76,10 @@ end
 ---@param timeout? number Message timeout in seconds (default: 4)
 ---@return nil
 function UIComponents.showWarningMessage(message, timeout)
-    UIManager:show(InfoMessage:new {
+    UIManager:show(InfoMessage:new({
         text = message,
         timeout = timeout or 4,
-    })
+    }))
 end
 
 -- =============================================================================
@@ -97,7 +97,7 @@ local ProgressDialog = {}
 function ProgressDialog:new(title)
     local obj = {
         title = title,
-        dialog = nil
+        dialog = nil,
     }
     setmetatable(obj, self)
     self.__index = self
@@ -118,10 +118,10 @@ function ProgressDialog:update(message, timeout)
     local full_message = self.title and (self.title .. "\n\n" .. message) or message
 
     -- Create new progress dialog
-    self.dialog = InfoMessage:new {
+    self.dialog = InfoMessage:new({
         text = full_message,
         timeout = timeout,
-    }
+    })
 
     UIManager:show(self.dialog)
     UIManager:forceRePaint()
@@ -147,9 +147,9 @@ end
 ---@param message string Progress message
 ---@return InfoMessage Progress dialog for manual cleanup if needed
 function UIComponents.showSimpleProgress(message)
-    local dialog = InfoMessage:new {
+    local dialog = InfoMessage:new({
         text = message,
-    }
+    })
     UIManager:show(dialog)
     UIManager:forceRePaint()
     return dialog

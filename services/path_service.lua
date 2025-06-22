@@ -116,7 +116,7 @@ function PathService:addToNavigationHistory(nav_data)
             title = nav_data.current_title or self.browser.title,
             type = nav_data.current_type or "main",
             page_info = nav_data.page_info,
-            nav_data = nav_data.current_data
+            nav_data = nav_data.current_data,
         }
         table.insert(self.browser.navigation_paths, current_path)
     end

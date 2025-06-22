@@ -5,7 +5,7 @@ Handles all feed-related data access and API interactions.
 Provides a clean interface for feed data without UI concerns.
 
 @module miniflux.browser.repositories.feed_repository
---]] --
+--]]
 
 ---@class FeedRepository
 ---@field api MinifluxAPI API client instance
@@ -19,7 +19,7 @@ local FeedRepository = {}
 function FeedRepository:new(api, settings)
     local obj = {
         api = api,
-        settings = settings
+        settings = settings,
     }
     setmetatable(obj, self)
     self.__index = self

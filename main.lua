@@ -8,7 +8,6 @@ This main file acts as a coordinator, delegating to specialized modules.
 --]]
 
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
-local DataStorage = require("datastorage")
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
 local Dispatcher = require("dispatcher")
@@ -54,7 +53,7 @@ function Miniflux:init()
     -- Initialize API client
     self.api = MinifluxAPI:new({
         server_address = self.settings.server_address,
-        api_token = self.settings.api_token
+        api_token = self.settings.api_token,
     })
 
     -- Initialize EntryService instance with settings dependency
@@ -66,7 +65,7 @@ function Miniflux:init()
             return self:createBrowser()
         end,
         settings = self.settings,
-        api = self.api
+        api = self.api,
     })
 
     -- Override ReaderStatus EndOfBook behavior for miniflux entries
@@ -125,14 +124,14 @@ end
 ---@return MinifluxBrowser Browser instance
 function Miniflux:createBrowser()
     local MinifluxBrowser = require("browser/browser")
-    local browser = MinifluxBrowser:new {
+    local browser = MinifluxBrowser:new({
         title = _("Miniflux"),
         settings = self.settings,
         api = self.api,
         download_dir = self.download_dir,
         -- No close_callback needed since browser is created on-demand
         -- UIManager:close(self) in closeAll() is sufficient
-    }
+    })
     return browser
 end
 
@@ -169,7 +168,7 @@ function Miniflux:overrideEndOfBookBehavior()
                     file_path = file_path,
                     entry_id = entry_id, -- Now a number
                 })
-                return                   -- Don't call original handler
+                return -- Don't call original handler
             end
         end
 

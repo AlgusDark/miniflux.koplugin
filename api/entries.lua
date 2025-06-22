@@ -5,7 +5,7 @@ This module handles all entry-related operations. It receives a reference to the
 main API client and uses its HTTP methods for communication.
 
 @module koplugin.miniflux.api.entries
---]] --
+--]]
 
 local apiUtils = require("api/utils")
 
@@ -28,7 +28,7 @@ local Entries = {}
 ---@return Entries
 function Entries:new(api)
     local o = {
-        api = api
+        api = api,
     }
     setmetatable(o, self)
     self.__index = self

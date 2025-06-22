@@ -5,7 +5,7 @@ Settings management with idiomatic property access using metamethods.
 Uses LuaSettings for storage with proper initialization and state management.
 
 @module koplugin.miniflux.settings
---]]--
+--]]
 
 local DataStorage = require("datastorage")
 local LuaSettings = require("luasettings")
@@ -18,7 +18,7 @@ local DEFAULTS = {
     order = "published_at",
     direction = "desc",
     hide_read_entries = true,
-    include_images = true
+    include_images = true,
 }
 
 -- =============================================================================
@@ -40,9 +40,9 @@ local MinifluxSettings = {}
 ---@return MinifluxSettings
 function MinifluxSettings:new()
     local instance = {
-        settings = LuaSettings:open(DataStorage:getSettingsDir() .. "/miniflux.lua")
+        settings = LuaSettings:open(DataStorage:getSettingsDir() .. "/miniflux.lua"),
     }
-    
+
     setmetatable(instance, self)
     return instance
 end
@@ -59,13 +59,13 @@ function MinifluxSettings:__index(key)
     if rawget(MinifluxSettings, key) then
         return rawget(MinifluxSettings, key)
     end
-    
+
     -- Handle setting access
     local default = DEFAULTS[key]
     if default ~= nil then
         return self.settings:readSetting(key, default)
     end
-    
+
     -- Fallback to nil for unknown keys
     return nil
 end
@@ -101,4 +101,4 @@ function MinifluxSettings:toggleHideReadEntries()
     return new_value
 end
 
-return MinifluxSettings 
+return MinifluxSettings

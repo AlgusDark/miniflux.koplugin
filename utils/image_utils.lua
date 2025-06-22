@@ -5,7 +5,7 @@ This utility module handles image discovery, downloading, and HTML processing
 for offline viewing of RSS entries with embedded images.
 
 @module miniflux.browser.utils.image_utils
---]] --
+--]]
 
 local http = require("socket.http")
 local ltn12 = require("ltn12")
@@ -65,7 +65,7 @@ function ImageUtils.discoverImages(content, base_url)
                 filename = filename,
                 width = width,
                 height = height,
-                downloaded = false
+                downloaded = false,
             }
 
             table.insert(images, image_info)
@@ -148,10 +148,10 @@ function ImageUtils.downloadImage(url, entry_dir, filename)
 
     local result, status_code
     local network_success = pcall(function()
-        result, status_code = http.request {
+        result, status_code = http.request({
             url = url,
             sink = ltn12.sink.table(response_body),
-        }
+        })
     end)
 
     socketutil:reset_timeout()
@@ -227,7 +227,7 @@ function ImageUtils.processHtmlImages(content, seen_images, include_images, base
             if include_images then
                 return img_tag -- Keep original if we can't identify it
             else
-                return ""      -- Remove if include_images is false
+                return "" -- Remove if include_images is false
             end
         end
 
@@ -236,7 +236,7 @@ function ImageUtils.processHtmlImages(content, seen_images, include_images, base
             if include_images then
                 return img_tag -- Keep data URLs as-is
             else
-                return ""      -- Remove if include_images is false
+                return "" -- Remove if include_images is false
             end
         end
 
@@ -257,7 +257,7 @@ function ImageUtils.processHtmlImages(content, seen_images, include_images, base
             if include_images then
                 return img_tag -- Keep original
             else
-                return ""      -- Remove
+                return "" -- Remove
             end
         end
     end
@@ -306,8 +306,8 @@ function ImageUtils.cleanHtmlContent(content)
     pcall(function()
         -- Remove iframe tags (both self-closing and with content)
         cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*>.-<%s*/%s*iframe%s*>", "") -- iframe with content
-        cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*/%s*>", "")                 -- self-closing iframe
-        cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*>", "")                     -- opening iframe tag without closing
+        cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*/%s*>", "") -- self-closing iframe
+        cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*>", "") -- opening iframe tag without closing
     end)
 
     return cleaned_content

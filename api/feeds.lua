@@ -5,7 +5,7 @@ This module handles all feed-related operations including feed listing,
 feed entries retrieval, and feed statistics management.
 
 @module koplugin.miniflux.api.feeds
---]] --
+--]]
 
 local apiUtils = require("api/utils")
 
@@ -23,7 +23,7 @@ local Feeds = {}
 ---@return Feeds
 function Feeds:new(api)
     local o = {
-        api = api
+        api = api,
     }
     setmetatable(o, self)
     self.__index = self

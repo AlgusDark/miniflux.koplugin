@@ -5,7 +5,7 @@ This utility module provides progress tracking and user feedback for long-runnin
 particularly entry downloading with image processing.
 
 @module miniflux.browser.utils.progress_utils
---]] --
+--]]
 
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
@@ -35,7 +35,7 @@ function EntryDownloadProgress:new(entry_title)
         downloaded_images = 0,
         include_images = true,
         dialog = nil,
-        completion_dialog = nil
+        completion_dialog = nil,
     }
     setmetatable(obj, self)
     self.__index = self
@@ -59,7 +59,7 @@ function EntryDownloadProgress:update(step, image_progress, can_cancel)
     local message_parts = {
         T(_("Downloading: %1"), self.title),
         "",
-        self.current_step
+        self.current_step,
     }
 
     -- Add image progress if relevant
@@ -83,10 +83,10 @@ function EntryDownloadProgress:update(step, image_progress, can_cancel)
     end
 
     -- Create new progress dialog
-    self.dialog = InfoMessage:new {
+    self.dialog = InfoMessage:new({
         text = message,
         timeout = can_cancel and 30 or nil, -- Allow longer timeout for cancellable operations
-    }
+    })
 
     UIManager:show(self.dialog)
     UIManager:forceRePaint()

@@ -9,7 +9,7 @@ browsing experience for Miniflux. Delegates specific responsibilities to:
 - NavigationService: Complex entry navigation logic (via EntryService)
 
 @module miniflux.browser.browser
---]] --
+--]]
 
 local Menu = require("ui/widget/menu")
 local UIManager = require("ui/uimanager")
@@ -39,7 +39,7 @@ local _ = require("gettext")
 ---@field category_repository CategoryRepository Repository for category data access
 ---@field menu_formatter MenuFormatter Formatter for menu items
 ---@field new fun(self: MinifluxBrowser, o: table): MinifluxBrowser Override Menu:new to return correct type
-local MinifluxBrowser = Menu:extend {
+local MinifluxBrowser = Menu:extend({
     title_shrink_font_to_fit = true,
     is_popout = false,
     covers_fullscreen = true,
@@ -48,7 +48,7 @@ local MinifluxBrowser = Menu:extend {
     title_bar_left_icon = "appbar.settings",
     perpage = 20,
     close_callback = nil,
-}
+})
 
 -- =============================================================================
 -- INITIALIZATION
@@ -206,11 +206,11 @@ function MinifluxBrowser:showConfigDialog()
         },
     })
 
-    self.config_dialog = ButtonDialogTitle:new {
+    self.config_dialog = ButtonDialogTitle:new({
         title = _("Miniflux Settings"),
         title_align = "center",
         buttons = buttons,
-    }
+    })
     UIManager:show(self.config_dialog)
 end
 
@@ -231,17 +231,17 @@ end
 ---@return nil
 function MinifluxBrowser:showMainScreen()
     if self.settings.server_address == "" or self.settings.api_token == "" then
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("Please configure server settings first"),
             timeout = 3,
-        })
+        }))
         return
     end
 
     -- Show loading message while fetching initial data
-    local loading_info = InfoMessage:new {
+    local loading_info = InfoMessage:new({
         text = _("Loading Miniflux data..."),
-    }
+    })
     UIManager:show(loading_info)
     UIManager:forceRePaint() -- Force immediate display before API calls
 
@@ -249,16 +249,16 @@ function MinifluxBrowser:showMainScreen()
     local api_success = pcall(function()
         self.api:updateConfig({
             server_address = self.settings.server_address,
-            api_token = self.settings.api_token
+            api_token = self.settings.api_token,
         })
     end)
 
     if not api_success then
         UIManager:close(loading_info)
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("Failed to initialize API connection"),
             timeout = 5,
-        })
+        }))
         return
     end
 
@@ -294,18 +294,18 @@ function MinifluxBrowser:fetchInitialData(loading_info)
     local unread_count, error_msg = self.entry_repository:getUnreadCount()
     if not unread_count then
         UIManager:close(loading_info)
-        UIManager:show(InfoMessage:new {
+        UIManager:show(InfoMessage:new({
             text = _("Failed to connect to Miniflux: ") .. tostring(error_msg),
             timeout = 5,
-        })
+        }))
         return nil
     end
 
     -- Update loading message
     UIManager:close(loading_info)
-    loading_info = InfoMessage:new {
+    loading_info = InfoMessage:new({
         text = _("Loading feeds data..."),
-    }
+    })
     UIManager:show(loading_info)
     UIManager:forceRePaint()
 
@@ -314,9 +314,9 @@ function MinifluxBrowser:fetchInitialData(loading_info)
 
     -- Update loading message
     UIManager:close(loading_info)
-    loading_info = InfoMessage:new {
+    loading_info = InfoMessage:new({
         text = _("Loading categories data..."),
-    }
+    })
     UIManager:show(loading_info)
     UIManager:forceRePaint()
 
@@ -339,18 +339,18 @@ function MinifluxBrowser:generateMainMenuWithCounts(unread_count, feeds_count, c
         {
             text = _("Unread"),
             mandatory = tostring(unread_count),
-            action_type = "unread"
+            action_type = "unread",
         },
         {
             text = _("Feeds"),
             mandatory = tostring(feeds_count),
-            action_type = "feeds"
+            action_type = "feeds",
         },
         {
             text = _("Categories"),
             mandatory = tostring(categories_count),
-            action_type = "categories"
-        }
+            action_type = "categories",
+        },
     }
 end
 

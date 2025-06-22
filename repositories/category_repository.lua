@@ -5,7 +5,7 @@ Handles all category-related data access and API interactions.
 Provides a clean interface for category data without UI concerns.
 
 @module miniflux.browser.repositories.category_repository
---]] --
+--]]
 
 ---@class CategoryRepository
 ---@field api MinifluxAPI API client instance
@@ -19,7 +19,7 @@ local CategoryRepository = {}
 function CategoryRepository:new(api, settings)
     local obj = {
         api = api,
-        settings = settings
+        settings = settings,
     }
     setmetatable(obj, self)
     self.__index = self
