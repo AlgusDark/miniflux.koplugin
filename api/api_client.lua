@@ -88,7 +88,8 @@ end
 ---@param endpoint string API endpoint path
 ---@param body? table Request body to encode as JSON
 ---@param params? table Query parameters to append to URL
----@return boolean success, any result_or_error
+---@return boolean success True if request succeeded
+---@return table|string result_or_error Decoded JSON table on success, error string on failure
 function MinifluxAPI:makeRequest(method, endpoint, body, params)
     if not self.server_address or not self.api_token or
         self.server_address == "" or self.api_token == "" then
@@ -196,7 +197,8 @@ end
 ---Make a GET request
 ---@param endpoint string API endpoint path
 ---@param config? table Configuration with optional query params
----@return boolean success, any result_or_error
+---@return boolean success True if request succeeded
+---@return table|string result_or_error Decoded JSON table on success, error string on failure
 function MinifluxAPI:get(endpoint, config)
     config = config or {}
     return self:makeRequest("GET", endpoint, nil, config.query)
@@ -205,7 +207,8 @@ end
 ---Make a POST request
 ---@param endpoint string API endpoint path
 ---@param config? table Configuration with optional body and query params
----@return boolean success, any result_or_error
+---@return boolean success True if request succeeded
+---@return table|string result_or_error Decoded JSON table on success, error string on failure
 function MinifluxAPI:post(endpoint, config)
     config = config or {}
     return self:makeRequest("POST", endpoint, config.body, config.query)
@@ -214,7 +217,8 @@ end
 ---Make a PUT request
 ---@param endpoint string API endpoint path
 ---@param config? table Configuration with optional body and query params
----@return boolean success, any result_or_error
+---@return boolean success True if request succeeded
+---@return table|string result_or_error Decoded JSON table on success, error string on failure
 function MinifluxAPI:put(endpoint, config)
     config = config or {}
     return self:makeRequest("PUT", endpoint, config.body, config.query)
@@ -223,7 +227,8 @@ end
 ---Make a DELETE request
 ---@param endpoint string API endpoint path
 ---@param config? table Configuration with optional query params
----@return boolean success, any result_or_error
+---@return boolean success True if request succeeded
+---@return table|string result_or_error Decoded JSON table on success, error string on failure
 function MinifluxAPI:delete(endpoint, config)
     config = config or {}
     return self:makeRequest("DELETE", endpoint, nil, config.query)
