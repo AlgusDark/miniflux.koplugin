@@ -38,6 +38,7 @@ local _ = require("gettext")
 ---@field feed_repository FeedRepository Repository for feed data access
 ---@field category_repository CategoryRepository Repository for category data access
 ---@field menu_formatter MenuFormatter Formatter for menu items
+---@field new fun(self: MinifluxBrowser, o: table): MinifluxBrowser Override Menu:new to return correct type
 local MinifluxBrowser = Menu:extend {
     title_shrink_font_to_fit = true,
     is_popout = false,

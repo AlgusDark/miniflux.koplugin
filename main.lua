@@ -133,7 +133,6 @@ function Miniflux:createBrowser()
         -- No close_callback needed since browser is created on-demand
         -- UIManager:close(self) in closeAll() is sufficient
     }
-    ---@cast browser MinifluxBrowser
     return browser
 end
 
