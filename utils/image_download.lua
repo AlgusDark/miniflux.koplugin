@@ -14,12 +14,19 @@ local socketutil = require("socketutil")
 local ImageDownload = {}
 
 ---Download a single image from URL
----@param url string Image URL to download
----@param entry_dir string Directory to save image in
----@param filename string Filename to save image as
+---@param config {url: string, entry_dir: string, filename: string} Configuration table
 ---@return boolean True if download successful
-function ImageDownload.downloadImage(url, entry_dir, filename)
-    local filepath = entry_dir .. filename
+function ImageDownload.downloadImage(config)
+    -- Validate required config parameters
+    if not config or type(config) ~= "table" then
+        return false
+    end
+
+    if not config.url or not config.entry_dir or not config.filename then
+        return false
+    end
+
+    local filepath = config.entry_dir .. config.filename
     local response_body = {}
 
     -- Add robust timeout handling using socketutil
@@ -29,7 +36,7 @@ function ImageDownload.downloadImage(url, entry_dir, filename)
     local result, status_code
     local network_success = pcall(function()
         result, status_code = http.request({
-            url = url,
+            url = config.url,
             sink = ltn12.sink.table(response_body),
         })
     end)

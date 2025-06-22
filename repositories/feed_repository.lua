@@ -7,6 +7,10 @@ Provides a clean interface for feed data without UI concerns.
 @module miniflux.browser.repositories.feed_repository
 --]]
 
+---@class FeedsWithCountersResult
+---@field feeds table[] Array of feeds
+---@field counters table Feed counters with reads/unreads maps
+
 ---@class FeedRepository
 ---@field api MinifluxAPI API client instance
 ---@field settings MinifluxSettings Settings instance
@@ -31,26 +35,25 @@ end
 -- =============================================================================
 
 ---Get all feeds
----@return table[]|nil Array of feeds or nil on error
----@return string|nil Error message if failed
+---@return table[]|nil feeds Array of feeds or nil on error
+---@return string|nil error Error message if failed
 function FeedRepository:getAll()
     local success, feeds = self.api.feeds:getAll()
     if not success then
         return nil, feeds
     end
 
-    return feeds
+    return feeds, nil
 end
 
 ---Get feeds with their read/unread counters
----@return table[]|nil Array of feeds or nil on error
----@return table|nil Feed counters with reads/unreads maps
----@return string|nil Error message if failed
+---@return FeedsWithCountersResult|nil result Result containing feeds and counters, or nil on error
+---@return string|nil error Error message if failed
 function FeedRepository:getAllWithCounters()
-    -- Get feeds
+    -- Get feeds first
     local feeds, error_msg = self:getAll()
     if not feeds then
-        return nil, nil, error_msg
+        return nil, error_msg
     end
 
     -- Get counters (optional - continue without if it fails)
@@ -59,11 +62,14 @@ function FeedRepository:getAllWithCounters()
         counters = { reads = {}, unreads = {} } -- Empty counters on failure
     end
 
-    return feeds, counters
+    return {
+        feeds = feeds,
+        counters = counters
+    }, nil
 end
 
 ---Get feeds count for initialization
----@return number Count of feeds (0 if failed)
+---@return number count Count of feeds (0 if failed)
 function FeedRepository:getCount()
     local feeds, error_msg = self:getAll()
     if not feeds then

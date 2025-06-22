@@ -13,6 +13,12 @@ local _ = require("gettext")
 ---@field settings MinifluxSettings Settings instance
 local MenuFormatter = {}
 
+---@class EntryMenuConfig
+---@field show_feed_names? boolean Whether to show feed names in entries (default: false)
+
+---@class FeedMenuConfig
+---@field feed_counters? FeedCounters Feed counters with reads/unreads maps
+
 ---Create a new MenuFormatter instance
 ---@param settings MinifluxSettings The settings instance
 ---@return MenuFormatter
@@ -31,9 +37,12 @@ end
 
 ---Convert entries to menu items
 ---@param entries table[] Array of entry data
----@param show_feed_names boolean Whether to show feed names in entries
+---@param config? EntryMenuConfig Configuration options
 ---@return table[] Array of menu items
-function MenuFormatter:entriesToMenuItems(entries, show_feed_names)
+function MenuFormatter:entriesToMenuItems(entries, config)
+    config = config or {}
+    local show_feed_names = config.show_feed_names or false
+
     if not entries or #entries == 0 then
         local hide_read = self.settings.hide_read_entries
         return {
@@ -74,9 +83,12 @@ end
 
 ---Convert feeds to menu items
 ---@param feeds table[] Array of feed data
----@param feed_counters table Feed counters with reads/unreads maps
+---@param config? FeedMenuConfig Configuration options
 ---@return table[] Array of menu items
-function MenuFormatter:feedsToMenuItems(feeds, feed_counters)
+function MenuFormatter:feedsToMenuItems(feeds, config)
+    config = config or {}
+    local feed_counters = config.feed_counters
+
     local menu_items = {}
 
     for _, feed in ipairs(feeds) do

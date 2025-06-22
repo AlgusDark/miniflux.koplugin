@@ -31,19 +31,19 @@ end
 -- =============================================================================
 
 ---Get all categories with counts
----@return table[]|nil Array of categories or nil on error
----@return string|nil Error message if failed
+---@return table[]|nil categories Array of categories or nil on error
+---@return string|nil error Error message if failed
 function CategoryRepository:getAll()
     local success, categories = self.api.categories:getAll(true) -- include counts
     if not success then
         return nil, categories
     end
 
-    return categories
+    return categories, nil
 end
 
 ---Get categories count for initialization
----@return number Count of categories (0 if failed)
+---@return number count Count of categories (0 if failed)
 function CategoryRepository:getCount()
     local categories, error_msg = self:getAll()
     if not categories then

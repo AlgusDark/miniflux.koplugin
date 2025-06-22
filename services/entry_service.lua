@@ -192,7 +192,11 @@ function EntryService:_downloadImages(images, entry_dir, progress)
             end
         end
 
-        local success = ImageDownload.downloadImage(img.src, entry_dir, img.filename)
+        local success = ImageDownload.downloadImage({
+            url = img.src,
+            entry_dir = entry_dir,
+            filename = img.filename
+        })
         img.downloaded = success
 
         if success then
