@@ -51,22 +51,6 @@ function Entries:getEntries(options)
     return self.api:get("/entries", { query = query_params })
 end
 
----Get a single entry by ID
----@param entry_id number The entry ID
----@return boolean success, MinifluxEntry|string result_or_error
-function Entries:getEntry(entry_id)
-    return self.api:get("/entries/" .. tostring(entry_id))
-end
-
----Get unread entries (convenience method)
----@param options? ApiOptions Query options for filtering and sorting
----@return boolean success, EntriesResponse|string result_or_error
-function Entries:getUnreadEntries(options)
-    options = options or {}
-    options.status = { "unread" }
-    return self:getEntries(options)
-end
-
 -- =============================================================================
 -- ENTRY STATUS MANAGEMENT
 -- =============================================================================

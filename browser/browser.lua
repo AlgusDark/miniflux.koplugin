@@ -161,25 +161,8 @@ function MinifluxBrowser:openEntry(entry_data)
     })
 end
 
-function MinifluxBrowser:showMainContent()
-    self.view_service:showMainContent()
-end
-
--- =============================================================================
--- NAVIGATION MANAGEMENT (delegated to PathService)
--- =============================================================================
-
-function MinifluxBrowser:createNavData(paths_updated, parent_type, current_data, page_info)
-    return self.path_service:createNavData(paths_updated, parent_type, current_data, page_info)
-end
-
-function MinifluxBrowser:updateBackButton()
-    self.path_service:updateBackButton()
-end
-
-function MinifluxBrowser:goBack()
-    return self.path_service:goBack()
-end
+-- Navigation methods are handled directly by ViewService and PathService
+-- No wrapper methods needed since services call each other directly
 
 -- =============================================================================
 -- SETTINGS DIALOG
