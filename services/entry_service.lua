@@ -24,8 +24,11 @@ local T = require("ffi/util").template
 local EntryUtils = require("utils/entry_utils")
 local NavigationContext = require("utils/navigation_context")
 local ProgressUtils = require("utils/progress_utils")
+local ImageDiscovery = require("utils/image_discovery")
+local ImageDownload = require("utils/image_download")
 local ImageUtils = require("utils/image_utils")
 local HtmlUtils = require("utils/html_utils")
+local FileUtils = require("utils/file_utils")
 local NavigationService = require("services/navigation_service")
 local MetadataLoader = require("utils/metadata_loader")
 
@@ -111,7 +114,7 @@ function EntryService:_downloadEntryContent(entry_data, browser)
 
     -- Process images
     local base_url = entry_data.url and socket_url.parse(entry_data.url) or nil
-    local images, seen_images = ImageUtils.discoverImages(content, base_url)
+    local images, seen_images = ImageDiscovery.discoverImages(content, base_url)
 
     progress:setImageConfig(include_images, #images)
 
@@ -130,7 +133,7 @@ function EntryService:_downloadEntryContent(entry_data, browser)
 
     -- Create and save HTML document
     local html_content = HtmlUtils.createHtmlDocument(entry_data, processed_content)
-    local file_success = self:_saveFile(html_file, html_content)
+    local file_success = FileUtils.writeFile(html_file, html_content)
     if not file_success then
         progress:close()
         self:_showError(_("Failed to save HTML file"))
@@ -147,7 +150,7 @@ function EntryService:_downloadEntryContent(entry_data, browser)
     })
     local metadata_file = EntryUtils.getEntryMetadataPath(entry_data.id)
     local metadata_content = "return " .. self:_tableToString(metadata)
-    self:_saveFile(metadata_file, metadata_content)
+    FileUtils.writeFile(metadata_file, metadata_content)
 
     progress:close()
 
@@ -189,7 +192,7 @@ function EntryService:_downloadImages(images, entry_dir, progress)
             end
         end
 
-        local success = ImageUtils.downloadImage(img.src, entry_dir, img.filename)
+        local success = ImageDownload.downloadImage(img.src, entry_dir, img.filename)
         img.downloaded = success
 
         if success then
@@ -537,7 +540,7 @@ function EntryService:_updateLocalEntryStatus(entry_id, new_status)
 
     metadata.status = new_status
     local metadata_content = "return " .. self:_tableToString(metadata)
-    return self:_saveFile(metadata_file, metadata_content)
+    return FileUtils.writeFile(metadata_file, metadata_content)
 end
 
 ---Delete a local entry
@@ -595,20 +598,6 @@ function EntryService:_closeBrowserAndOpenEntry(browser, html_file)
     UIManager:scheduleIn(0.1, function()
         ReaderUI:showReader(html_file)
     end)
-end
-
----Save content to file
----@param file_path string File path
----@param content string Content to save
----@return boolean success
-function EntryService:_saveFile(file_path, content)
-    local file = io.open(file_path, "w")
-    if file then
-        file:write(content)
-        file:close()
-        return true
-    end
-    return false
 end
 
 ---Open the Miniflux folder in file manager

@@ -15,7 +15,7 @@ local socket = require("socket")
 local socketutil = require("socketutil")
 local _ = require("gettext")
 local logger = require("logger")
-local utils = require("utils/utils")
+local FileUtils = require("utils/file_utils")
 local util = require("util")
 
 -- Load specialized API modules
@@ -76,7 +76,7 @@ function MinifluxAPI:makeRequest(method, endpoint, body, params)
         return false, _("Server address and API token must be configured")
     end
 
-    local base_url = utils.rtrim_slashes(server_address) .. "/v1"
+    local base_url = FileUtils.rtrimSlashes(server_address) .. "/v1"
     local url = base_url .. endpoint
 
     -- Build query string from params
