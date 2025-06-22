@@ -98,7 +98,7 @@ end
 
 ---Navigate to the previous entry
 ---@param entry_info table Current entry information with file_path and entry_id
----@param entry_service table EntryService instance for callbacks
+---@param entry_service EntryService EntryService instance for callbacks
 ---@return nil
 function NavigationService:navigateToPreviousEntry(entry_info, entry_service)
     local current_entry_id = entry_info.entry_id

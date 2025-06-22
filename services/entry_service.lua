@@ -22,7 +22,7 @@ local _ = require("gettext")
 local T = require("ffi/util").template
 
 -- Import dependencies
-local Entry = require("entities/entry/entry")
+local EntryUtils = require("utils/entry_utils")
 local MinifluxAPI = require("api/api_client")
 local NavigationContext = require("utils/navigation_context")
 local ProgressUtils = require("utils/progress_utils")
@@ -33,7 +33,6 @@ local MetadataLoader = require("utils/metadata_loader")
 
 ---@class EntryService
 ---@field settings MinifluxSettings Settings instance
----@field download_dir string Download directory path
 ---@field navigation_service NavigationService Navigation service for entry navigation
 local EntryService = {}
 
@@ -43,7 +42,6 @@ local EntryService = {}
 function EntryService:new(settings)
     local instance = {
         settings = settings,
-        download_dir = ("%s/%s/"):format(DataStorage:getFullDataDir(), "miniflux"),
         navigation_service = NavigationService:new(settings),
     }
     setmetatable(instance, self)
@@ -60,20 +58,18 @@ end
 ---@param browser? table Browser instance to close
 ---@return boolean success
 function EntryService:readEntry(entry_data, browser)
-    local entry = Entry:new(entry_data)
-
-    -- Validate entry
-    local valid, error_msg = entry:validateForDownload()
+    -- Validate entry data
+    local valid, error_msg = EntryUtils.validateForDownload(entry_data)
     if not valid then
         self:_showError(error_msg)
         return false
     end
 
     -- Update navigation context
-    self:_updateNavigationContext(entry.id)
+    self:_updateNavigationContext(entry_data.id)
 
     -- Download entry if needed
-    local success = self:_downloadEntryContent(entry, browser)
+    local success = self:_downloadEntryContent(entry_data, browser)
     if not success then
         self:_showError(_("Failed to download and show entry"))
         return false
@@ -83,22 +79,22 @@ function EntryService:readEntry(entry_data, browser)
 end
 
 ---Download entry content with progress tracking
----@param entry Entry Entry entity
+---@param entry_data table Entry data from API
 ---@param browser? table Browser instance to close
 ---@return boolean success
-function EntryService:_downloadEntryContent(entry, browser)
-    local progress = ProgressUtils.createEntryProgress(entry.title)
+function EntryService:_downloadEntryContent(entry_data, browser)
+    local progress = ProgressUtils.createEntryProgress(entry_data.title or _("Untitled Entry"))
 
     -- Create entry directory
-    local entry_dir = entry:getLocalDirectory(self.download_dir)
+    local entry_dir = EntryUtils.getEntryDirectory(entry_data.id)
     if not lfs.attributes(entry_dir, "mode") then
         lfs.mkdir(entry_dir)
     end
 
-    local html_file = entry:getLocalHtmlPath(self.download_dir)
+    local html_file = EntryUtils.getEntryHtmlPath(entry_data.id)
 
     -- Check if already downloaded
-    if entry:isDownloaded(self.download_dir) then
+    if EntryUtils.isEntryDownloaded(entry_data.id) then
         progress:close()
         self:_closeBrowserAndOpenEntry(browser, html_file)
         return true
@@ -107,13 +103,13 @@ function EntryService:_downloadEntryContent(entry, browser)
     progress:update(_("Preparing download…"))
 
     -- Get entry content
-    local content = entry.content or entry.summary or ""
+    local content = entry_data.content or entry_data.summary or ""
     local include_images = self.settings.include_images
 
     progress:update(_("Scanning for images…"))
 
     -- Process images
-    local base_url = entry.url and socket_url.parse(entry.url) or nil
+    local base_url = entry_data.url and socket_url.parse(entry_data.url) or nil
     local images, seen_images = ImageUtils.discoverImages(content, base_url)
 
     progress:setImageConfig(include_images, #images)
@@ -132,7 +128,7 @@ function EntryService:_downloadEntryContent(entry, browser)
     progress:update(_("Creating HTML file…"))
 
     -- Create and save HTML document
-    local html_content = HtmlUtils.createHtmlDocument(entry, processed_content)
+    local html_content = HtmlUtils.createHtmlDocument(entry_data, processed_content)
     local file_success = self:_saveFile(html_file, html_content)
     if not file_success then
         progress:close()
@@ -143,8 +139,12 @@ function EntryService:_downloadEntryContent(entry, browser)
     progress:update(_("Creating metadata…"))
 
     -- Save metadata
-    local metadata = entry:createMetadata(include_images, #images)
-    local metadata_file = entry:getLocalMetadataPath(self.download_dir)
+    local metadata = EntryUtils.createMetadata({
+        entry_data = entry_data,
+        include_images = include_images,
+        images_count = #images
+    })
+    local metadata_file = EntryUtils.getEntryMetadataPath(entry_data.id)
     local metadata_content = "return " .. self:_tableToString(metadata)
     self:_saveFile(metadata_file, metadata_content)
 
@@ -243,9 +243,7 @@ end
 ---@param new_status string New status
 ---@return boolean success
 function EntryService:_changeEntryStatus(entry_id, new_status)
-    local entry = Entry:new({ id = entry_id })
-
-    if not entry:hasValidId() then
+    if not EntryUtils.isValidId(entry_id) then
         self:_showError(_("Cannot change status: invalid entry ID"))
         return false
     end
@@ -331,22 +329,20 @@ function EntryService:openEntryFile(html_file)
     local is_miniflux_entry = html_file:match("/miniflux/") ~= nil
 
     if is_miniflux_entry then
-        -- Extract entry ID from path for navigation context
-        local entry_id = html_file:match("/miniflux/(%d+)/")
+        -- Extract entry ID from path and convert to number for navigation context
+        local entry_id_str = html_file:match("/miniflux/(%d+)/")
+        local entry_id = entry_id_str and tonumber(entry_id_str)
 
         if entry_id then
             -- Update global navigation context with this entry
             -- Note: We don't have browsing context when opening existing files,
             -- so navigation will be global unless the user came from a browser session
-            local entry_id_num = tonumber(entry_id)
-            if entry_id_num then
-                if not NavigationContext.hasValidContext() then
-                    -- Set global context if no context exists
-                    NavigationContext.setGlobalContext(entry_id_num)
-                else
-                    -- Update current entry in existing context
-                    NavigationContext.updateCurrentEntry(entry_id_num)
-                end
+            if not NavigationContext.hasValidContext() then
+                -- Set global context if no context exists
+                NavigationContext.setGlobalContext(entry_id)
+            else
+                -- Update current entry in existing context
+                NavigationContext.updateCurrentEntry(entry_id)
             end
         end
     end
@@ -374,17 +370,13 @@ function EntryService:showEndOfEntryDialog(entry_info)
         metadata = { status = "unread" }
     end
 
-    -- Create Entry entity from metadata for business logic
+    -- Use status for business logic
     local entry_status = metadata and metadata.status or "unread"
-    local entry = Entry:new({
-        id = entry_info.entry_id and tonumber(entry_info.entry_id),
-        status = entry_status
-    })
 
-    -- Use entity logic for button text and callback
-    local mark_button_text = entry:getToggleButtonText()
+    -- Use utility functions for button text and callback
+    local mark_button_text = EntryUtils.getStatusButtonText(entry_status)
     local mark_callback
-    if entry:isRead() then
+    if EntryUtils.isEntryRead(entry_status) then
         mark_callback = function()
             self:markEntryAsUnread(entry_info)
         end
@@ -496,32 +488,27 @@ function EntryService:navigateToNextEntry(entry_info)
     self.navigation_service:navigateToNextEntry(entry_info, self)
 end
 
----Entry operations with parameter transformation
+---Entry operations (entry_id is already a number from boundary conversion)
 ---@param entry_info table Current entry information
 ---@return nil
 function EntryService:markEntryAsRead(entry_info)
-    local entry_id = entry_info.entry_id
-    local entry_id_num = tonumber(entry_id)
-    self:markAsRead(entry_id_num)
+    self:markAsRead(entry_info.entry_id)
 end
 
----Mark an entry as unread (with parameter transformation)
+---Mark an entry as unread (entry_id is already a number)
 ---@param entry_info table Current entry information
 ---@return nil
 function EntryService:markEntryAsUnread(entry_info)
-    local entry_id = entry_info.entry_id
-    local entry_id_num = tonumber(entry_id)
-    self:markAsUnread(entry_id_num)
+    self:markAsUnread(entry_info.entry_id)
 end
 
----Delete a local entry (with parameter transformation and validation)
+---Delete a local entry (with validation, entry_id is already a number)
 ---@param entry_info table Current entry information
 ---@return nil
 function EntryService:deleteLocalEntryFromInfo(entry_info)
     local entry_id = entry_info.entry_id
-    local entry_id_num = tonumber(entry_id)
 
-    if not entry_id_num then
+    if not EntryUtils.isValidId(entry_id) then
         UIManager:show(InfoMessage:new {
             text = _("Cannot delete: invalid entry ID"),
             timeout = 3,
@@ -529,7 +516,7 @@ function EntryService:deleteLocalEntryFromInfo(entry_info)
         return
     end
 
-    self:deleteLocalEntry(entry_id_num)
+    self:deleteLocalEntry(entry_id)
 end
 
 -- =============================================================================
@@ -564,8 +551,7 @@ end
 ---@param new_status string New status
 ---@return boolean success
 function EntryService:_updateLocalEntryStatus(entry_id, new_status)
-    local entry = Entry:new({ id = entry_id })
-    local metadata_file = entry:getLocalMetadataPath(self.download_dir)
+    local metadata_file = EntryUtils.getEntryMetadataPath(entry_id)
 
     if lfs.attributes(metadata_file, "mode") ~= "file" then
         return false
@@ -585,8 +571,7 @@ end
 ---@param entry_id number Entry ID
 ---@return boolean success
 function EntryService:_deleteLocalEntry(entry_id)
-    local entry = Entry:new({ id = entry_id })
-    local entry_dir = entry:getLocalDirectory(self.download_dir)
+    local entry_dir = EntryUtils.getEntryDirectory(entry_id)
 
     local success = pcall(function()
         if ReaderUI.instance then

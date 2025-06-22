@@ -20,6 +20,7 @@ local MinifluxSettings = require("settings/settings")
 local BrowserLauncher = require("browser/browser_launcher")
 local MenuManager = require("menu/menu_manager")
 local EntryService = require("services/entry_service")
+local EntryUtils = require("utils/entry_utils")
 
 ---@class Miniflux : WidgetContainer
 ---@field name string Plugin name identifier
@@ -84,7 +85,7 @@ end
 ---Initialize the download directory for entries
 ---@return string|nil Download directory path or nil if failed
 function Miniflux:initializeDownloadDirectory()
-    local download_dir = ("%s/%s/"):format(DataStorage:getFullDataDir(), "miniflux")
+    local download_dir = EntryUtils.getDownloadDir()
 
     -- Create the directory if it doesn't exist
     if not lfs.attributes(download_dir, "mode") then
@@ -148,16 +149,17 @@ function Miniflux:overrideEndOfBookBehavior()
 
         -- Check if this is a miniflux HTML entry
         if file_path:match("/miniflux/") and file_path:match("%.html$") then
-            -- Extract entry ID from path
-            local entry_id = file_path:match("/miniflux/(%d+)/")
+            -- Extract entry ID from path and convert to number
+            local entry_id_str = file_path:match("/miniflux/(%d+)/")
+            local entry_id = entry_id_str and tonumber(entry_id_str)
 
             if entry_id then
                 -- Show the end of entry dialog with entry info as parameter
                 self.entry_service:showEndOfEntryDialog({
                     file_path = file_path,
-                    entry_id = entry_id,
+                    entry_id = entry_id, -- Now a number
                 })
-                return -- Don't call original handler
+                return                   -- Don't call original handler
             end
         end
 
