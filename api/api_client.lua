@@ -35,6 +35,10 @@ local MinifluxAPI = {}
 ---@field getServerAddress fun(): string Server base URL
 ---@field getAPIToken fun(): string API authentication token
 
+---@class ApiRequestConfig
+---@field query? table<string, any> Query parameters to append to URL
+---@field body? table<string, any> Request body to encode as JSON (for POST/PUT requests)
+
 ---Create a new API instance
 ---@param config MinifluxConfig Configuration table with getter functions
 ---@return MinifluxAPI
@@ -177,7 +181,7 @@ end
 
 ---Make a GET request
 ---@param endpoint string API endpoint path
----@param config? table Configuration with optional query params
+---@param config? ApiRequestConfig Configuration with optional query params
 ---@return boolean success True if request succeeded
 ---@return table|string result_or_error Decoded JSON table on success, error string on failure
 function MinifluxAPI:get(endpoint, config)
@@ -187,7 +191,7 @@ end
 
 ---Make a POST request
 ---@param endpoint string API endpoint path
----@param config? table Configuration with optional body and query params
+---@param config? ApiRequestConfig Configuration with optional body and query params
 ---@return boolean success True if request succeeded
 ---@return table|string result_or_error Decoded JSON table on success, error string on failure
 function MinifluxAPI:post(endpoint, config)
@@ -197,7 +201,7 @@ end
 
 ---Make a PUT request
 ---@param endpoint string API endpoint path
----@param config? table Configuration with optional body and query params
+---@param config? ApiRequestConfig Configuration with optional body and query params
 ---@return boolean success True if request succeeded
 ---@return table|string result_or_error Decoded JSON table on success, error string on failure
 function MinifluxAPI:put(endpoint, config)
@@ -207,7 +211,7 @@ end
 
 ---Make a DELETE request
 ---@param endpoint string API endpoint path
----@param config? table Configuration with optional query params
+---@param config? ApiRequestConfig Configuration with optional query params
 ---@return boolean success True if request succeeded
 ---@return table|string result_or_error Decoded JSON table on success, error string on failure
 function MinifluxAPI:delete(endpoint, config)
