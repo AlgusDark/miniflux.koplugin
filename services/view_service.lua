@@ -12,16 +12,22 @@ local _ = require("gettext")
 
 ---@class ViewService
 ---@field browser MinifluxBrowser Reference to the MinifluxBrowser instance
----@field data MenuBuilder Reference to MenuBuilder instance
+---@field entry_repository EntryRepository Repository for entry data access
+---@field feed_repository FeedRepository Repository for feed data access
+---@field category_repository CategoryRepository Repository for category data access
+---@field menu_formatter MenuFormatter Formatter for menu items
 ---@field settings table Reference to settings
 ---@field path_service PathService|nil Reference to PathService (injected after creation)
 local ViewService = {}
 ViewService.__index = ViewService
 
-function ViewService:new(browser, data, settings)
+function ViewService:new(browser, entry_repository, feed_repository, category_repository, menu_formatter, settings)
     local obj = setmetatable({}, ViewService)
     obj.browser = browser
-    obj.data = data
+    obj.entry_repository = entry_repository
+    obj.feed_repository = feed_repository
+    obj.category_repository = category_repository
+    obj.menu_formatter = menu_formatter
     obj.settings = settings
     obj.path_service = nil -- Will be injected after PathService creation
     return obj
@@ -38,15 +44,16 @@ end
 function ViewService:showUnreadEntries(paths_updated)
     local loading_info = UIComponents.showLoadingMessage(_("Fetching unread entries..."))
 
-    local entries = self.data:getUnreadEntries()
+    local entries, error_msg = self.entry_repository:getUnread()
     UIComponents.closeLoadingMessage(loading_info)
 
     if not entries then
+        UIComponents.showErrorMessage(_("Failed to fetch unread entries: ") .. tostring(error_msg))
         return
     end
 
-    local menu_items = self.data:entriesToMenuItems(entries, true) -- show feed names
-    local subtitle = self:buildSubtitle(#entries, false, true)     -- unread only
+    local menu_items = self.menu_formatter:entriesToMenuItems(entries, true) -- show feed names
+    local subtitle = self:buildSubtitle(#entries, false, true)               -- unread only
 
     self.browser.current_context = { type = "unread_entries" }
     local nav_data = self.path_service and self.path_service:createNavData(paths_updated, "main") or {}
@@ -56,14 +63,15 @@ end
 function ViewService:showFeeds(paths_updated, page_info)
     local loading_info = UIComponents.showLoadingMessage(_("Fetching feeds..."))
 
-    local feeds, counters = self.data:getFeedsWithCounters()
+    local feeds, counters, error_msg = self.feed_repository:getAllWithCounters()
     UIComponents.closeLoadingMessage(loading_info)
 
     if not feeds then
+        UIComponents.showErrorMessage(_("Failed to fetch feeds: ") .. tostring(error_msg))
         return
     end
 
-    local menu_items = self.data:feedsToMenuItems(feeds, counters)
+    local menu_items = self.menu_formatter:feedsToMenuItems(feeds, counters)
     local hide_read = self.settings.hide_read_entries
     local subtitle = self:buildSubtitle(#feeds, hide_read, false, "feeds")
 
@@ -75,14 +83,15 @@ end
 function ViewService:showCategories(paths_updated, page_info)
     local loading_info = UIComponents.showLoadingMessage(_("Fetching categories..."))
 
-    local categories = self.data:getCategories()
+    local categories, error_msg = self.category_repository:getAll()
     UIComponents.closeLoadingMessage(loading_info)
 
     if not categories then
+        UIComponents.showErrorMessage(_("Failed to fetch categories: ") .. tostring(error_msg))
         return
     end
 
-    local menu_items = self.data:categoriesToMenuItems(categories)
+    local menu_items = self.menu_formatter:categoriesToMenuItems(categories)
     local hide_read = self.settings.hide_read_entries
     local subtitle = self:buildSubtitle(#categories, hide_read, false, "categories")
 
@@ -94,14 +103,15 @@ end
 function ViewService:showFeedEntries(feed_id, feed_title, paths_updated)
     local loading_info = UIComponents.showLoadingMessage(_("Fetching feed entries..."))
 
-    local entries = self.data:getFeedEntries(feed_id)
+    local entries, error_msg = self.entry_repository:getByFeed(feed_id)
     UIComponents.closeLoadingMessage(loading_info)
 
     if not entries then
+        UIComponents.showErrorMessage(_("Failed to fetch feed entries: ") .. tostring(error_msg))
         return
     end
 
-    local menu_items = self.data:entriesToMenuItems(entries, false) -- don't show feed names
+    local menu_items = self.menu_formatter:entriesToMenuItems(entries, false) -- don't show feed names
     local hide_read = self.settings.hide_read_entries
     local subtitle = self:buildSubtitle(#entries, hide_read, false, "entries")
 
@@ -122,14 +132,15 @@ end
 function ViewService:showCategoryEntries(category_id, category_title, paths_updated)
     local loading_info = UIComponents.showLoadingMessage(_("Fetching category entries..."))
 
-    local entries = self.data:getCategoryEntries(category_id)
+    local entries, error_msg = self.entry_repository:getByCategory(category_id)
     UIComponents.closeLoadingMessage(loading_info)
 
     if not entries then
+        UIComponents.showErrorMessage(_("Failed to fetch category entries: ") .. tostring(error_msg))
         return
     end
 
-    local menu_items = self.data:entriesToMenuItems(entries, true) -- show feed names
+    local menu_items = self.menu_formatter:entriesToMenuItems(entries, true) -- show feed names
     local hide_read = self.settings.hide_read_entries
     local subtitle = self:buildSubtitle(#entries, hide_read, false, "entries")
 
@@ -148,11 +159,30 @@ function ViewService:showCategoryEntries(category_id, category_title, paths_upda
 end
 
 function ViewService:showMainContent()
-    local main_items = self.browser:generateMainMenu()
+    -- When going back to main, use the stored counts from browser initialization
     local hide_read = self.settings and self.settings.hide_read_entries
     local subtitle = hide_read and "⊘ " or "◯ "
 
     self.browser.current_context = { type = "main" }
+
+    local main_items = {
+        {
+            text = _("Unread"),
+            mandatory = tostring(self.browser.unread_count),
+            action_type = "unread"
+        },
+        {
+            text = _("Feeds"),
+            mandatory = tostring(self.browser.feeds_count),
+            action_type = "feeds"
+        },
+        {
+            text = _("Categories"),
+            mandatory = tostring(self.browser.categories_count),
+            action_type = "categories"
+        }
+    }
+
     self:updateBrowser(_("Miniflux"), main_items, subtitle, { paths_updated = true })
 end
 

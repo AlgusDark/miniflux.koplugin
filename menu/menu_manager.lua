@@ -16,17 +16,17 @@ local T = require("ffi/util").template
 local MinifluxAPI = require("api/api_client")
 
 ---@class MenuManager
----@field browser_launcher BrowserLauncher Browser launcher instance
+---@field browser_factory function Factory function to create browser instances
 ---@field settings MinifluxSettings Settings instance
 ---@field api MinifluxAPI API client instance
 local MenuManager = {}
 
 ---Create a new menu manager with proper dependency injection
----@param dependencies {browser_launcher: BrowserLauncher, settings: MinifluxSettings, api: MinifluxAPI}
+---@param dependencies {browser_factory: function, settings: MinifluxSettings, api: MinifluxAPI}
 ---@return MenuManager
 function MenuManager:new(dependencies)
     local obj = {
-        browser_launcher = dependencies.browser_launcher,
+        browser_factory = dependencies.browser_factory,
         settings = dependencies.settings,
         api = dependencies.api
     }
@@ -48,7 +48,8 @@ function MenuManager:buildMainMenu()
             {
                 text = _("Read entries"),
                 callback = function()
-                    self.browser_launcher:showMainScreen()
+                    local browser = self.browser_factory()
+                    browser:showMainScreen()
                 end,
             },
             {

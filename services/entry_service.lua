@@ -55,7 +55,7 @@ end
 
 ---Read an entry (download if needed and open)
 ---@param entry_data table Raw entry data from API
----@param browser? table Browser instance to close
+---@param browser? MinifluxBrowser Browser instance to close
 ---@return boolean success
 function EntryService:readEntry(entry_data, browser)
     -- Validate entry data
@@ -80,7 +80,7 @@ end
 
 ---Download entry content with progress tracking
 ---@param entry_data table Entry data from API
----@param browser? table Browser instance to close
+---@param browser? MinifluxBrowser Browser instance to close
 ---@return boolean success
 function EntryService:_downloadEntryContent(entry_data, browser)
     local progress = ProgressUtils.createEntryProgress(entry_data.title or _("Untitled Entry"))
@@ -215,34 +215,21 @@ end
 ---@param entry_id number Entry ID
 ---@return boolean success
 function EntryService:markAsRead(entry_id)
-    return self:_changeEntryStatus(entry_id, "read")
+    return self:changeEntryStatus(entry_id, "read")
 end
 
 ---Mark an entry as unread
 ---@param entry_id number Entry ID
 ---@return boolean success
 function EntryService:markAsUnread(entry_id)
-    return self:_changeEntryStatus(entry_id, "unread")
-end
-
----Delete a local entry (public interface)
----@param entry_id number Entry ID
----@return boolean success
-function EntryService:deleteLocalEntry(entry_id)
-    return self:_deleteLocalEntry(entry_id)
-end
-
----Open the Miniflux folder in file manager (public interface)
----@return nil
-function EntryService:openMinifluxFolder()
-    self:_openMinifluxFolder()
+    return self:changeEntryStatus(entry_id, "unread")
 end
 
 ---Change entry status with validation and side effects
 ---@param entry_id number Entry ID
 ---@param new_status string New status
 ---@return boolean success
-function EntryService:_changeEntryStatus(entry_id, new_status)
+function EntryService:changeEntryStatus(entry_id, new_status)
     if not EntryUtils.isValidId(entry_id) then
         self:_showError(_("Cannot change status: invalid entry ID"))
         return false
@@ -280,7 +267,7 @@ function EntryService:_changeEntryStatus(entry_id, new_status)
 
     if success then
         -- Handle side effects
-        self:_onEntryStatusChanged(entry_id, new_status)
+        self:onEntryStatusChanged(entry_id, new_status)
 
         local success_text = new_status == "read" and _("Entry marked as read") or _("Entry marked as unread")
         UIManager:show(InfoMessage:new {
@@ -301,7 +288,7 @@ end
 ---@param entry_id number Entry ID
 ---@param new_status string New status
 ---@return nil
-function EntryService:_onEntryStatusChanged(entry_id, new_status)
+function EntryService:onEntryStatusChanged(entry_id, new_status)
     -- Update local metadata
     pcall(function()
         self:_updateLocalEntryStatus(entry_id, new_status)
@@ -311,7 +298,7 @@ function EntryService:_onEntryStatusChanged(entry_id, new_status)
     if new_status == "read" then
         UIManager:scheduleIn(0.5, function()
             pcall(function()
-                self:_deleteLocalEntry(entry_id)
+                self:deleteLocalEntry(entry_id)
             end)
         end)
     end
@@ -524,13 +511,13 @@ end
 -- =============================================================================
 
 ---Legacy method aliases for backward compatibility
----@param params {entry: MinifluxEntry, browser?: table}
+---@param params {entry: MinifluxEntry, browser?: MinifluxBrowser}
 function EntryService:showEntry(params)
     return self:readEntry(params.entry, params.browser)
 end
 
 ---Legacy method aliases for backward compatibility
----@param params {entry: MinifluxEntry, browser?: table}
+---@param params {entry: MinifluxEntry, browser?: MinifluxBrowser}
 function EntryService:downloadEntry(params)
     return self:readEntry(params.entry, params.browser)
 end
@@ -570,7 +557,7 @@ end
 ---Delete a local entry
 ---@param entry_id number Entry ID
 ---@return boolean success
-function EntryService:_deleteLocalEntry(entry_id)
+function EntryService:deleteLocalEntry(entry_id)
     local entry_dir = EntryUtils.getEntryDirectory(entry_id)
 
     local success = pcall(function()
@@ -589,7 +576,7 @@ function EntryService:_deleteLocalEntry(entry_id)
 
         -- Open Miniflux folder
         pcall(function()
-            self:_openMinifluxFolder()
+            self:openMinifluxFolder()
         end)
 
         return true
@@ -609,16 +596,17 @@ function EntryService:_updateNavigationContext(entry_id)
 end
 
 ---Close browser and open entry file
----@param browser? table Browser instance
+---@param browser? MinifluxBrowser Browser instance
 ---@param html_file string HTML file path
 ---@return nil
 function EntryService:_closeBrowserAndOpenEntry(browser, html_file)
+    -- Close browser first
     if browser and browser.closeAll then
         browser:closeAll()
     end
 
-    -- Open entry file
-    pcall(function()
+    -- Small delay to ensure browser cleanup, then open reader
+    UIManager:scheduleIn(0.1, function()
         ReaderUI:showReader(html_file)
     end)
 end
@@ -639,15 +627,17 @@ end
 
 ---Open the Miniflux folder in file manager
 ---@return nil
-function EntryService:_openMinifluxFolder()
+function EntryService:openMinifluxFolder()
+    local download_dir = EntryUtils.getDownloadDir()
+
     if ReaderUI.instance then
         ReaderUI.instance:onClose()
     end
 
     if FileManager.instance then
-        FileManager.instance:reinit(self.download_dir)
+        FileManager.instance:reinit(download_dir)
     else
-        FileManager:showFiles(self.download_dir)
+        FileManager:showFiles(download_dir)
     end
 end
 

@@ -13,8 +13,12 @@ browsing experience for Miniflux. Delegates specific responsibilities to:
 
 local Menu = require("ui/widget/menu")
 local UIManager = require("ui/uimanager")
+local InfoMessage = require("ui/widget/infomessage")
 local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
-local MenuBuilder = require("browser/menu_builder")
+local EntryRepository = require("repositories/entry_repository")
+local FeedRepository = require("repositories/feed_repository")
+local CategoryRepository = require("repositories/category_repository")
+local MenuFormatter = require("browser/menu_formatter")
 local EntryService = require("services/entry_service")
 local NavigationContext = require("utils/navigation_context")
 local UIComponents = require("utils/ui_components")
@@ -24,13 +28,17 @@ local _ = require("gettext")
 
 ---@class MinifluxBrowser : Menu
 ---@field close_callback function|nil Callback function to execute when closing the browser
----@field unread_count number|nil Number of unread entries
----@field feeds_count number|nil Number of feeds
----@field categories_count number|nil Number of categories
+---@field unread_count number|nil Number of unread entries (stored from initialization)
+---@field feeds_count number|nil Number of feeds (stored from initialization)
+---@field categories_count number|nil Number of categories (stored from initialization)
 ---@field view_service ViewService Service handling content display and view state
 ---@field path_service PathService Service handling navigation paths and back button
 ---@field entry_service EntryService Service handling entry display and dialog management
----@field data MenuBuilder Data layer for menu item generation
+---@field entry_repository EntryRepository Repository for entry data access
+---@field feed_repository FeedRepository Repository for feed data access
+---@field category_repository CategoryRepository Repository for category data access
+---@field menu_formatter MenuFormatter Formatter for menu items
+---@field new fun(self: MinifluxBrowser, o: table): MinifluxBrowser Override Menu:new to return correct type
 local MinifluxBrowser = Menu:extend {
     title_shrink_font_to_fit = true,
     is_popout = false,
@@ -52,14 +60,26 @@ function MinifluxBrowser:init()
     self.api = self.api or {}
     self.download_dir = self.download_dir
 
-    -- Initialize menu builder
-    self.data = MenuBuilder:new(self.api, self.settings)
+    -- Initialize repositories
+    self.entry_repository = EntryRepository:new(self.api, self.settings)
+    self.feed_repository = FeedRepository:new(self.api, self.settings)
+    self.category_repository = CategoryRepository:new(self.api, self.settings)
+
+    -- Initialize menu formatter
+    self.menu_formatter = MenuFormatter:new(self.settings)
 
     -- Initialize EntryService instance with settings dependency
     self.entry_service = EntryService:new(self.settings)
 
-    -- Initialize ViewService
-    self.view_service = ViewService:new(self, self.data, self.settings)
+    -- Initialize ViewService with repositories and formatter
+    self.view_service = ViewService:new(
+        self,
+        self.entry_repository,
+        self.feed_repository,
+        self.category_repository,
+        self.menu_formatter,
+        self.settings
+    )
 
     -- Initialize PathService and wire it up
     self.path_service = PathService:new(self, self.view_service)
@@ -69,9 +89,9 @@ function MinifluxBrowser:init()
     self.navigation_paths = {}
     self.current_context = { type = "main" }
 
-    -- Generate initial menu
+    -- Generate initial menu (will be populated by showMainScreen)
     self.title = self.title or _("Miniflux")
-    self.item_table = self:generateMainMenu()
+    self.item_table = {}
 
     -- Set up settings button
     self.onLeftButtonTap = function()
@@ -80,30 +100,6 @@ function MinifluxBrowser:init()
 
     -- Initialize parent
     Menu.init(self)
-end
-
-function MinifluxBrowser:generateMainMenu()
-    local unread_count = self.unread_count or 0
-    local feeds_count = self.feeds_count or 0
-    local categories_count = self.categories_count or 0
-
-    return {
-        {
-            text = _("Unread"),
-            mandatory = tostring(unread_count),
-            action_type = "unread"
-        },
-        {
-            text = _("Feeds"),
-            mandatory = tostring(feeds_count),
-            action_type = "feeds"
-        },
-        {
-            text = _("Categories"),
-            mandatory = tostring(categories_count),
-            action_type = "categories"
-        }
-    }
 end
 
 -- =============================================================================
@@ -156,6 +152,7 @@ function MinifluxBrowser:openEntry(entry_data)
     end
 
     -- Show the entry using EntryService instance
+    -- EntryService will handle closing the browser and opening the Reader
     self.entry_service:showEntry({
         entry = entry_data,
         api = self.api,
@@ -164,25 +161,8 @@ function MinifluxBrowser:openEntry(entry_data)
     })
 end
 
-function MinifluxBrowser:showMainContent()
-    self.view_service:showMainContent()
-end
-
--- =============================================================================
--- NAVIGATION MANAGEMENT (delegated to PathService)
--- =============================================================================
-
-function MinifluxBrowser:createNavData(paths_updated, parent_type, current_data, page_info)
-    return self.path_service:createNavData(paths_updated, parent_type, current_data, page_info)
-end
-
-function MinifluxBrowser:updateBackButton()
-    self.path_service:updateBackButton()
-end
-
-function MinifluxBrowser:goBack()
-    return self.path_service:goBack()
-end
+-- Navigation methods are handled directly by ViewService and PathService
+-- No wrapper methods needed since services call each other directly
 
 -- =============================================================================
 -- SETTINGS DIALOG
@@ -241,6 +221,137 @@ function MinifluxBrowser:toggleReadEntriesVisibility()
 
     -- Refresh current view
     self.view_service:refreshCurrentView()
+end
+
+-- =============================================================================
+-- INITIALIZATION AND DATA FETCHING (merged from browser_launcher)
+-- =============================================================================
+
+---Show the main Miniflux browser screen with initial data
+---@return nil
+function MinifluxBrowser:showMainScreen()
+    if self.settings.server_address == "" or self.settings.api_token == "" then
+        UIManager:show(InfoMessage:new {
+            text = _("Please configure server settings first"),
+            timeout = 3,
+        })
+        return
+    end
+
+    -- Show loading message while fetching initial data
+    local loading_info = InfoMessage:new {
+        text = _("Loading Miniflux data..."),
+    }
+    UIManager:show(loading_info)
+    UIManager:forceRePaint() -- Force immediate display before API calls
+
+    -- Update API with current settings
+    local api_success = pcall(function()
+        self.api:updateConfig({
+            server_address = self.settings.server_address,
+            api_token = self.settings.api_token
+        })
+    end)
+
+    if not api_success then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new {
+            text = _("Failed to initialize API connection"),
+            timeout = 5,
+        })
+        return
+    end
+
+    -- Fetch initial data for browser
+    local unread_count, feeds_count, categories_count = self:fetchInitialData(loading_info)
+
+    if not unread_count then
+        -- Error already handled in fetchInitialData
+        return
+    end
+
+    -- Close loading message and prepare for browser display
+    UIManager:close(loading_info)
+
+    -- Ensure all values are numbers (fallback to 0 if nil)
+    self.unread_count = unread_count or 0
+    self.feeds_count = feeds_count or 0
+    self.categories_count = categories_count or 0
+
+    -- Generate main menu with counts and show it
+    self.item_table = self:generateMainMenuWithCounts(self.unread_count, self.feeds_count, self.categories_count)
+    self.view_service:showMainContent()
+
+    -- Actually show the browser
+    UIManager:show(self)
+end
+
+---Fetch initial data needed for browser initialization
+---@param loading_info InfoMessage Loading message to update
+---@return number|nil unread_count, number|nil feeds_count, number|nil categories_count
+function MinifluxBrowser:fetchInitialData(loading_info)
+    -- Get unread count
+    local unread_count, error_msg = self.entry_repository:getUnreadCount()
+    if not unread_count then
+        UIManager:close(loading_info)
+        UIManager:show(InfoMessage:new {
+            text = _("Failed to connect to Miniflux: ") .. tostring(error_msg),
+            timeout = 5,
+        })
+        return nil
+    end
+
+    -- Update loading message
+    UIManager:close(loading_info)
+    loading_info = InfoMessage:new {
+        text = _("Loading feeds data..."),
+    }
+    UIManager:show(loading_info)
+    UIManager:forceRePaint()
+
+    -- Get feeds count
+    local feeds_count = self.feed_repository:getCount()
+
+    -- Update loading message
+    UIManager:close(loading_info)
+    loading_info = InfoMessage:new {
+        text = _("Loading categories data..."),
+    }
+    UIManager:show(loading_info)
+    UIManager:forceRePaint()
+
+    -- Get categories count
+    local categories_count = self.category_repository:getCount()
+
+    -- Close the loading message before returning
+    UIManager:close(loading_info)
+
+    return unread_count, feeds_count, categories_count
+end
+
+---Generate main menu with counts
+---@param unread_count number Number of unread entries
+---@param feeds_count number Number of feeds
+---@param categories_count number Number of categories
+---@return table[] Menu items for main screen
+function MinifluxBrowser:generateMainMenuWithCounts(unread_count, feeds_count, categories_count)
+    return {
+        {
+            text = _("Unread"),
+            mandatory = tostring(unread_count),
+            action_type = "unread"
+        },
+        {
+            text = _("Feeds"),
+            mandatory = tostring(feeds_count),
+            action_type = "feeds"
+        },
+        {
+            text = _("Categories"),
+            mandatory = tostring(categories_count),
+            action_type = "categories"
+        }
+    }
 end
 
 -- =============================================================================
