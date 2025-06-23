@@ -123,7 +123,7 @@ end
 ---Create and return a new browser instance
 ---@return MinifluxBrowser Browser instance
 function Miniflux:createBrowser()
-    local MinifluxBrowser = require("browser/browser")
+    local MinifluxBrowser = require("browser/miniflux_browser")
     local browser = MinifluxBrowser:new({
         title = _("Miniflux"),
         settings = self.settings,

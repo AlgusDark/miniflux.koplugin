@@ -1,20 +1,22 @@
 --[[--
-Browser History - Simple Navigation History Management
+Browser History - Navigation History Management
 
 Manages browser navigation history stack for back/forward navigation.
-Uses simple data objects instead of complex command patterns.
 
-@module miniflux.browser.browser_history
+@module browser.browser_history
 --]]
 
----@class HistoryParams
----@field type ViewType View type
+---@class HistoryState
+---@field location string Location identifier for restoration
+---@field params table Parameters for restoration
 ---@field page_info? PageInfo Page information for restoration
----@field feed_id? number Feed ID (for feed entries)
----@field category_id? number Category ID (for category entries)
+
+---@class PageInfo
+---@field page number Current page number
+---@field perpage number Items per page
 
 ---@class BrowserHistory
----@field stack HistoryParams[] Navigation history stack
+---@field stack HistoryState[] Navigation history stack
 local BrowserHistory = {}
 BrowserHistory.__index = BrowserHistory
 
@@ -31,25 +33,17 @@ end
 -- =============================================================================
 
 ---Push navigation state to history
----@param params HistoryParams State to save for back navigation
-function BrowserHistory:push(params)
-    if not params or not params.type then
+---@param state HistoryState State to save for back navigation
+function BrowserHistory:push(state)
+    if not state then
         return
     end
 
-    -- Create a copy to avoid reference issues
-    local history_entry = {
-        type = params.type,
-        page_info = params.page_info,
-        feed_id = params.feed_id,
-        category_id = params.category_id,
-    }
-
-    table.insert(self.stack, history_entry)
+    table.insert(self.stack, state)
 end
 
 ---Go back to previous state
----@return HistoryParams|nil params Restored parameters or nil if no history
+---@return HistoryState|nil state Restored state or nil if no history
 function BrowserHistory:goBack()
     if #self.stack == 0 then
         return nil
@@ -76,7 +70,7 @@ function BrowserHistory:getDepth()
 end
 
 ---Peek at the most recent history entry without removing it
----@return HistoryParams|nil params Most recent history entry or nil if empty
+---@return HistoryState|nil state Most recent state or nil if empty
 function BrowserHistory:peek()
     if #self.stack == 0 then
         return nil
