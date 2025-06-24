@@ -148,15 +148,16 @@ end
 
 ---Show feeds list with counters
 function MinifluxBrowser:showFeeds()
-    -- Show loading message
-    local loading_info = UIComponents.showLoadingMessage(_("Fetching feeds..."))
-
-    -- Fetch data
-    local result, error_msg = self.feed_repository:getAllWithCounters()
-    UIComponents.closeLoadingMessage(loading_info)
+    -- Fetch data with API-level dialog management
+    local result, error_msg = self.feed_repository:getAllWithCounters({
+        dialogs = {
+            loading = { text = _("Fetching feeds...") },
+            error = { text = _("Failed to fetch feeds"), timeout = 5 }
+        }
+    })
 
     if not result then
-        UIComponents.showErrorMessage(_("Failed to fetch feeds: ") .. tostring(error_msg))
+        -- Error dialog already shown by API system
         return
     end
 
@@ -191,15 +192,16 @@ end
 
 ---Show categories list
 function MinifluxBrowser:showCategories()
-    -- Show loading message
-    local loading_info = UIComponents.showLoadingMessage(_("Fetching categories..."))
-
-    -- Fetch data
-    local categories, error_msg = self.category_repository:getAll()
-    UIComponents.closeLoadingMessage(loading_info)
+    -- Fetch data with API-level dialog management
+    local categories, error_msg = self.category_repository:getAll({
+        dialogs = {
+            loading = { text = _("Fetching categories...") },
+            error = { text = _("Failed to fetch categories"), timeout = 5 }
+        }
+    })
 
     if not categories then
-        UIComponents.showErrorMessage(_("Failed to fetch categories: ") .. tostring(error_msg))
+        -- Error dialog already shown by API system
         return
     end
 
@@ -238,28 +240,33 @@ function MinifluxBrowser:showEntries(config)
         self:pushPageState(self:getCurrentItemNumber())
     end
 
-    -- Show loading message
+    -- Prepare loading messages
     local loading_messages = {
         unread = _("Fetching unread entries..."),
         feed = _("Fetching feed entries..."),
         category = _("Fetching category entries...")
     }
-    local loading_info = UIComponents.showLoadingMessage(loading_messages[config.type])
 
-    -- Fetch data based on type
+    -- Create dialog configuration
+    local dialog_config = {
+        dialogs = {
+            loading = { text = loading_messages[config.type] },
+            error = { text = _("Failed to fetch entries"), timeout = 5 }
+        }
+    }
+
+    -- Fetch data based on type using enhanced repositories
     local entries, error_msg
     if config.type == "unread" then
-        entries, error_msg = self.entry_repository:getUnread()
+        entries, error_msg = self.entry_repository:getUnread(dialog_config)
     elseif config.type == "feed" then
-        entries, error_msg = self.entry_repository:getByFeed(config.id)
+        entries, error_msg = self.entry_repository:getByFeed(config.id, dialog_config)
     elseif config.type == "category" then
-        entries, error_msg = self.entry_repository:getByCategory(config.id)
+        entries, error_msg = self.entry_repository:getByCategory(config.id, dialog_config)
     end
 
-    UIComponents.closeLoadingMessage(loading_info)
-
     if not entries then
-        UIComponents.showErrorMessage(_("Failed to fetch entries: ") .. tostring(error_msg))
+        -- Error dialog already shown by API system
         return
     end
 
@@ -411,39 +418,27 @@ end
 -- =============================================================================
 
 ---Fetch initial data needed for browser initialization
----@param loading_info InfoMessage Loading message to update
+---@param loading_info InfoMessage Loading message to close
 ---@return boolean success, string? error_msg
 function MinifluxBrowser:fetchInitialData(loading_info)
-    -- Get unread count
-    local unread_count, error_msg = self.entry_repository:getUnreadCount()
+    -- Close the initial loading message
+    UIManager:close(loading_info)
+
+    -- Get unread count with dialog
+    local unread_count, error_msg = self.entry_repository:getUnreadCount({
+        dialogs = {
+            loading = { text = _("Loading unread count...") }
+        }
+    })
     if not unread_count then
         return false, error_msg
     end
 
-    -- Update loading message
-    UIManager:close(loading_info)
-    loading_info = InfoMessage:new({
-        text = _("Loading feeds data..."),
-    })
-    UIManager:show(loading_info)
-    UIManager:forceRePaint()
-
-    -- Get feeds count
+    -- Get feeds count (using silent repository call)
     local feeds_count = self.feed_repository:getCount()
 
-    -- Update loading message
-    UIManager:close(loading_info)
-    loading_info = InfoMessage:new({
-        text = _("Loading categories data..."),
-    })
-    UIManager:show(loading_info)
-    UIManager:forceRePaint()
-
-    -- Get categories count
+    -- Get categories count (using silent repository call)
     local categories_count = self.category_repository:getCount()
-
-    -- Close the final loading message
-    UIManager:close(loading_info)
 
     -- Store counts
     self.unread_count = unread_count

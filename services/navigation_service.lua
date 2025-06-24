@@ -116,18 +116,11 @@ function NavigationService:navigateToPreviousEntry(entry_info, entry_service)
         return
     end
 
-    local loading_info = InfoMessage:new({
-        text = _("Finding previous entry..."),
-    })
-    UIManager:show(loading_info)
-    UIManager:forceRePaint()
-
     local context_success, has_context = pcall(function()
         return NavigationContext.hasValidContext()
     end)
 
     if not context_success or not has_context then
-        UIManager:close(loading_info)
         UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: no browsing context available"),
             timeout = 3,
@@ -137,7 +130,6 @@ function NavigationService:navigateToPreviousEntry(entry_info, entry_service)
 
     local metadata = MetadataLoader.loadCurrentEntryMetadata(entry_info)
     if not metadata or not metadata.published_at then
-        UIManager:close(loading_info)
         UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: missing timestamp information"),
             timeout = 3,
@@ -151,7 +143,6 @@ function NavigationService:navigateToPreviousEntry(entry_info, entry_service)
     end)
 
     if not ok or not published_unix then
-        UIManager:close(loading_info)
         UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: invalid timestamp format"),
             timeout = 3,
@@ -165,7 +156,6 @@ function NavigationService:navigateToPreviousEntry(entry_info, entry_service)
     end)
 
     if not options_success or not options then
-        UIManager:close(loading_info)
         UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: failed to get context options"),
             timeout = 3,
@@ -178,8 +168,12 @@ function NavigationService:navigateToPreviousEntry(entry_info, entry_service)
     options.limit = 1
     options.order = self.settings.order
 
-    local success, result = self.api.entries:getEntries(options)
-    UIManager:close(loading_info)
+    -- Use API-level dialog management for navigation
+    local success, result = self.api.entries:getEntries(options, {
+        dialogs = {
+            loading = { text = _("Finding previous entry...") }
+        }
+    })
 
     if success and result and result.entries and #result.entries > 0 then
         local prev_entry = result.entries[1]
@@ -214,7 +208,11 @@ function NavigationService:navigateToPreviousEntry(entry_info, entry_service)
             global_options.limit = 1
             global_options.order = self.settings.order
 
-            success, result = self.api.entries:getEntries(global_options)
+            success, result = self.api.entries:getEntries(global_options, {
+                dialogs = {
+                    loading = { text = _("Searching globally for previous entry...") }
+                }
+            })
 
             if success and result and result.entries and #result.entries > 0 then
                 local prev_entry = result.entries[1]
@@ -252,18 +250,11 @@ function NavigationService:navigateToNextEntry(entry_info, entry_service)
         return
     end
 
-    local loading_info = InfoMessage:new({
-        text = _("Finding next entry..."),
-    })
-    UIManager:show(loading_info)
-    UIManager:forceRePaint()
-
     local context_success, has_context = pcall(function()
         return NavigationContext.hasValidContext()
     end)
 
     if not context_success or not has_context then
-        UIManager:close(loading_info)
         UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: no browsing context available"),
             timeout = 3,
@@ -273,7 +264,6 @@ function NavigationService:navigateToNextEntry(entry_info, entry_service)
 
     local metadata = MetadataLoader.loadCurrentEntryMetadata(entry_info)
     if not metadata or not metadata.published_at then
-        UIManager:close(loading_info)
         UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: missing timestamp information"),
             timeout = 3,
@@ -287,7 +277,6 @@ function NavigationService:navigateToNextEntry(entry_info, entry_service)
     end)
 
     if not ok or not published_unix then
-        UIManager:close(loading_info)
         UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: invalid timestamp format"),
             timeout = 3,
@@ -301,7 +290,6 @@ function NavigationService:navigateToNextEntry(entry_info, entry_service)
     end)
 
     if not options_success or not options then
-        UIManager:close(loading_info)
         UIManager:show(InfoMessage:new({
             text = _("Cannot navigate: failed to get context options"),
             timeout = 3,
@@ -314,8 +302,12 @@ function NavigationService:navigateToNextEntry(entry_info, entry_service)
     options.limit = 1
     options.order = self.settings.order
 
-    local success, result = self.api.entries:getEntries(options)
-    UIManager:close(loading_info)
+    -- Use API-level dialog management for navigation
+    local success, result = self.api.entries:getEntries(options, {
+        dialogs = {
+            loading = { text = _("Finding next entry...") }
+        }
+    })
 
     if success and result and result.entries and #result.entries > 0 then
         local next_entry = result.entries[1]
@@ -350,7 +342,11 @@ function NavigationService:navigateToNextEntry(entry_info, entry_service)
             global_options.limit = 1
             global_options.order = self.settings.order
 
-            success, result = self.api.entries:getEntries(global_options)
+            success, result = self.api.entries:getEntries(global_options, {
+                dialogs = {
+                    loading = { text = _("Searching globally for next entry...") }
+                }
+            })
 
             if success and result and result.entries and #result.entries > 0 then
                 local next_entry = result.entries[1]

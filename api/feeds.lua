@@ -35,9 +35,11 @@ end
 -- =============================================================================
 
 ---Get all feeds
+---@param config? table Configuration including optional dialogs
 ---@return boolean success, MinifluxFeed[]|string result_or_error
-function Feeds:getAll()
-    return self.api:get("/feeds")
+function Feeds:getAll(config)
+    config = config or {}
+    return self.api:get("/feeds", config)
 end
 
 ---@class FeedCounters
@@ -53,11 +55,20 @@ end
 ---Get entries for a specific feed
 ---@param feed_id number The feed ID
 ---@param options? ApiOptions Query options for filtering and sorting
+---@param config? table Configuration including optional dialogs
 ---@return boolean success, EntriesResponse|string result_or_error
-function Feeds:getEntries(feed_id, options)
+function Feeds:getEntries(feed_id, options, config)
+    config = config or {}
     local query_params = apiUtils.buildQueryParams(options)
     local endpoint = "/feeds/" .. tostring(feed_id) .. "/entries"
-    return self.api:get(endpoint, { query = query_params })
+
+    -- Build request configuration
+    local request_config = {
+        query = query_params,
+        dialogs = config.dialogs
+    }
+
+    return self.api:get(endpoint, request_config)
 end
 
 return Feeds

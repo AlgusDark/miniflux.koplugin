@@ -236,43 +236,37 @@ function EntryService:changeEntryStatus(entry_id, new_status)
         return false
     end
 
-    -- Show loading message
-    local action_text = new_status == "read" and _("Marking entry as read...") or _("Marking entry as unread...")
-    local loading_info = InfoMessage:new({ text = action_text })
-    UIManager:show(loading_info)
-    UIManager:forceRePaint()
+    -- Prepare dialog messages
+    local loading_text = new_status == "read" and _("Marking entry as read...") or _("Marking entry as unread...")
+    local success_text = new_status == "read" and _("Entry marked as read") or _("Entry marked as unread")
+    local error_text = new_status == "read" and _("Failed to mark entry as read") or _("Failed to mark entry as unread")
 
-    -- Use injected API client
-    if not self.api then
-        UIManager:close(loading_info)
-        self:_showError(_("API not available"))
-        return false
-    end
-
-    -- Call appropriate API method
+    -- Call API with automatic dialog management
     local success, result
     if new_status == "read" then
-        success, result = self.api.entries:markAsRead(entry_id)
+        success, result = self.api.entries:markAsRead(entry_id, {
+            dialogs = {
+                loading = { text = loading_text },
+                success = { text = success_text, timeout = 2 },
+                error = { text = error_text, timeout = 5 }
+            }
+        })
     else
-        success, result = self.api.entries:markAsUnread(entry_id)
+        success, result = self.api.entries:markAsUnread(entry_id, {
+            dialogs = {
+                loading = { text = loading_text },
+                success = { text = success_text, timeout = 2 },
+                error = { text = error_text, timeout = 5 }
+            }
+        })
     end
 
-    UIManager:close(loading_info)
-
     if success then
-        -- Handle side effects
+        -- Handle side effects after successful status change
         self:onEntryStatusChanged(entry_id, new_status)
-
-        local success_text = new_status == "read" and _("Entry marked as read") or _("Entry marked as unread")
-        UIManager:show(InfoMessage:new({
-            text = success_text,
-            timeout = 2,
-        }))
         return true
     else
-        local error_text = new_status == "read" and _("Failed to mark entry as read: ") .. tostring(result)
-            or _("Failed to mark entry as unread: ") .. tostring(result)
-        self:_showError(error_text)
+        -- Error dialog already shown by API system
         return false
     end
 end

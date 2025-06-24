@@ -35,10 +35,11 @@ end
 -- =============================================================================
 
 ---Get all feeds
+---@param config? table Configuration with optional dialogs
 ---@return table[]|nil feeds Array of feeds or nil on error
 ---@return string|nil error Error message if failed
-function FeedRepository:getAll()
-    local success, feeds = self.api.feeds:getAll()
+function FeedRepository:getAll(config)
+    local success, feeds = self.api.feeds:getAll(config)
     if not success then
         return nil, feeds
     end
@@ -47,11 +48,12 @@ function FeedRepository:getAll()
 end
 
 ---Get feeds with their read/unread counters
+---@param config? table Configuration with optional dialogs
 ---@return FeedsWithCountersResult|nil result Result containing feeds and counters, or nil on error
 ---@return string|nil error Error message if failed
-function FeedRepository:getAllWithCounters()
+function FeedRepository:getAllWithCounters(config)
     -- Get feeds first
-    local feeds, error_msg = self:getAll()
+    local feeds, error_msg = self:getAll(config)
     if not feeds then
         return nil, error_msg
     end

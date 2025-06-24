@@ -1,8 +1,8 @@
 --[[--
 UI Components for Miniflux Browser
 
-This module provides reusable UI components for the browser layer, including
-standardized message dialogs, loading indicators, and progress tracking.
+This module provides reusable UI components for the browser layer.
+Many methods have been superseded by the enhanced API dialog system.
 
 @module miniflux.browser.lib.ui_components
 --]]
@@ -14,9 +14,13 @@ local _ = require("gettext")
 local UIComponents = {}
 
 -- =============================================================================
--- MESSAGE COMPONENTS
+-- DEPRECATED METHODS (Superseded by API Dialog System)
 -- =============================================================================
+-- The following methods have been largely replaced by the enhanced API client
+-- with automatic dialog management. They remain for backward compatibility
+-- but new code should use the API dialog system instead.
 
+---@deprecated Use API dialog system: api:get(endpoint, {dialogs = {loading = {...}}}) instead
 ---Create and show a loading message with immediate display
 ---@param text? string Loading message text (defaults to "Loading...")
 ---@return InfoMessage Loading message widget for cleanup
@@ -29,6 +33,7 @@ function UIComponents.showLoadingMessage(text)
     return loading_info
 end
 
+---@deprecated Use API dialog system instead
 ---Close a loading message dialog
 ---@param loading_info InfoMessage Loading message widget to close
 ---@return nil
@@ -38,6 +43,7 @@ function UIComponents.closeLoadingMessage(loading_info)
     end
 end
 
+---@deprecated Use API dialog system: api:get(endpoint, {dialogs = {error = {...}}}) instead
 ---Show an error message with timeout
 ---@param message string Error message text
 ---@param timeout? number Message timeout in seconds (default: 5)
@@ -49,6 +55,7 @@ function UIComponents.showErrorMessage(message, timeout)
     }))
 end
 
+---@deprecated Use API dialog system: api:get(endpoint, {dialogs = {success = {...}}}) instead
 ---Show a success message with timeout
 ---@param message string Success message text
 ---@param timeout? number Message timeout in seconds (default: 3)
@@ -60,7 +67,7 @@ function UIComponents.showSuccessMessage(message, timeout)
     }))
 end
 
----Show an info message with timeout
+---Show an info message with timeout (still useful for non-API operations)
 ---@param message string Info message text
 ---@param timeout? number Message timeout in seconds (default: 3)
 ---@return nil
@@ -71,7 +78,7 @@ function UIComponents.showInfoMessage(message, timeout)
     }))
 end
 
----Show a warning message with timeout
+---Show a warning message with timeout (still useful for validation messages)
 ---@param message string Warning message text
 ---@param timeout? number Message timeout in seconds (default: 4)
 ---@return nil
@@ -83,7 +90,7 @@ function UIComponents.showWarningMessage(message, timeout)
 end
 
 -- =============================================================================
--- PROGRESS COMPONENTS
+-- ACTIVE METHODS (Still Useful for Complex Operations)
 -- =============================================================================
 
 ---@class ProgressDialog
@@ -136,14 +143,14 @@ function ProgressDialog:close()
     end
 end
 
----Create a new progress dialog
+---Create a new progress dialog (still useful for complex multi-step operations)
 ---@param title string Title for the progress operation
 ---@return ProgressDialog
 function UIComponents.createProgressDialog(title)
     return ProgressDialog:new(title)
 end
 
----Show a simple progress message (auto-managed)
+---Show a simple progress message (still useful for immediate feedback)
 ---@param message string Progress message
 ---@return InfoMessage Progress dialog for manual cleanup if needed
 function UIComponents.showSimpleProgress(message)
@@ -156,9 +163,10 @@ function UIComponents.showSimpleProgress(message)
 end
 
 -- =============================================================================
--- SPECIALIZED MESSAGE PATTERNS
+-- DEPRECATED SPECIALIZED PATTERNS
 -- =============================================================================
 
+---@deprecated Use API dialog system instead
 ---Show a standardized API error message
 ---@param operation_name string Name of the failed operation
 ---@param error_message string Specific error details
@@ -169,6 +177,7 @@ function UIComponents.showApiError(operation_name, error_message, timeout)
     UIComponents.showErrorMessage(message, timeout)
 end
 
+---@deprecated Use API dialog system instead
 ---Show a standardized operation success message
 ---@param operation_name string Name of the successful operation
 ---@param timeout? number Message timeout in seconds (default: 3)
@@ -178,7 +187,7 @@ function UIComponents.showOperationSuccess(operation_name, timeout)
     UIComponents.showSuccessMessage(message, timeout)
 end
 
----Show a "no data found" message
+---Show a "no data found" message (still useful for validation)
 ---@param data_type string Type of data that wasn't found
 ---@param timeout? number Message timeout in seconds (default: 3)
 ---@return nil
@@ -187,7 +196,7 @@ function UIComponents.showNoDataMessage(data_type, timeout)
     UIComponents.showInfoMessage(message, timeout)
 end
 
----Show a configuration required message
+---Show a configuration required message (still useful for validation)
 ---@param setting_name string Name of the required setting
 ---@param timeout? number Message timeout in seconds (default: 4)
 ---@return nil
@@ -197,9 +206,10 @@ function UIComponents.showConfigurationRequired(setting_name, timeout)
 end
 
 -- =============================================================================
--- COMPOUND OPERATIONS
+-- DEPRECATED COMPOUND OPERATIONS
 -- =============================================================================
 
+---@deprecated Use API dialog system: api:method(endpoint, {dialogs = {loading, success, error}}) instead
 ---Execute an operation with loading feedback
 ---@param params {operation_name: string, operation_func: function, loading_message?: string, success_message?: string}
 ---@return boolean success, any result_or_error
@@ -230,6 +240,7 @@ function UIComponents.withLoadingFeedback(params)
     end
 end
 
+---@deprecated Use API dialog system with progress tracking instead
 ---Execute multiple sequential operations with progress updates
 ---@param operations {name: string, func: function, loading_message: string}[]
 ---@param title string Overall operation title
