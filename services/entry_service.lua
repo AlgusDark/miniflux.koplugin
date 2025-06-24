@@ -319,7 +319,7 @@ function EntryService:openEntryFile(html_file)
             -- so navigation will be global unless the user came from a browser session
             if not NavigationContext.hasValidContext() then
                 -- Set global context if no context exists
-                NavigationContext.setGlobalContext(entry_id)
+                NavigationContext.setContext(entry_id)
             else
                 -- Update current entry in existing context
                 NavigationContext.updateCurrentEntry(entry_id)

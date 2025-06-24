@@ -1,13 +1,13 @@
 --[[--
-Miniflux Browser - Miniflux-specific Browser Implementation
+Miniflux Browser - Simplified Menu-based RSS Browser
 
-Extends the generic Browser to provide Miniflux RSS reader functionality
-including feeds, categories, and entry management.
+Directly extends KOReader's Menu widget to provide Miniflux RSS reader functionality.
+Replaces the over-engineered Browser abstraction with direct Menu usage.
 
 @module miniflux.browser.miniflux_browser
 --]]
 
-local Browser = require("browser/browser")
+local Menu = require("ui/widget/menu")
 local UIManager = require("ui/uimanager")
 local InfoMessage = require("ui/widget/infomessage")
 local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
@@ -20,7 +20,7 @@ local NavigationContext = require("utils/navigation_context")
 local UIComponents = require("utils/ui_components")
 local _ = require("gettext")
 
----@class MinifluxBrowser : Browser
+---@class MinifluxBrowser : Menu
 ---@field unread_count number|nil Number of unread entries (stored from initialization)
 ---@field feeds_count number|nil Number of feeds (stored from initialization)
 ---@field categories_count number|nil Number of categories (stored from initialization)
@@ -32,8 +32,19 @@ local _ = require("gettext")
 ---@field settings table Plugin settings
 ---@field api table API client
 ---@field download_dir string Download directory path
----@field new fun(self: MinifluxBrowser, o: table): MinifluxBrowser Override Browser:new to return correct type
-local MinifluxBrowser = Browser:extend({})
+---@field page_state_stack number[] Stack of page states for each navigation level
+local MinifluxBrowser = Menu:extend({
+    title_shrink_font_to_fit = true,
+    is_popout = false,
+    covers_fullscreen = true,
+    is_borderless = true,
+    title_bar_fm_style = true,
+    title_bar_left_icon = "appbar.settings",
+    perpage = 20,
+
+    -- Page state stack for navigation restoration
+    page_state_stack = {},
+})
 
 -- =============================================================================
 -- INITIALIZATION
@@ -45,7 +56,7 @@ function MinifluxBrowser:init()
     self.api = self.api or {}
     self.download_dir = self.download_dir
 
-    -- Initialize repositories (direct access)
+    -- Initialize repositories
     self.entry_repository = EntryRepository:new(self.api, self.settings)
     self.feed_repository = FeedRepository:new(self.api, self.settings)
     self.category_repository = CategoryRepository:new(self.api, self.settings)
@@ -59,99 +70,46 @@ function MinifluxBrowser:init()
         self:showConfigDialog()
     end
 
-    -- Initialize parent Browser
-    Browser.init(self)
+    -- Initialize Menu parent
+    Menu.init(self)
 end
 
 -- =============================================================================
--- ABSTRACT METHOD IMPLEMENTATIONS
+-- MAIN ENTRY POINT
 -- =============================================================================
 
----Get the initial location for the browser
----@return string location Initial location identifier
-function MinifluxBrowser:getInitialLocation()
-    return "main"
-end
+---Show the main Miniflux browser screen with initial data
+function MinifluxBrowser:showMainScreen()
+    -- Show loading message while fetching initial data
+    local loading_info = InfoMessage:new({
+        text = _("Loading Miniflux data..."),
+    })
+    UIManager:show(loading_info)
+    UIManager:forceRePaint()
 
----Navigate to a specific location
----@param location string Target location identifier
----@param params? table Navigation parameters
-function MinifluxBrowser:navigate(location, params)
-    params = params or {}
-
-    if location == "main" then
-        self:showMainContent(params)
-    elseif location == "feeds" then
-        self:showFeeds(params)
-    elseif location == "categories" then
-        self:showCategories(params)
-    elseif location == "unread_entries" then
-        self:showUnreadEntries(params)
-    elseif location == "feed_entries" then
-        self:showFeedEntries(params)
-    elseif location == "category_entries" then
-        self:showCategoryEntries(params)
-    else
-        -- Fallback to main
-        self:showMainContent(params)
-    end
-end
-
----Determine if this navigation should be added to history
----@param location string Target location
----@param params table Navigation parameters
----@return boolean should_add_to_history
-function MinifluxBrowser:shouldAddToHistory(location, params)
-    -- Don't add to history if explicitly marked as paths_updated
-    if params and params.paths_updated then
-        return false
+    -- Fetch initial data for browser
+    local success, error_msg = self:fetchInitialData(loading_info)
+    if not success then
+        UIManager:show(InfoMessage:new({
+            text = _("Failed to load Miniflux: ") .. tostring(error_msg),
+            timeout = 5,
+        }))
+        return
     end
 
-    -- Don't add main screen to history when navigating TO main (since it's the root)
-    if location == "main" then
-        return false
-    end
+    -- Show main content (loading dialog already closed by fetchInitialData)
+    self:showMain()
 
-    -- Add all other locations to history (including when navigating FROM main)
-    return true
-end
-
----Create history state for current location
----@return HistoryState|nil state State to save, or nil if shouldn't save
-function MinifluxBrowser:createHistoryState()
-    if not self.current_location then
-        return nil
-    end
-
-    -- Always save current location state (including main) when navigating away from it
-    return {
-        location = self.current_location,
-        params = {
-            feed_id = self.current_params and self.current_params.feed_id,
-            category_id = self.current_params and self.current_params.category_id,
-        },
-        page_info = {
-            page = self.page or 1,
-            perpage = self.perpage or 20,
-        }
-    }
-end
-
----Show settings dialog
-function MinifluxBrowser:showSettingsDialog()
-    self:showConfigDialog()
+    -- Actually show the browser
+    UIManager:show(self)
 end
 
 -- =============================================================================
--- CONTENT DISPLAY METHODS
+-- NAVIGATION METHODS (SIMPLIFIED)
 -- =============================================================================
 
 ---Show main Miniflux screen with counts
----@param params? table Optional parameters
-function MinifluxBrowser:showMainContent(params)
-    params = params or {}
-
-    -- Use stored counts from initialization
+function MinifluxBrowser:showMain()
     local hide_read = self.settings and self.settings.hide_read_entries
     local subtitle = hide_read and "⊘ " or "◯ "
 
@@ -159,43 +117,41 @@ function MinifluxBrowser:showMainContent(params)
         {
             text = _("Unread"),
             mandatory = tostring(self.unread_count or 0),
-            onSelect = function(browser, item)
-                browser:navigate("unread_entries")
+            callback = function()
+                self:showUnreadEntries()
             end
         },
         {
             text = _("Feeds"),
             mandatory = tostring(self.feeds_count or 0),
-            onSelect = function(browser, item)
-                browser:navigate("feeds")
+            callback = function()
+                self:showFeeds()
             end
         },
         {
             text = _("Categories"),
             mandatory = tostring(self.categories_count or 0),
-            onSelect = function(browser, item)
-                browser:navigate("categories")
+            callback = function()
+                self:showCategories()
             end
         },
     }
 
-    self:updateContent({
-        title = _("Miniflux"),
-        items = main_items,
-        params = params,
-        subtitle = subtitle
-    }, "main")
+    -- Clear navigation stack - we're at the root (BEFORE switchItemTable)
+    self.paths = {}
+    self.page_state_stack = {} -- Clear page state stack too
+    self.onReturn = nil
+
+    -- Use Menu's built-in content switching
+    self:switchItemTable(_("Miniflux"), main_items, nil, nil, subtitle)
 end
 
 ---Show feeds list with counters
----@param params? table Optional parameters
-function MinifluxBrowser:showFeeds(params)
-    params = params or {}
-
+function MinifluxBrowser:showFeeds()
     -- Show loading message
     local loading_info = UIComponents.showLoadingMessage(_("Fetching feeds..."))
 
-    -- Direct repository call
+    -- Fetch data
     local result, error_msg = self.feed_repository:getAllWithCounters()
     UIComponents.closeLoadingMessage(loading_info)
 
@@ -204,16 +160,16 @@ function MinifluxBrowser:showFeeds(params)
         return
     end
 
-    -- Direct menu generation with onSelect functions
+    -- Generate menu items
     local menu_items = self.menu_formatter:feedsToMenuItems(result.feeds, {
         feed_counters = result.counters
     })
 
-    -- Add onSelect functions to feed items
+    -- Add callbacks to feed items
     for _, item in ipairs(menu_items) do
         if item.feed_data then
-            item.onSelect = function(browser, item_data)
-                browser:navigate("feed_entries", { feed_id = item_data.feed_data.id })
+            item.callback = function()
+                self:showFeedEntries(item.feed_data.id)
             end
         end
     end
@@ -221,23 +177,24 @@ function MinifluxBrowser:showFeeds(params)
     local hide_read = self.settings.hide_read_entries
     local subtitle = self:buildSubtitle(#result.feeds, hide_read, false, "feeds")
 
-    self:updateContent({
-        title = _("Feeds"),
-        items = menu_items,
-        params = params,
-        subtitle = subtitle
-    }, "feeds")
+    -- Set up back navigation to main BEFORE calling switchItemTable
+    table.insert(self.paths, true)
+    self.onReturn = function()
+        table.remove(self.paths)
+        self:showMain()
+    end
+
+    -- Use Menu's built-in navigation with page state restoration
+    local restore_to = self:popPageState()
+    self:switchItemTable(_("Feeds"), menu_items, restore_to, nil, subtitle)
 end
 
 ---Show categories list
----@param params? table Optional parameters
-function MinifluxBrowser:showCategories(params)
-    params = params or {}
-
+function MinifluxBrowser:showCategories()
     -- Show loading message
     local loading_info = UIComponents.showLoadingMessage(_("Fetching categories..."))
 
-    -- Direct repository call
+    -- Fetch data
     local categories, error_msg = self.category_repository:getAll()
     UIComponents.closeLoadingMessage(loading_info)
 
@@ -246,14 +203,14 @@ function MinifluxBrowser:showCategories(params)
         return
     end
 
-    -- Direct menu generation with onSelect functions
+    -- Generate menu items
     local menu_items = self.menu_formatter:categoriesToMenuItems(categories)
 
-    -- Add onSelect functions to category items
+    -- Add callbacks to category items
     for _, item in ipairs(menu_items) do
         if item.category_data then
-            item.onSelect = function(browser, item_data)
-                browser:navigate("category_entries", { category_id = item_data.category_data.id })
+            item.callback = function()
+                self:showCategoryEntries(item.category_data.id)
             end
         end
     end
@@ -261,208 +218,163 @@ function MinifluxBrowser:showCategories(params)
     local hide_read = self.settings.hide_read_entries
     local subtitle = self:buildSubtitle(#categories, hide_read, false, "categories")
 
-    self:updateContent({
-        title = _("Categories"),
-        items = menu_items,
-        params = params,
-        subtitle = subtitle
-    }, "categories")
+    -- Set up back navigation to main BEFORE calling switchItemTable
+    table.insert(self.paths, true)
+    self.onReturn = function()
+        table.remove(self.paths)
+        self:showMain()
+    end
+
+    -- Use Menu's built-in navigation with page state restoration
+    local restore_to = self:popPageState()
+    self:switchItemTable(_("Categories"), menu_items, restore_to, nil, subtitle)
+end
+
+---Show entries with unified configuration
+---@param config {type: "unread"|"feed"|"category", id?: number, title?: string, onItemSelect: function, onBack: function}
+function MinifluxBrowser:showEntries(config)
+    -- Push page state for feed/category navigation (unread doesn't need it)
+    if config.type ~= "unread" then
+        self:pushPageState(self:getCurrentItemNumber())
+    end
+
+    -- Show loading message
+    local loading_messages = {
+        unread = _("Fetching unread entries..."),
+        feed = _("Fetching feed entries..."),
+        category = _("Fetching category entries...")
+    }
+    local loading_info = UIComponents.showLoadingMessage(loading_messages[config.type])
+
+    -- Fetch data based on type
+    local entries, error_msg
+    if config.type == "unread" then
+        entries, error_msg = self.entry_repository:getUnread()
+    elseif config.type == "feed" then
+        entries, error_msg = self.entry_repository:getByFeed(config.id)
+    elseif config.type == "category" then
+        entries, error_msg = self.entry_repository:getByCategory(config.id)
+    end
+
+    UIComponents.closeLoadingMessage(loading_info)
+
+    if not entries then
+        UIComponents.showErrorMessage(_("Failed to fetch entries: ") .. tostring(error_msg))
+        return
+    end
+
+    -- Generate menu items with appropriate configuration
+    local show_feed_names = (config.type == "unread" or config.type == "category")
+    local menu_items = self.menu_formatter:entriesToMenuItems(entries, { show_feed_names = show_feed_names })
+
+    -- Add callbacks to entry items
+    for _, item in ipairs(menu_items) do
+        if item.entry_data then
+            item.callback = function()
+                config.onItemSelect(item.entry_data)
+            end
+        end
+    end
+
+    -- Build subtitle based on type
+    local subtitle
+    if config.type == "unread" then
+        subtitle = self:buildSubtitle(#entries, false, true) -- unread only
+    else
+        local hide_read = self.settings.hide_read_entries
+        subtitle = self:buildSubtitle(#entries, hide_read, false, "entries")
+    end
+
+    -- Determine title
+    local title = config.title
+    if not title then
+        if config.type == "unread" then
+            title = _("Unread Entries")
+        elseif config.type == "feed" then
+            title = _("Feed Entries")
+            if #entries > 0 and entries[1].feed and entries[1].feed.title then
+                title = entries[1].feed.title
+            end
+        elseif config.type == "category" then
+            title = _("Category Entries")
+            if #entries > 0 and entries[1].feed and entries[1].feed.category and entries[1].feed.category.title then
+                title = entries[1].feed.category.title
+            end
+        end
+    end
+
+    -- Set up back navigation
+    table.insert(self.paths, true)
+    self.onReturn = function()
+        table.remove(self.paths)
+        config.onBack()
+    end
+
+    -- Use Menu's built-in navigation
+    self:switchItemTable(title, menu_items, nil, nil, subtitle)
 end
 
 ---Show unread entries from all feeds
----@param params? table Optional parameters
-function MinifluxBrowser:showUnreadEntries(params)
-    params = params or {}
-
-    -- Show loading message
-    local loading_info = UIComponents.showLoadingMessage(_("Fetching unread entries..."))
-
-    -- Direct repository call
-    local entries, error_msg = self.entry_repository:getUnread()
-    UIComponents.closeLoadingMessage(loading_info)
-
-    if not entries then
-        UIComponents.showErrorMessage(_("Failed to fetch unread entries: ") .. tostring(error_msg))
-        return
-    end
-
-    -- Direct menu generation with onSelect functions
-    local menu_items = self.menu_formatter:entriesToMenuItems(entries, { show_feed_names = true })
-
-    -- Add onSelect functions to entry items
-    for _, item in ipairs(menu_items) do
-        if item.entry_data then
-            item.onSelect = function(browser, item_data)
-                browser:openEntry(item_data.entry_data)
-            end
+function MinifluxBrowser:showUnreadEntries()
+    self:showEntries({
+        type = "unread",
+        onItemSelect = function(entry_data)
+            self:openEntry(entry_data)
+        end,
+        onBack = function()
+            self:showMain()
         end
-    end
-
-    local subtitle = self:buildSubtitle(#entries, false, true) -- unread only
-
-    self:updateContent({
-        title = _("Unread Entries"),
-        items = menu_items,
-        params = params,
-        subtitle = subtitle
-    }, "unread_entries")
+    })
 end
 
 ---Show entries for a specific feed
----@param params table Required: feed_id
-function MinifluxBrowser:showFeedEntries(params)
-    if not params.feed_id then
-        UIComponents.showErrorMessage(_("Missing feed information"))
-        return
-    end
-
-    -- Show loading message
-    local loading_info = UIComponents.showLoadingMessage(_("Fetching feed entries..."))
-
-    -- Direct repository call
-    local entries, error_msg = self.entry_repository:getByFeed(params.feed_id)
-    UIComponents.closeLoadingMessage(loading_info)
-
-    if not entries then
-        UIComponents.showErrorMessage(_("Failed to fetch feed entries: ") .. tostring(error_msg))
-        return
-    end
-
-    -- Direct menu generation with onSelect functions
-    local menu_items = self.menu_formatter:entriesToMenuItems(entries, { show_feed_names = false })
-
-    -- Add onSelect functions to entry items
-    for _, item in ipairs(menu_items) do
-        if item.entry_data then
-            item.onSelect = function(browser, item_data)
-                browser:openEntry(item_data.entry_data)
-            end
+---@param feed_id number Feed ID
+function MinifluxBrowser:showFeedEntries(feed_id)
+    self:showEntries({
+        type = "feed",
+        id = feed_id,
+        onItemSelect = function(entry_data)
+            self:openEntry(entry_data, { type = "feed", id = feed_id })
+        end,
+        onBack = function()
+            self:showFeeds()
         end
-    end
-
-    local hide_read = self.settings.hide_read_entries
-    local subtitle = self:buildSubtitle(#entries, hide_read, false, "entries")
-
-    -- Use feed title from first entry if available, otherwise fallback
-    local feed_title = _("Feed Entries")
-    if #entries > 0 and entries[1].feed and entries[1].feed.title then
-        feed_title = entries[1].feed.title
-    end
-
-    self:updateContent({
-        title = feed_title,
-        items = menu_items,
-        params = params,
-        subtitle = subtitle
-    }, "feed_entries")
+    })
 end
 
 ---Show entries for a specific category
----@param params table Required: category_id
-function MinifluxBrowser:showCategoryEntries(params)
-    if not params.category_id then
-        UIComponents.showErrorMessage(_("Missing category information"))
-        return
-    end
-
-    -- Show loading message
-    local loading_info = UIComponents.showLoadingMessage(_("Fetching category entries..."))
-
-    -- Direct repository call
-    local entries, error_msg = self.entry_repository:getByCategory(params.category_id)
-    UIComponents.closeLoadingMessage(loading_info)
-
-    if not entries then
-        UIComponents.showErrorMessage(_("Failed to fetch category entries: ") .. tostring(error_msg))
-        return
-    end
-
-    -- Direct menu generation with onSelect functions
-    local menu_items = self.menu_formatter:entriesToMenuItems(entries, { show_feed_names = true })
-
-    -- Add onSelect functions to entry items
-    for _, item in ipairs(menu_items) do
-        if item.entry_data then
-            item.onSelect = function(browser, item_data)
-                browser:openEntry(item_data.entry_data)
-            end
+---@param category_id number Category ID
+function MinifluxBrowser:showCategoryEntries(category_id)
+    self:showEntries({
+        type = "category",
+        id = category_id,
+        onItemSelect = function(entry_data)
+            self:openEntry(entry_data, { type = "category", id = category_id })
+        end,
+        onBack = function()
+            self:showCategories()
         end
-    end
-
-    local hide_read = self.settings.hide_read_entries
-    local subtitle = self:buildSubtitle(#entries, hide_read, false, "entries")
-
-    -- Use category title from first entry if available, otherwise fallback
-    local category_title = _("Category Entries")
-    if #entries > 0 and entries[1].feed and entries[1].feed.category and entries[1].feed.category.title then
-        category_title = entries[1].feed.category.title
-    end
-
-    self:updateContent({
-        title = category_title,
-        items = menu_items,
-        params = params,
-        subtitle = subtitle
-    }, "category_entries")
+    })
 end
 
 -- =============================================================================
 -- ENTRY HANDLING
 -- =============================================================================
 
-function MinifluxBrowser:openEntry(entry_data)
-    -- Set navigation context directly using NavigationContext
-    if self.current_location == "feed_entries" and self.current_params.feed_id then
-        NavigationContext.setFeedContext(self.current_params.feed_id, entry_data.id)
-    elseif self.current_location == "category_entries" and self.current_params.category_id then
-        NavigationContext.setCategoryContext(self.current_params.category_id, entry_data.id)
-    else
-        -- For unread_entries or any other context, use global
-        NavigationContext.setGlobalContext(entry_data.id)
-    end
+---Open an entry with optional navigation context
+---@param entry_data table Entry data from API
+---@param context? {type: "feed"|"category", id: number} Navigation context (nil = global)
+function MinifluxBrowser:openEntry(entry_data, context)
+    -- Set navigation context using unified method
+    NavigationContext.setContext(entry_data.id, context)
 
-    -- Show the entry using EntryService instance
+    -- Show the entry using EntryService
     self.entry_service:showEntry({
         entry = entry_data,
         api = self.api,
         download_dir = self.download_dir,
         browser = self,
     })
-end
-
--- =============================================================================
--- BACKWARD COMPATIBILITY - LEGACY ITEM HANDLING
--- =============================================================================
-
----Handle item actions for backward compatibility
----@param item table Menu item
-function MinifluxBrowser:handleItemAction(item)
-    if not item or not item.action_type then
-        return
-    end
-
-    if item.action_type == "unread" then
-        self:navigate("unread_entries")
-    elseif item.action_type == "feeds" then
-        self:navigate("feeds")
-    elseif item.action_type == "categories" then
-        self:navigate("categories")
-    elseif item.action_type == "feed_entries" then
-        local feed_data = item.feed_data
-        if feed_data and feed_data.id then
-            self:navigate("feed_entries", { feed_id = feed_data.id })
-        end
-    elseif item.action_type == "category_entries" then
-        local category_data = item.category_data
-        if category_data and category_data.id then
-            self:navigate("category_entries", { category_id = category_data.id })
-        end
-    elseif item.action_type == "read_entry" then
-        local entry_data = item.entry_data
-        if entry_data then
-            self:openEntry(entry_data)
-        end
-    end
 end
 
 -- =============================================================================
@@ -475,38 +387,16 @@ function MinifluxBrowser:showConfigDialog()
         return
     end
 
-    local is_entry_view = (self.current_location == "feed_entries" or
-        self.current_location == "category_entries")
-    local is_unread_view = self.current_location == "unread_entries"
-
-    local buttons = {}
-
-    -- Show toggle only for non-unread entry views
-    if is_entry_view and not is_unread_view then
-        local hide_read = self.settings.hide_read_entries
-        local eye_icon = hide_read and "◯ " or "⊘ "
-        local button_text = eye_icon .. (hide_read and _("Show all entries") or _("Show only unread entries"))
-
-        table.insert(buttons, {
+    local buttons = {
+        {
             {
-                text = button_text,
+                text = _("Close"),
                 callback = function()
                     UIManager:close(self.config_dialog)
-                    self:toggleReadEntriesVisibility()
                 end,
             },
-        })
-    end
-
-    -- Close button
-    table.insert(buttons, {
-        {
-            text = _("Close"),
-            callback = function()
-                UIManager:close(self.config_dialog)
-            end,
         },
-    })
+    }
 
     self.config_dialog = ButtonDialogTitle:new({
         title = _("Miniflux Settings"),
@@ -516,54 +406,9 @@ function MinifluxBrowser:showConfigDialog()
     UIManager:show(self.config_dialog)
 end
 
-function MinifluxBrowser:toggleReadEntriesVisibility()
-    local now_hidden = self.settings:toggleHideReadEntries()
-    local message = now_hidden and _("Now showing only unread entries") or _("Now showing all entries")
-    UIComponents.showInfoMessage(message, 2)
-
-    -- Refresh current view
-    self:refreshCurrentView()
-end
-
 -- =============================================================================
--- INITIALIZATION AND DATA FETCHING
+-- DATA FETCHING & UTILITIES
 -- =============================================================================
-
----Show the main Miniflux browser screen with initial data
-function MinifluxBrowser:showMainScreen()
-    if self.settings.server_address == "" or self.settings.api_token == "" then
-        UIManager:show(InfoMessage:new({
-            text = _("Please configure server settings first"),
-            timeout = 3,
-        }))
-        return
-    end
-
-    -- Show loading message while fetching initial data
-    local loading_info = InfoMessage:new({
-        text = _("Loading Miniflux data..."),
-    })
-    UIManager:show(loading_info)
-    UIManager:forceRePaint()
-
-    -- Fetch initial data for browser
-    local success, error_msg = self:fetchInitialData(loading_info)
-    if not success then
-        UIManager:close(loading_info)
-        UIManager:show(InfoMessage:new({
-            text = _("Failed to load Miniflux: ") .. tostring(error_msg),
-            timeout = 5,
-        }))
-        return
-    end
-
-    -- Close loading message and show main content
-    UIManager:close(loading_info)
-    self:navigate("main")
-
-    -- Actually show the browser
-    UIManager:show(self)
-end
 
 ---Fetch initial data needed for browser initialization
 ---@param loading_info InfoMessage Loading message to update
@@ -608,10 +453,6 @@ function MinifluxBrowser:fetchInitialData(loading_info)
     return true
 end
 
--- =============================================================================
--- UTILITIES
--- =============================================================================
-
 ---Build subtitle for content views
 ---@param count number Number of items
 ---@param hide_read boolean Whether read entries are hidden
@@ -638,6 +479,48 @@ function MinifluxBrowser:buildSubtitle(count, hide_read, is_unread_only, item_ty
     else
         return icon .. count .. " " .. _("items")
     end
+end
+
+---Get current item number for page state restoration
+---@return number Current item number (for use with switchItemTable)
+function MinifluxBrowser:getCurrentItemNumber()
+    -- Safely get properties with fallbacks for uninitialized Menu state
+    local page = tonumber(self.page) or 1
+    local perpage = tonumber(self.perpage) or 20
+
+    -- For Menu widgets, the current item might be tracked differently
+    -- Use itemnumber if available, otherwise fall back to a safe default
+    local current_item = tonumber(self.itemnumber) or 1
+
+    -- If we have valid page info, calculate the absolute item number
+    if page > 1 then
+        local item_number = (page - 1) * perpage + current_item
+        return math.max(item_number, 1)
+    end
+
+    -- Otherwise, just return the current item or 1
+    return math.max(current_item, 1)
+end
+
+---Push page state to stack (when navigating away from a paginated list)
+---@param page_state number Current page/item position
+---@return nil
+function MinifluxBrowser:pushPageState(page_state)
+    table.insert(self.page_state_stack, page_state)
+end
+
+---Pop page state from stack (when returning to a paginated list)
+---@return number|nil Page state to restore to, or nil if stack is empty
+function MinifluxBrowser:popPageState()
+    if #self.page_state_stack > 0 then
+        return table.remove(self.page_state_stack)
+    end
+    return 1
+end
+
+---Close the browser (for compatibility with entry service)
+function MinifluxBrowser:closeAll()
+    UIManager:close(self)
 end
 
 return MinifluxBrowser
