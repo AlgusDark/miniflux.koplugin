@@ -6,7 +6,6 @@ This directory contains utility modules for the Miniflux KOReader plugin. The ut
 
 ### Core System Utilities
 - **`file_utils.lua`** - File operations and string manipulation (only functions actually used)
-- **`ui_components.lua`** - Reusable UI components and standardized dialogs
 - **`progress_utils.lua`** - Progress tracking for long-running operations
 
 ### Entry Processing Utilities
@@ -46,8 +45,7 @@ local FileUtils = require("utils/file_utils")
 -- Entry processing
 local EntryUtils = require("utils/entry_utils")
 
--- UI components
-local UIComponents = require("utils/ui_components") 
+-- Progress tracking
 local ProgressUtils = require("utils/progress_utils")
 
 -- Content processing
@@ -60,7 +58,6 @@ local ImageDownload = require("utils/image_download")   -- Image downloading
 ### Dependency Graph  
 ```
 EntryService -> EntryUtils, ImageDiscovery, ImageDownload, ImageUtils, HtmlUtils, FileUtils, ProgressUtils, NavigationContext
-ViewService -> UIComponents
 ApiClient -> FileUtils
 ImageUtils -> ImageDiscovery (HTML processing only)
 ```
@@ -100,7 +97,6 @@ ImageUtils -> ImageDiscovery (HTML processing only)
 utils/
 ├── README.md              # Documentation
 ├── file_utils.lua         # File operations - YAGNI compliant, no facades
-├── ui_components.lua      # UI components 
 ├── progress_utils.lua     # Progress tracking
 ├── entry_utils.lua        # Entry operations
 ├── metadata_loader.lua    # Metadata loading
@@ -111,7 +107,7 @@ utils/
 └── image_utils.lua        # HTML image processing only
 ```
 
-**Total: 11 focused files with direct imports, no facades**
+**Total: 10 focused files with direct imports, no facades**
 
 ## Future Considerations
 

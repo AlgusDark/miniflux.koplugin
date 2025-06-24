@@ -32,6 +32,13 @@ local FileUtils = require("utils/file_utils")
 local NavigationService = require("services/navigation_service")
 local MetadataLoader = require("utils/metadata_loader")
 
+-- Timeout constants for consistent UI messaging
+local TIMEOUTS = {
+    SUCCESS = 2, -- Success messages
+    ERROR = 5,   -- Error messages
+    WARNING = 3, -- Warning/info messages
+}
+
 ---@class EntryService
 ---@field settings MinifluxSettings Settings instance
 ---@field api MinifluxAPI API client instance
@@ -176,17 +183,17 @@ function EntryService:_downloadImages(images, entry_dir, progress)
     local time_prev = time.now()
 
     for i, img in ipairs(images) do
+        -- Extract the repeated progress message template
+        local download_message = T(_("Downloading image %1 of %2…"), i, #images)
+        local progress_data = { current = i - 1, total = #images }
+
         -- Update progress for each image
-        progress:update(T(_("Downloading image %1 of %2…"), i, #images), { current = i - 1, total = #images }, true)
+        progress:update(download_message, progress_data, true)
 
         -- Process can be interrupted every second
         if time.to_ms(time.since(time_prev)) > 1000 then
             time_prev = time.now()
-            local go_on = progress:update(
-                T(_("Downloading image %1 of %2…"), i, #images),
-                { current = i - 1, total = #images },
-                true
-            )
+            local go_on = progress:update(download_message, progress_data, true)
             if not go_on then
                 break
             end
@@ -212,6 +219,25 @@ end
 -- ENTRY STATUS MANAGEMENT
 -- =============================================================================
 
+---Generate status messages for entry operations
+---@param new_status string The new status ("read" or "unread")
+---@return table Status messages with loading, success, and error text
+function EntryService:_getStatusMessages(new_status)
+    if new_status == "read" then
+        return {
+            loading = _("Marking entry as read..."),
+            success = _("Entry marked as read"),
+            error = _("Failed to mark entry as read")
+        }
+    else
+        return {
+            loading = _("Marking entry as unread..."),
+            success = _("Entry marked as unread"),
+            error = _("Failed to mark entry as unread")
+        }
+    end
+end
+
 ---Mark an entry as read
 ---@param entry_id number Entry ID
 ---@return boolean success
@@ -236,27 +262,25 @@ function EntryService:changeEntryStatus(entry_id, new_status)
         return false
     end
 
-    -- Prepare dialog messages
-    local loading_text = new_status == "read" and _("Marking entry as read...") or _("Marking entry as unread...")
-    local success_text = new_status == "read" and _("Entry marked as read") or _("Entry marked as unread")
-    local error_text = new_status == "read" and _("Failed to mark entry as read") or _("Failed to mark entry as unread")
+    -- Get consolidated status messages
+    local messages = self:_getStatusMessages(new_status)
 
     -- Call API with automatic dialog management
     local success, result
     if new_status == "read" then
         success, result = self.api.entries:markAsRead(entry_id, {
             dialogs = {
-                loading = { text = loading_text },
-                success = { text = success_text, timeout = 2 },
-                error = { text = error_text, timeout = 5 }
+                loading = { text = messages.loading },
+                success = { text = messages.success, timeout = TIMEOUTS.SUCCESS },
+                error = { text = messages.error, timeout = TIMEOUTS.ERROR }
             }
         })
     else
         success, result = self.api.entries:markAsUnread(entry_id, {
             dialogs = {
-                loading = { text = loading_text },
-                success = { text = success_text, timeout = 2 },
-                error = { text = error_text, timeout = 5 }
+                loading = { text = messages.loading },
+                success = { text = messages.success, timeout = TIMEOUTS.SUCCESS },
+                error = { text = messages.error, timeout = TIMEOUTS.ERROR }
             }
         })
     end
@@ -436,7 +460,7 @@ function EntryService:showEndOfEntryDialog(entry_info)
         -- If dialog creation fails, show a simple error message
         UIManager:show(InfoMessage:new({
             text = _("Failed to create end of entry dialog"),
-            timeout = 3,
+            timeout = TIMEOUTS.ERROR,
         }))
         return nil
     end
@@ -485,35 +509,12 @@ function EntryService:deleteLocalEntryFromInfo(entry_info)
     if not EntryUtils.isValidId(entry_id) then
         UIManager:show(InfoMessage:new({
             text = _("Cannot delete: invalid entry ID"),
-            timeout = 3,
+            timeout = TIMEOUTS.WARNING,
         }))
         return
     end
 
     self:deleteLocalEntry(entry_id)
-end
-
--- =============================================================================
--- LEGACY SUPPORT METHODS
--- =============================================================================
-
----Legacy method aliases for backward compatibility
----@param params {entry: MinifluxEntry, browser?: MinifluxBrowser}
-function EntryService:showEntry(params)
-    return self:readEntry(params.entry, params.browser)
-end
-
----Legacy method aliases for backward compatibility
----@param params {entry: MinifluxEntry, browser?: MinifluxBrowser}
-function EntryService:downloadEntry(params)
-    return self:readEntry(params.entry, params.browser)
-end
-
----Legacy method aliases for backward compatibility
----@param entry MinifluxEntry Entry to download and show
----@return nil
-function EntryService:downloadAndShowEntry(entry)
-    self:readEntry(entry)
 end
 
 -- =============================================================================
@@ -558,7 +559,7 @@ function EntryService:deleteLocalEntry(entry_id)
     if success then
         UIManager:show(InfoMessage:new({
             text = _("Local entry deleted successfully"),
-            timeout = 2,
+            timeout = TIMEOUTS.SUCCESS,
         }))
 
         -- Open Miniflux folder
@@ -620,7 +621,7 @@ end
 function EntryService:_showError(message)
     UIManager:show(InfoMessage:new({
         text = message,
-        timeout = 5,
+        timeout = TIMEOUTS.ERROR,
     }))
 end
 

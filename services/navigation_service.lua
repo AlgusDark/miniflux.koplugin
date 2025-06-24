@@ -371,8 +371,8 @@ end
 ---@param entry_service table EntryService instance for delegation
 ---@return nil
 function NavigationService:downloadAndShowEntry(entry, entry_service)
-    -- Delegate back to EntryService
-    entry_service:downloadAndShowEntry(entry)
+    -- Delegate back to EntryService using modern method
+    entry_service:readEntry(entry)
 end
 
 return NavigationService

@@ -112,36 +112,4 @@ function NavigationContext.hasValidContext()
     return _current_context.type ~= nil and _current_context.entry_id ~= nil
 end
 
----Clear the navigation context (useful for cleanup or testing)
----@return nil
-function NavigationContext.clear()
-    _current_context = {
-        type = nil,
-        feed_id = nil,
-        category_id = nil,
-        entry_id = nil,
-        timestamp = nil,
-    }
-end
-
----Get a human-readable description of the current context (for debugging)
----@return string Context description
-function NavigationContext.getContextDescription()
-    local context = _current_context
-    if not context.type then
-        return "No navigation context set"
-    end
-
-    local desc = "Context: " .. context.type
-    if context.feed_id then
-        desc = desc .. " (feed " .. context.feed_id .. ")"
-    elseif context.category_id then
-        desc = desc .. " (category " .. context.category_id .. ")"
-    end
-    if context.entry_id then
-        desc = desc .. ", current entry: " .. context.entry_id
-    end
-    return desc
-end
-
 return NavigationContext

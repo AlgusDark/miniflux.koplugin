@@ -107,7 +107,7 @@ function HtmlUtils.createHtmlDocument(entry, content)
         HtmlUtils.escapeHtml(entry_title), -- Title in head
         HtmlUtils.escapeHtml(entry_title), -- Title in body
         metadata_html,
-        content -- Content is already processed, don't escape it
+        content                            -- Content is already processed, don't escape it
     )
 end
 
@@ -128,51 +128,6 @@ function HtmlUtils.escapeHtml(text)
     }
 
     return (text:gsub("[&<>\"']", escape_map))
-end
-
----Create a simple HTML template for plain text content
----@param title string Document title
----@param content string Plain text content
----@return string HTML document
-function HtmlUtils.createSimpleHtmlDocument(title, content)
-    local escaped_title = HtmlUtils.escapeHtml(title)
-    local escaped_content = HtmlUtils.escapeHtml(content)
-
-    -- Convert line breaks to paragraphs
-    local formatted_content = escaped_content:gsub("\n\n+", "</p><p>"):gsub("\n", "<br>")
-    if formatted_content ~= "" then
-        formatted_content = "<p>" .. formatted_content .. "</p>"
-    end
-
-    return string.format(
-        [[<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>%s</title>
-    <style>
-        body {
-            font-family: serif;
-            line-height: 1.6;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        p {
-            margin-bottom: 1em;
-        }
-    </style>
-</head>
-<body>
-    <h1>%s</h1>
-    %s
-</body>
-</html>]],
-        escaped_title,
-        escaped_title,
-        formatted_content
-    )
 end
 
 ---Clean and normalize HTML content
@@ -205,65 +160,6 @@ function HtmlUtils.cleanHtmlContent(content)
     end)
 
     return cleaned_content
-end
-
----Extract text content from HTML
----@param html string HTML content
----@return string Plain text content
-function HtmlUtils.extractTextContent(html)
-    if not html then
-        return ""
-    end
-
-    local text = html
-
-    -- Remove all HTML tags
-    text = text:gsub("<%s*[^>]*>", "")
-
-    -- Decode common HTML entities
-    local entity_map = {
-        ["&amp;"] = "&",
-        ["&lt;"] = "<",
-        ["&gt;"] = ">",
-        ["&quot;"] = '"',
-        ["&#39;"] = "'",
-        ["&nbsp;"] = " ",
-        ["&mdash;"] = "—",
-        ["&ndash;"] = "–",
-        ["&hellip;"] = "…",
-    }
-
-    for entity, char in pairs(entity_map) do
-        text = text:gsub(entity, char)
-    end
-
-    -- Clean up whitespace
-    text = text:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
-
-    return text
-end
-
----Get a truncated text summary from HTML content
----@param html string HTML content
----@param max_length? number Maximum length of summary (default: 200)
----@return string Text summary
-function HtmlUtils.getTextSummary(html, max_length)
-    max_length = max_length or 200
-    local text = HtmlUtils.extractTextContent(html)
-
-    if #text <= max_length then
-        return text
-    end
-
-    -- Truncate at word boundary
-    local truncated = text:sub(1, max_length)
-    local last_space = truncated:find("%s[^%s]*$")
-
-    if last_space then
-        truncated = truncated:sub(1, last_space - 1)
-    end
-
-    return truncated .. "…"
 end
 
 return HtmlUtils

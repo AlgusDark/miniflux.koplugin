@@ -14,11 +14,14 @@ local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
 local EntryRepository = require("repositories/entry_repository")
 local FeedRepository = require("repositories/feed_repository")
 local CategoryRepository = require("repositories/category_repository")
-local MenuFormatter = require("browser/menu_formatter")
 local EntryService = require("services/entry_service")
 local NavigationContext = require("utils/navigation_context")
-local UIComponents = require("utils/ui_components")
 local _ = require("gettext")
+
+-- Timeout constants for consistent UI messaging
+local TIMEOUTS = {
+    ERROR = 5, -- Error messages
+}
 
 ---@class MinifluxBrowser : Menu
 ---@field unread_count number|nil Number of unread entries (stored from initialization)
@@ -28,7 +31,6 @@ local _ = require("gettext")
 ---@field entry_repository EntryRepository Repository for entry data access
 ---@field feed_repository FeedRepository Repository for feed data access
 ---@field category_repository CategoryRepository Repository for category data access
----@field menu_formatter MenuFormatter Formatter for menu items
 ---@field settings table Plugin settings
 ---@field api table API client
 ---@field download_dir string Download directory path
@@ -62,7 +64,6 @@ function MinifluxBrowser:init()
     self.category_repository = CategoryRepository:new(self.api, self.settings)
 
     -- Initialize other components
-    self.menu_formatter = MenuFormatter:new(self.settings)
     self.entry_service = EntryService:new(self.settings, self.api)
 
     -- Set up settings button
@@ -92,7 +93,7 @@ function MinifluxBrowser:showMainScreen()
     if not success then
         UIManager:show(InfoMessage:new({
             text = _("Failed to load Miniflux: ") .. tostring(error_msg),
-            timeout = 5,
+            timeout = TIMEOUTS.ERROR,
         }))
         return
     end
@@ -152,7 +153,7 @@ function MinifluxBrowser:showFeeds()
     local result, error_msg = self.feed_repository:getAllWithCounters({
         dialogs = {
             loading = { text = _("Fetching feeds...") },
-            error = { text = _("Failed to fetch feeds"), timeout = 5 }
+            error = { text = _("Failed to fetch feeds"), timeout = TIMEOUTS.ERROR }
         }
     })
 
@@ -162,9 +163,44 @@ function MinifluxBrowser:showFeeds()
     end
 
     -- Generate menu items
-    local menu_items = self.menu_formatter:feedsToMenuItems(result.feeds, {
-        feed_counters = result.counters
-    })
+    local menu_items = {}
+    local counters = result.counters
+
+    for _, feed in ipairs(result.feeds or {}) do
+        local feed_title = feed.title or _("Untitled Feed")
+        local feed_id_str = tostring(feed.id or 0)
+
+        -- Get counts
+        local read_count = 0
+        local unread_count = 0
+        if counters then
+            read_count = (counters.reads and counters.reads[feed_id_str]) or 0
+            unread_count = (counters.unreads and counters.unreads[feed_id_str]) or 0
+        end
+
+        -- Format count display
+        local count_info = ""
+        local total_count = read_count + unread_count
+        if total_count > 0 then
+            count_info = string.format("(%d/%d)", unread_count, total_count)
+        end
+
+        table.insert(menu_items, {
+            text = feed_title,
+            mandatory = count_info,
+            action_type = "feed_entries",
+            unread_count = unread_count,
+            feed_data = { id = feed.id, title = feed_title, unread_count = unread_count }
+        })
+    end
+
+    -- Sort: unread items first, then by unread count desc, then alphabetically
+    table.sort(menu_items, function(a, b)
+        if a.unread_count > 0 and b.unread_count == 0 then return true end
+        if a.unread_count == 0 and b.unread_count > 0 then return false end
+        if a.unread_count ~= b.unread_count then return a.unread_count > b.unread_count end
+        return a.text:lower() < b.text:lower()
+    end)
 
     -- Add callbacks to feed items
     for _, item in ipairs(menu_items) do
@@ -196,7 +232,7 @@ function MinifluxBrowser:showCategories()
     local categories, error_msg = self.category_repository:getAll({
         dialogs = {
             loading = { text = _("Fetching categories...") },
-            error = { text = _("Failed to fetch categories"), timeout = 5 }
+            error = { text = _("Failed to fetch categories"), timeout = TIMEOUTS.ERROR }
         }
     })
 
@@ -206,7 +242,28 @@ function MinifluxBrowser:showCategories()
     end
 
     -- Generate menu items
-    local menu_items = self.menu_formatter:categoriesToMenuItems(categories)
+    local menu_items = {}
+
+    for _, category in ipairs(categories or {}) do
+        local category_title = category.title or _("Untitled Category")
+        local unread_count = category.total_unread or 0
+
+        table.insert(menu_items, {
+            text = category_title,
+            mandatory = string.format("(%d)", unread_count),
+            action_type = "category_entries",
+            unread_count = unread_count,
+            category_data = { id = category.id, title = category_title, unread_count = unread_count }
+        })
+    end
+
+    -- Sort: unread items first, then by unread count desc, then alphabetically
+    table.sort(menu_items, function(a, b)
+        if a.unread_count > 0 and b.unread_count == 0 then return true end
+        if a.unread_count == 0 and b.unread_count > 0 then return false end
+        if a.unread_count ~= b.unread_count then return a.unread_count > b.unread_count end
+        return a.text:lower() < b.text:lower()
+    end)
 
     -- Add callbacks to category items
     for _, item in ipairs(menu_items) do
@@ -251,7 +308,7 @@ function MinifluxBrowser:showEntries(config)
     local dialog_config = {
         dialogs = {
             loading = { text = loading_messages[config.type] },
-            error = { text = _("Failed to fetch entries"), timeout = 5 }
+            error = { text = _("Failed to fetch entries"), timeout = TIMEOUTS.ERROR }
         }
     }
 
@@ -272,7 +329,29 @@ function MinifluxBrowser:showEntries(config)
 
     -- Generate menu items with appropriate configuration
     local show_feed_names = (config.type == "unread" or config.type == "category")
-    local menu_items = self.menu_formatter:entriesToMenuItems(entries, { show_feed_names = show_feed_names })
+    local menu_items = {}
+
+    if not entries or #entries == 0 then
+        local hide_read = self.settings.hide_read_entries
+        local message = hide_read and _("There are no unread entries.") or _("There are no entries.")
+        menu_items = { { text = message, mandatory = "", action_type = "no_action" } }
+    else
+        for _, entry in ipairs(entries) do
+            local entry_title = entry.title or _("Untitled Entry")
+            local status_indicator = entry.status == "read" and "○ " or "● "
+            local display_text = status_indicator .. entry_title
+
+            if show_feed_names and entry.feed and entry.feed.title then
+                display_text = display_text .. " (" .. entry.feed.title .. ")"
+            end
+
+            table.insert(menu_items, {
+                text = display_text,
+                action_type = "read_entry",
+                entry_data = entry
+            })
+        end
+    end
 
     -- Add callbacks to entry items
     for _, item in ipairs(menu_items) do
@@ -376,12 +455,7 @@ function MinifluxBrowser:openEntry(entry_data, context)
     NavigationContext.setContext(entry_data.id, context)
 
     -- Show the entry using EntryService
-    self.entry_service:showEntry({
-        entry = entry_data,
-        api = self.api,
-        download_dir = self.download_dir,
-        browser = self,
-    })
+    self.entry_service:readEntry(entry_data, self)
 end
 
 -- =============================================================================
@@ -390,7 +464,10 @@ end
 
 function MinifluxBrowser:showConfigDialog()
     if not self.settings then
-        UIComponents.showErrorMessage(_("Settings not available"))
+        UIManager:show(InfoMessage:new({
+            text = _("Settings not available"),
+            timeout = TIMEOUTS.ERROR,
+        }))
         return
     end
 
