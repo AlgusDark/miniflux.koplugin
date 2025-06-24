@@ -129,6 +129,7 @@ function Miniflux:createBrowser()
         settings = self.settings,
         api = self.api,
         download_dir = self.download_dir,
+        entry_service = self.entry_service, -- Pass shared EntryService
     })
     return browser
 end

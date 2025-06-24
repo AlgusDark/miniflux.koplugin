@@ -14,7 +14,6 @@ local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
 local EntryRepository = require("repositories/entry_repository")
 local FeedRepository = require("repositories/feed_repository")
 local CategoryRepository = require("repositories/category_repository")
-local EntryService = require("services/entry_service")
 local NavigationContext = require("utils/navigation_context")
 local _ = require("gettext")
 
@@ -58,13 +57,13 @@ function MinifluxBrowser:init()
     self.api = self.api or {}
     self.download_dir = self.download_dir
 
-    -- Initialize repositories
+    -- Require shared EntryService instead of creating our own
+    self.entry_service = self.entry_service or error("entry_service required")
+
+    -- Initialize repositories (lightweight, can be created on-demand)
     self.entry_repository = EntryRepository:new(self.api, self.settings)
     self.feed_repository = FeedRepository:new(self.api, self.settings)
     self.category_repository = CategoryRepository:new(self.api, self.settings)
-
-    -- Initialize other components
-    self.entry_service = EntryService:new(self.settings, self.api)
 
     -- Set up settings button
     self.onLeftButtonTap = function()
