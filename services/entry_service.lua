@@ -52,7 +52,10 @@ function EntryService:new(settings, api)
     local instance = {
         settings = settings,
         api = api,
-        navigation_service = NavigationService:new(settings, api),
+        navigation_service = NavigationService:new({
+            settings = settings,
+            api = api,
+        }),
     }
     setmetatable(instance, self)
     self.__index = self
@@ -445,7 +448,7 @@ function EntryService:showEndOfEntryDialog(entry_info)
                         callback = function()
                             UIManager:close(dialog)
                             pcall(function()
-                                self.navigation_service:navigateToPreviousEntry(entry_info, self)
+                                self.navigation_service:navigateToEntry(entry_info, { direction = "previous" }, self)
                             end)
                         end,
                     },
@@ -454,7 +457,7 @@ function EntryService:showEndOfEntryDialog(entry_info)
                         callback = function()
                             UIManager:close(dialog)
                             pcall(function()
-                                self.navigation_service:navigateToNextEntry(entry_info, self)
+                                self.navigation_service:navigateToEntry(entry_info, { direction = "next" }, self)
                             end)
                         end,
                     },
