@@ -1,53 +1,60 @@
 /*
  * Miniflux Reader CSS
- * 
+ *
  * This CSS file controls the appearance of RSS entries when viewed in KOReader.
  */
 
+body {
+  background-color: "000000";
+}
+
 img {
-    max-width: 100%;
-    height: auto;
-    display: block;
-    margin: 10px 0;
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 10px 0;
 }
 
 .entry-meta {
-    border-bottom: 1px solid #ccc;
-    padding-bottom: 10px;
-    margin-bottom: 20px;
-    color: #666;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+  color: #666;
 }
 
 .entry-content {
-    text-align: justify;
+  text-align: justify;
 }
 
 .entry-content p {
-    margin-bottom: 1em;
+  margin-bottom: 1em;
 }
 
-.entry-content h1, .entry-content h2, .entry-content h3 {
-    margin-top: 0;
-    margin-bottom: 0.5em;
+.entry-content h1,
+.entry-content h2,
+.entry-content h3 {
+  margin-top: 0;
+  margin-bottom: 0.5em;
 }
 
 .entry-content blockquote {
-    margin: 1em 0;
-    padding-left: 1em;
-    border-left: 3px solid #ccc;
-    font-style: italic;
+  margin: 1em 0;
+  padding-left: 1em;
+  border-left: 3px solid #ccc;
+  font-style: italic;
 }
 
 .entry-content pre {
-    background-color: #f5f5f5;
-    padding: 10px;
-    border-radius: 3px;
-    overflow-x: auto;
+  background-color: #f5f5f5;
+  padding: 10px;
+  border-radius: 3px;
+  overflow-x: auto;
 }
 
 .entry-content code {
-    background-color: #f5f5f5;
-    padding: 2px 4px;
-    border-radius: 3px;
-    font-family: monospace;
-} 
+  background-color: #f5f5f5;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-family: monospace;
+}
+
