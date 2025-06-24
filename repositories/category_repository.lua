@@ -31,10 +31,11 @@ end
 -- =============================================================================
 
 ---Get all categories with counts
+---@param config? table Configuration with optional dialogs
 ---@return table[]|nil categories Array of categories or nil on error
 ---@return string|nil error Error message if failed
-function CategoryRepository:getAll()
-    local success, categories = self.api.categories:getAll(true) -- include counts
+function CategoryRepository:getAll(config)
+    local success, categories = self.api.categories:getAll(true, config) -- include counts
     if not success then
         return nil, categories
     end
@@ -43,9 +44,10 @@ function CategoryRepository:getAll()
 end
 
 ---Get categories count for initialization
+---@param config? table Configuration with optional dialogs
 ---@return number count Count of categories (0 if failed)
-function CategoryRepository:getCount()
-    local categories, error_msg = self:getAll()
+function CategoryRepository:getCount(config)
+    local categories, error_msg = self:getAll(config)
     if not categories then
         return 0 -- Continue with 0 categories instead of failing
     end

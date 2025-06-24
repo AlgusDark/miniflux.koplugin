@@ -36,23 +36,41 @@ end
 
 ---Get all categories
 ---@param include_counts? boolean Whether to include entry counts
+---@param config? table Configuration including optional dialogs
 ---@return boolean success, MinifluxCategory[]|string result_or_error
-function Categories:getAll(include_counts)
+function Categories:getAll(include_counts, config)
+    config = config or {}
     local query_params = {}
     if include_counts then
         query_params.counts = "true"
     end
-    return self.api:get("/categories", { query = query_params })
+
+    -- Build request configuration
+    local request_config = {
+        query = query_params,
+        dialogs = config.dialogs
+    }
+
+    return self.api:get("/categories", request_config)
 end
 
 ---Get entries for a specific category
 ---@param category_id number The category ID
 ---@param options? ApiOptions Query options for filtering and sorting
+---@param config? table Configuration including optional dialogs
 ---@return boolean success, EntriesResponse|string result_or_error
-function Categories:getEntries(category_id, options)
+function Categories:getEntries(category_id, options, config)
+    config = config or {}
     local query_params = apiUtils.buildQueryParams(options)
     local endpoint = "/categories/" .. tostring(category_id) .. "/entries"
-    return self.api:get(endpoint, { query = query_params })
+
+    -- Build request configuration
+    local request_config = {
+        query = query_params,
+        dialogs = config.dialogs
+    }
+
+    return self.api:get(endpoint, request_config)
 end
 
 return Categories

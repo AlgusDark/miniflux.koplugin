@@ -251,27 +251,18 @@ end
 ---Test connection to Miniflux server
 ---@return nil
 function MenuManager:testConnection()
-    if self.settings.server_address == "" or self.settings.api_token == "" then
-        UIManager:show(InfoMessage:new({
-            text = _("Please configure server address and API token first"),
-        }))
-        return
-    end
-
-    local connection_info = InfoMessage:new({
-        text = _("Testing connection to Miniflux server..."),
+    -- Use the enhanced API with automatic loading dialog and validation
+    local success, result = self.api:testConnection({
+        dialogs = {
+            loading = {
+                text = _("Testing connection to Miniflux server...")
+            }
+        }
     })
-    UIManager:show(connection_info)
-    UIManager:forceRePaint() -- Force immediate display before API call
 
-    local success, result = self.api:testConnection()
-
-    -- Close the "testing" message
-    UIManager:close(connection_info)
-
-    -- Show the result
+    -- Show the result message (API handles loading and validation automatically)
     UIManager:show(InfoMessage:new({
-        text = result,
+        text = result, -- API provides good success/error messages
         timeout = success and 3 or 5,
     }))
 end

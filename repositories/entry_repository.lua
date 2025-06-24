@@ -55,9 +55,10 @@ end
 -- =============================================================================
 
 ---Get unread entries
+---@param config? table Configuration with optional dialogs
 ---@return table[]|nil entries Array of unread entries or nil on error
 ---@return string|nil error Error message if failed
-function EntryRepository:getUnread()
+function EntryRepository:getUnread(config)
     local options = {
         status = { "unread" }, -- Always unread only for this view
         order = self.settings.order,
@@ -65,7 +66,7 @@ function EntryRepository:getUnread()
         limit = self.settings.limit,
     }
 
-    local success, result = self.api.entries:getEntries(options)
+    local success, result = self.api.entries:getEntries(options, config)
     if not success then
         return nil, result
     end
@@ -75,13 +76,14 @@ end
 
 ---Get entries for a specific feed
 ---@param feed_id number The feed ID
+---@param config? table Configuration with optional dialogs
 ---@return table[]|nil entries Array of feed entries or nil on error
 ---@return string|nil error Error message if failed
-function EntryRepository:getByFeed(feed_id)
+function EntryRepository:getByFeed(feed_id, config)
     local options = self:getApiOptions()
     options.feed_id = feed_id
 
-    local success, result = self.api.feeds:getEntries(feed_id, options)
+    local success, result = self.api.feeds:getEntries(feed_id, options, config)
     if not success then
         return nil, result
     end
@@ -91,13 +93,14 @@ end
 
 ---Get entries for a specific category
 ---@param category_id number The category ID
+---@param config? table Configuration with optional dialogs
 ---@return table[]|nil entries Array of category entries or nil on error
 ---@return string|nil error Error message if failed
-function EntryRepository:getByCategory(category_id)
+function EntryRepository:getByCategory(category_id, config)
     local options = self:getApiOptions()
     options.category_id = category_id
 
-    local success, result = self.api.categories:getEntries(category_id, options)
+    local success, result = self.api.categories:getEntries(category_id, options, config)
     if not success then
         return nil, result
     end
@@ -106,9 +109,10 @@ function EntryRepository:getByCategory(category_id)
 end
 
 ---Get unread count for initialization
+---@param config? table Configuration with optional dialogs
 ---@return number|nil count Unread count or nil on error
 ---@return string|nil error Error message if failed
-function EntryRepository:getUnreadCount()
+function EntryRepository:getUnreadCount(config)
     local options = {
         order = self.settings.order,
         direction = self.settings.direction,
@@ -116,7 +120,7 @@ function EntryRepository:getUnreadCount()
         status = { "unread" }, -- Only unread for count
     }
 
-    local success, result = self.api.entries:getEntries(options)
+    local success, result = self.api.entries:getEntries(options, config)
     if not success then
         return nil, result
     end

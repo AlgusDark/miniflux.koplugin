@@ -123,14 +123,12 @@ end
 ---Create and return a new browser instance
 ---@return MinifluxBrowser Browser instance
 function Miniflux:createBrowser()
-    local MinifluxBrowser = require("browser/browser")
+    local MinifluxBrowser = require("browser/miniflux_browser")
     local browser = MinifluxBrowser:new({
         title = _("Miniflux"),
         settings = self.settings,
         api = self.api,
         download_dir = self.download_dir,
-        -- No close_callback needed since browser is created on-demand
-        -- UIManager:close(self) in closeAll() is sufficient
     })
     return browser
 end

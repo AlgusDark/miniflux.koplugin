@@ -95,23 +95,6 @@ function ImageUtils.createLocalImageTag(img_info)
     end
 end
 
----Clean HTML content by removing problematic elements
----@param content string HTML content to clean
----@return string Cleaned HTML content
-function ImageUtils.cleanHtmlContent(content)
-    local cleaned_content = content
-
-    -- Remove iframe tags since they won't work in offline HTML files
-    pcall(function()
-        -- Remove iframe tags (both self-closing and with content)
-        cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*>.-<%s*/%s*iframe%s*>", "") -- iframe with content
-        cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*/%s*>", "")                 -- self-closing iframe
-        cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*>", "")                     -- opening iframe tag without closing
-    end)
-
-    return cleaned_content
-end
-
 ---Create download summary for images
 ---@param include_images boolean Whether images were included
 ---@param images ImageInfo[] Array of image information

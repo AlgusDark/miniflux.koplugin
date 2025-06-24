@@ -11,6 +11,15 @@ local _ = require("gettext")
 
 local HtmlUtils = {}
 
+---Get the path to the CSS file
+---@return string CSS file path
+function HtmlUtils.getCssPath()
+    -- Get the plugin directory path
+    local plugin_dir = debug.getinfo(1, "S").source:match("@(.*/)") or ""
+    plugin_dir = plugin_dir:gsub("/utils/$", "")
+    return plugin_dir .. "/assets/reader.css"
+end
+
 ---Create a complete HTML document for an entry
 ---@param entry MinifluxEntry Entry data
 ---@param content string Processed HTML content
@@ -43,6 +52,7 @@ function HtmlUtils.createHtmlDocument(entry, content)
     end
 
     local metadata_html = table.concat(metadata_sections, "\n        ")
+    local css_path = HtmlUtils.getCssPath()
 
     return string.format(
         [[<!DOCTYPE html>
@@ -51,48 +61,7 @@ function HtmlUtils.createHtmlDocument(entry, content)
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>%s</title>
-    <style>
-        img {
-            max-width: 100%%;
-            height: auto;
-            display: block;
-            margin: 10px 0;
-        }
-        .entry-meta {
-            border-bottom: 1px solid #ccc;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-            color: #666;
-        }
-        .entry-content {
-            text-align: justify;
-        }
-        .entry-content p {
-            margin-bottom: 1em;
-        }
-        .entry-content h1, .entry-content h2, .entry-content h3 {
-            margin-top: 0;
-            margin-bottom: 0.5em;
-        }
-        .entry-content blockquote {
-            margin: 1em 0;
-            padding-left: 1em;
-            border-left: 3px solid #ccc;
-            font-style: italic;
-        }
-        .entry-content pre {
-            background-color: #f5f5f5;
-            padding: 10px;
-            border-radius: 3px;
-            overflow-x: auto;
-        }
-        .entry-content code {
-            background-color: #f5f5f5;
-            padding: 2px 4px;
-            border-radius: 3px;
-            font-family: monospace;
-        }
-    </style>
+    <link rel="stylesheet" type="text/css" href="file://%s">
 </head>
 <body>
     <div class="entry-meta">
@@ -105,9 +74,10 @@ function HtmlUtils.createHtmlDocument(entry, content)
 </body>
 </html>]],
         HtmlUtils.escapeHtml(entry_title), -- Title in head
+        css_path,                          -- CSS file path
         HtmlUtils.escapeHtml(entry_title), -- Title in body
         metadata_html,
-        content -- Content is already processed, don't escape it
+        content                            -- Content is already processed, don't escape it
     )
 end
 
@@ -128,51 +98,6 @@ function HtmlUtils.escapeHtml(text)
     }
 
     return (text:gsub("[&<>\"']", escape_map))
-end
-
----Create a simple HTML template for plain text content
----@param title string Document title
----@param content string Plain text content
----@return string HTML document
-function HtmlUtils.createSimpleHtmlDocument(title, content)
-    local escaped_title = HtmlUtils.escapeHtml(title)
-    local escaped_content = HtmlUtils.escapeHtml(content)
-
-    -- Convert line breaks to paragraphs
-    local formatted_content = escaped_content:gsub("\n\n+", "</p><p>"):gsub("\n", "<br>")
-    if formatted_content ~= "" then
-        formatted_content = "<p>" .. formatted_content .. "</p>"
-    end
-
-    return string.format(
-        [[<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>%s</title>
-    <style>
-        body {
-            font-family: serif;
-            line-height: 1.6;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        p {
-            margin-bottom: 1em;
-        }
-    </style>
-</head>
-<body>
-    <h1>%s</h1>
-    %s
-</body>
-</html>]],
-        escaped_title,
-        escaped_title,
-        formatted_content
-    )
 end
 
 ---Clean and normalize HTML content
@@ -205,65 +130,6 @@ function HtmlUtils.cleanHtmlContent(content)
     end)
 
     return cleaned_content
-end
-
----Extract text content from HTML
----@param html string HTML content
----@return string Plain text content
-function HtmlUtils.extractTextContent(html)
-    if not html then
-        return ""
-    end
-
-    local text = html
-
-    -- Remove all HTML tags
-    text = text:gsub("<%s*[^>]*>", "")
-
-    -- Decode common HTML entities
-    local entity_map = {
-        ["&amp;"] = "&",
-        ["&lt;"] = "<",
-        ["&gt;"] = ">",
-        ["&quot;"] = '"',
-        ["&#39;"] = "'",
-        ["&nbsp;"] = " ",
-        ["&mdash;"] = "—",
-        ["&ndash;"] = "–",
-        ["&hellip;"] = "…",
-    }
-
-    for entity, char in pairs(entity_map) do
-        text = text:gsub(entity, char)
-    end
-
-    -- Clean up whitespace
-    text = text:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
-
-    return text
-end
-
----Get a truncated text summary from HTML content
----@param html string HTML content
----@param max_length? number Maximum length of summary (default: 200)
----@return string Text summary
-function HtmlUtils.getTextSummary(html, max_length)
-    max_length = max_length or 200
-    local text = HtmlUtils.extractTextContent(html)
-
-    if #text <= max_length then
-        return text
-    end
-
-    -- Truncate at word boundary
-    local truncated = text:sub(1, max_length)
-    local last_space = truncated:find("%s[^%s]*$")
-
-    if last_space then
-        truncated = truncated:sub(1, last_space - 1)
-    end
-
-    return truncated .. "…"
 end
 
 return HtmlUtils
