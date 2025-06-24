@@ -1,0 +1,74 @@
+--[[--
+Sort Direction Settings Component
+
+Handles sort direction submenu with ascending/descending options.
+
+@module miniflux.menu.settings.sort_direction
+--]]
+
+local InfoMessage = require("ui/widget/infomessage")
+local UIManager = require("ui/uimanager")
+local _ = require("gettext")
+local T = require("ffi/util").template
+
+local SortDirection = {}
+
+---Get the menu item for sort direction configuration
+---@param settings MinifluxSettings Settings instance
+---@return table Menu item configuration
+function SortDirection.getMenuItem(settings)
+    return {
+        text_func = function()
+            local direction_name = settings.direction == "asc" and _("Ascending")
+                or _("Descending")
+            return T(_("Sort direction - %1"), direction_name)
+        end,
+        keep_menu_open = true,
+        sub_item_table_func = function()
+            return SortDirection.getSubMenu(settings)
+        end,
+    }
+end
+
+---Get sort direction submenu items
+---@param settings MinifluxSettings Settings instance
+---@return table[] Sort direction menu items
+function SortDirection.getSubMenu(settings)
+    local current_direction = settings.direction
+
+    return {
+        {
+            text = _("Ascending") .. (current_direction == "asc" and " ✓" or ""),
+            keep_menu_open = true,
+            callback = function(touchmenu_instance)
+                SortDirection.updateSetting(settings, "asc", touchmenu_instance)
+            end,
+        },
+        {
+            text = _("Descending") .. (current_direction == "desc" and " ✓" or ""),
+            keep_menu_open = true,
+            callback = function(touchmenu_instance)
+                SortDirection.updateSetting(settings, "desc", touchmenu_instance)
+            end,
+        },
+    }
+end
+
+---Update sort direction setting
+---@param settings MinifluxSettings Settings instance
+---@param new_direction string New sort direction value ("asc" or "desc")
+---@param touchmenu_instance table TouchMenu instance for navigation
+---@return nil
+function SortDirection.updateSetting(settings, new_direction, touchmenu_instance)
+    settings.direction = new_direction
+    settings:save()
+    UIManager:show(InfoMessage:new({
+        text = _("Sort direction updated"),
+        timeout = 2,
+        dismiss_callback = function()
+            touchmenu_instance:backToUpperMenu()
+        end,
+    }))
+end
+
+return SortDirection
