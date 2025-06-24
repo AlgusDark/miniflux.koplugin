@@ -44,9 +44,10 @@ function CategoryRepository:getAll(config)
 end
 
 ---Get categories count for initialization
+---@param config? table Configuration with optional dialogs
 ---@return number count Count of categories (0 if failed)
-function CategoryRepository:getCount()
-    local categories, error_msg = self:getAll()
+function CategoryRepository:getCount(config)
+    local categories, error_msg = self:getAll(config)
     if not categories then
         return 0 -- Continue with 0 categories instead of failing
     end

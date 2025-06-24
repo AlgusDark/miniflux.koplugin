@@ -23,7 +23,6 @@ local T = require("ffi/util").template
 -- Import dependencies
 local EntryUtils = require("utils/entry_utils")
 local NavigationContext = require("utils/navigation_context")
-local ProgressUtils = require("utils/progress_utils")
 local ImageDiscovery = require("utils/image_discovery")
 local ImageDownload = require("utils/image_download")
 local ImageUtils = require("utils/image_utils")
@@ -94,7 +93,7 @@ end
 ---@param browser? MinifluxBrowser Browser instance to close
 ---@return boolean success
 function EntryService:_downloadEntryContent(entry_data, browser)
-    local progress = ProgressUtils.createEntryProgress(entry_data.title or _("Untitled Entry"))
+    local title = entry_data.title or _("Untitled Entry")
 
     -- Create entry directory
     local entry_dir = EntryUtils.getEntryDirectory(entry_data.id)
@@ -106,48 +105,93 @@ function EntryService:_downloadEntryContent(entry_data, browser)
 
     -- Check if already downloaded
     if EntryUtils.isEntryDownloaded(entry_data.id) then
-        progress:close()
         self:_closeBrowserAndOpenEntry(browser, html_file)
         return true
     end
 
-    progress:update(_("Preparing download…"))
+    -- Simple progress using close/recreate approach (inline, no abstraction)
+    local progress_info = InfoMessage:new({
+        text = T(_("Downloading: %1\n\nPreparing download…"), title),
+        timeout = nil,
+    })
+    UIManager:show(progress_info)
 
     -- Get entry content
     local content = entry_data.content or entry_data.summary or ""
     local include_images = self.settings.include_images
 
-    progress:update(_("Scanning for images…"))
+    -- Update progress
+    UIManager:close(progress_info)
+    progress_info = InfoMessage:new({
+        text = T(_("Downloading: %1\n\nScanning for images…"), title),
+        timeout = nil,
+    })
+    UIManager:show(progress_info)
+    UIManager:forceRePaint()
 
     -- Process images
     local base_url = entry_data.url and socket_url.parse(entry_data.url) or nil
     local images, seen_images = ImageDiscovery.discoverImages(content, base_url)
 
-    progress:setImageConfig(include_images, #images)
+    -- Update progress with image info
+    UIManager:close(progress_info)
+    local image_info = ""
+    if include_images and #images > 0 then
+        image_info = T(_("\n\nImages found: %1"), #images)
+    elseif not include_images and #images > 0 then
+        image_info = T(_("\n\nImages: %1 found (skipped)"), #images)
+    end
+    progress_info = InfoMessage:new({
+        text = T(_("Downloading: %1\n\nFound images%2"), title, image_info),
+        timeout = nil,
+    })
+    UIManager:show(progress_info)
+    UIManager:forceRePaint()
 
     -- Download images if enabled
     if include_images and #images > 0 then
-        self:_downloadImages(images, entry_dir, progress)
+        progress_info = self:_downloadImages(images, entry_dir, progress_info, title)
     end
 
-    progress:update(_("Processing content…"))
+    -- Update progress
+    UIManager:close(progress_info)
+    progress_info = InfoMessage:new({
+        text = T(_("Downloading: %1\n\nProcessing content…"), title),
+        timeout = nil,
+    })
+    UIManager:show(progress_info)
+    UIManager:forceRePaint()
 
     -- Process and clean content
     local processed_content = ImageUtils.processHtmlImages(content, seen_images, include_images, base_url)
     processed_content = HtmlUtils.cleanHtmlContent(processed_content)
 
-    progress:update(_("Creating HTML file…"))
+    -- Update progress
+    UIManager:close(progress_info)
+    progress_info = InfoMessage:new({
+        text = T(_("Downloading: %1\n\nCreating HTML file…"), title),
+        timeout = nil,
+    })
+    UIManager:show(progress_info)
+    UIManager:forceRePaint()
 
     -- Create and save HTML document
     local html_content = HtmlUtils.createHtmlDocument(entry_data, processed_content)
     local file_success = FileUtils.writeFile(html_file, html_content)
     if not file_success then
-        progress:close()
+        UIManager:close(progress_info)
         self:_showError(_("Failed to save HTML file"))
         return false
     end
 
-    progress:update(_("Creating metadata…"))
+    -- Update progress
+    UIManager:close(progress_info)
+    progress_info = InfoMessage:new({
+        text = T(_("Downloading: %1\n\nCreating metadata…"), title),
+        timeout = nil,
+    })
+    UIManager:show(progress_info)
+    UIManager:forceRePaint()
 
     -- Save metadata
     local metadata = EntryUtils.createMetadata({
@@ -159,7 +203,8 @@ function EntryService:_downloadEntryContent(entry_data, browser)
     local metadata_content = "return " .. self:_tableToString(metadata)
     FileUtils.writeFile(metadata_file, metadata_content)
 
-    progress:close()
+    -- Close progress dialog
+    UIManager:close(progress_info)
 
     -- Show completion summary
     local image_summary = ImageUtils.createDownloadSummary(include_images, images)
@@ -176,28 +221,22 @@ end
 ---Download images with progress tracking
 ---@param images table Array of image info
 ---@param entry_dir string Entry directory path
----@param progress table Progress tracker
----@return nil
-function EntryService:_downloadImages(images, entry_dir, progress)
-    local time = require("ui/time")
-    local time_prev = time.now()
+---@param progress_info InfoMessage Progress dialog (will be updated by reference)
+---@param title string Entry title
+---@return InfoMessage Updated progress dialog
+function EntryService:_downloadImages(images, entry_dir, progress_info, title)
+    local images_downloaded = 0
 
     for i, img in ipairs(images) do
-        -- Extract the repeated progress message template
-        local download_message = T(_("Downloading image %1 of %2…"), i, #images)
-        local progress_data = { current = i - 1, total = #images }
-
-        -- Update progress for each image
-        progress:update(download_message, progress_data, true)
-
-        -- Process can be interrupted every second
-        if time.to_ms(time.since(time_prev)) > 1000 then
-            time_prev = time.now()
-            local go_on = progress:update(download_message, progress_data, true)
-            if not go_on then
-                break
-            end
-        end
+        -- Update progress for current image
+        UIManager:close(progress_info)
+        progress_info = InfoMessage:new({
+            text = T(_("Downloading: %1\n\nDownloading image %2 of %3…\n\nImages: %4 / %5 downloaded"),
+                title, i, #images, images_downloaded, #images),
+            timeout = nil,
+        })
+        UIManager:show(progress_info)
+        UIManager:forceRePaint()
 
         local success = ImageDownload.downloadImage({
             url = img.src,
@@ -207,12 +246,21 @@ function EntryService:_downloadImages(images, entry_dir, progress)
         img.downloaded = success
 
         if success then
-            progress:incrementDownloadedImages()
+            images_downloaded = images_downloaded + 1
         end
     end
 
     -- Final update
-    progress:update(_("Image downloads completed"), { current = progress.downloaded_images, total = #images })
+    UIManager:close(progress_info)
+    progress_info = InfoMessage:new({
+        text = T(_("Downloading: %1\n\nImage downloads completed\n\nImages: %2 / %3 downloaded"),
+            title, images_downloaded, #images),
+        timeout = nil,
+    })
+    UIManager:show(progress_info)
+    UIManager:forceRePaint()
+
+    return progress_info
 end
 
 -- =============================================================================
@@ -397,7 +445,7 @@ function EntryService:showEndOfEntryDialog(entry_info)
                         callback = function()
                             UIManager:close(dialog)
                             pcall(function()
-                                self:navigateToPreviousEntry(entry_info)
+                                self.navigation_service:navigateToPreviousEntry(entry_info, self)
                             end)
                         end,
                     },
@@ -406,7 +454,7 @@ function EntryService:showEndOfEntryDialog(entry_info)
                         callback = function()
                             UIManager:close(dialog)
                             pcall(function()
-                                self:navigateToNextEntry(entry_info)
+                                self.navigation_service:navigateToNextEntry(entry_info, self)
                             end)
                         end,
                     },
@@ -467,24 +515,8 @@ function EntryService:showEndOfEntryDialog(entry_info)
 end
 
 -- =============================================================================
--- NAVIGATION FUNCTIONS (DELEGATES TO NAVIGATION SERVICE)
+-- ENTRY OPERATIONS FROM DIALOG
 -- =============================================================================
-
----Navigate to the previous entry (delegates to NavigationService)
----@param entry_info table Current entry information
----@return nil
-function EntryService:navigateToPreviousEntry(entry_info)
-    -- Delegate to NavigationService for complex navigation logic
-    self.navigation_service:navigateToPreviousEntry(entry_info, self)
-end
-
----Navigate to the next entry (delegates to NavigationService)
----@param entry_info table Current entry information
----@return nil
-function EntryService:navigateToNextEntry(entry_info)
-    -- Delegate to NavigationService for complex navigation logic
-    self.navigation_service:navigateToNextEntry(entry_info, self)
-end
 
 ---Entry operations (entry_id is already a number from boundary conversion)
 ---@param entry_info table Current entry information

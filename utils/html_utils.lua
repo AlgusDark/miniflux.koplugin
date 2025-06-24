@@ -11,6 +11,15 @@ local _ = require("gettext")
 
 local HtmlUtils = {}
 
+---Get the path to the CSS file
+---@return string CSS file path
+function HtmlUtils.getCssPath()
+    -- Get the plugin directory path
+    local plugin_dir = debug.getinfo(1, "S").source:match("@(.*/)") or ""
+    plugin_dir = plugin_dir:gsub("/utils/$", "")
+    return plugin_dir .. "/assets/reader.css"
+end
+
 ---Create a complete HTML document for an entry
 ---@param entry MinifluxEntry Entry data
 ---@param content string Processed HTML content
@@ -43,6 +52,7 @@ function HtmlUtils.createHtmlDocument(entry, content)
     end
 
     local metadata_html = table.concat(metadata_sections, "\n        ")
+    local css_path = HtmlUtils.getCssPath()
 
     return string.format(
         [[<!DOCTYPE html>
@@ -51,48 +61,7 @@ function HtmlUtils.createHtmlDocument(entry, content)
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>%s</title>
-    <style>
-        img {
-            max-width: 100%%;
-            height: auto;
-            display: block;
-            margin: 10px 0;
-        }
-        .entry-meta {
-            border-bottom: 1px solid #ccc;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-            color: #666;
-        }
-        .entry-content {
-            text-align: justify;
-        }
-        .entry-content p {
-            margin-bottom: 1em;
-        }
-        .entry-content h1, .entry-content h2, .entry-content h3 {
-            margin-top: 0;
-            margin-bottom: 0.5em;
-        }
-        .entry-content blockquote {
-            margin: 1em 0;
-            padding-left: 1em;
-            border-left: 3px solid #ccc;
-            font-style: italic;
-        }
-        .entry-content pre {
-            background-color: #f5f5f5;
-            padding: 10px;
-            border-radius: 3px;
-            overflow-x: auto;
-        }
-        .entry-content code {
-            background-color: #f5f5f5;
-            padding: 2px 4px;
-            border-radius: 3px;
-            font-family: monospace;
-        }
-    </style>
+    <link rel="stylesheet" type="text/css" href="file://%s">
 </head>
 <body>
     <div class="entry-meta">
@@ -105,6 +74,7 @@ function HtmlUtils.createHtmlDocument(entry, content)
 </body>
 </html>]],
         HtmlUtils.escapeHtml(entry_title), -- Title in head
+        css_path,                          -- CSS file path
         HtmlUtils.escapeHtml(entry_title), -- Title in body
         metadata_html,
         content                            -- Content is already processed, don't escape it

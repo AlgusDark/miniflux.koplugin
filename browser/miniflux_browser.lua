@@ -511,11 +511,19 @@ function MinifluxBrowser:fetchInitialData(loading_info)
         return false, error_msg
     end
 
-    -- Get feeds count (using silent repository call)
-    local feeds_count = self.feed_repository:getCount()
+    -- Get feeds count with dialog
+    local feeds_count = self.feed_repository:getCount({
+        dialogs = {
+            loading = { text = _("Loading feeds count...") }
+        }
+    })
 
-    -- Get categories count (using silent repository call)
-    local categories_count = self.category_repository:getCount()
+    -- Get categories count with dialog
+    local categories_count = self.category_repository:getCount({
+        dialogs = {
+            loading = { text = _("Loading categories count...") }
+        }
+    })
 
     -- Store counts
     self.unread_count = unread_count

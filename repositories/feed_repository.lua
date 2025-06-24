@@ -71,9 +71,10 @@ function FeedRepository:getAllWithCounters(config)
 end
 
 ---Get feeds count for initialization
+---@param config? table Configuration with optional dialogs
 ---@return number count Count of feeds (0 if failed)
-function FeedRepository:getCount()
-    local feeds, error_msg = self:getAll()
+function FeedRepository:getCount(config)
+    local feeds, error_msg = self:getAll(config)
     if not feeds then
         return 0 -- Continue with 0 feeds instead of failing
     end

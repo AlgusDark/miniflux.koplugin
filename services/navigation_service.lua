@@ -190,7 +190,7 @@ function NavigationService:navigateToPreviousEntry(entry_info, entry_service)
             end
         end
 
-        self:downloadAndShowEntry(prev_entry, entry_service)
+        entry_service:readEntry(prev_entry)
     else
         local current_context_success, current_context = pcall(function()
             return NavigationContext.getCurrentContext()
@@ -216,7 +216,7 @@ function NavigationService:navigateToPreviousEntry(entry_info, entry_service)
 
             if success and result and result.entries and #result.entries > 0 then
                 local prev_entry = result.entries[1]
-                self:downloadAndShowEntry(prev_entry, entry_service)
+                entry_service:readEntry(prev_entry)
                 return
             end
         end
@@ -324,7 +324,7 @@ function NavigationService:navigateToNextEntry(entry_info, entry_service)
             end
         end
 
-        self:downloadAndShowEntry(next_entry, entry_service)
+        entry_service:readEntry(next_entry)
     else
         local current_context_success, current_context = pcall(function()
             return NavigationContext.getCurrentContext()
@@ -350,7 +350,7 @@ function NavigationService:navigateToNextEntry(entry_info, entry_service)
 
             if success and result and result.entries and #result.entries > 0 then
                 local next_entry = result.entries[1]
-                self:downloadAndShowEntry(next_entry, entry_service)
+                entry_service:readEntry(next_entry)
                 return
             end
         end
@@ -360,19 +360,6 @@ function NavigationService:navigateToNextEntry(entry_info, entry_service)
             timeout = 3,
         }))
     end
-end
-
--- =============================================================================
--- HELPER METHODS
--- =============================================================================
-
----Download and show an entry (delegates to EntryService)
----@param entry MinifluxEntry Entry to download and show
----@param entry_service table EntryService instance for delegation
----@return nil
-function NavigationService:downloadAndShowEntry(entry, entry_service)
-    -- Delegate back to EntryService using modern method
-    entry_service:readEntry(entry)
 end
 
 return NavigationService
