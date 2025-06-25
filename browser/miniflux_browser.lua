@@ -29,6 +29,12 @@ local TIMEOUTS = {
     ERROR = 5, -- Error messages
 }
 
+---@class MinifluxBrowserOptions : MenuOptions
+---@field settings MinifluxSettings Plugin settings
+---@field api MinifluxAPI API client
+---@field download_dir string Download directory path
+---@field entry_service EntryService Service handling entry display and dialog management
+
 ---@class MinifluxBrowser : Menu
 ---@field counts table Cached counts from initialization
 ---@field entry_service EntryService Service handling entry display and dialog management
@@ -37,6 +43,7 @@ local TIMEOUTS = {
 ---@field api table API client
 ---@field download_dir string Download directory path
 ---@field page_state_stack number[] Stack of page states for each navigation level
+---@field new fun(self: MinifluxBrowser, o: MinifluxBrowserOptions): MinifluxBrowser Create new MinifluxBrowser instance
 local MinifluxBrowser = Menu:extend({
     title_shrink_font_to_fit = true,
     is_popout = false,
