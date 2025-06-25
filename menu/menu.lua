@@ -15,6 +15,7 @@ local Entries = require("menu/settings/entries")
 local SortOrder = require("menu/settings/sort_order")
 local SortDirection = require("menu/settings/sort_direction")
 local IncludeImages = require("menu/settings/include_images")
+local CopyCss = require("menu/settings/copy_css")
 local TestConnection = require("menu/settings/test_connection")
 
 local Menu = {}
@@ -42,6 +43,7 @@ function Menu.build(plugin)
                     SortOrder.getMenuItem(plugin.settings),
                     SortDirection.getMenuItem(plugin.settings),
                     IncludeImages.getMenuItem(plugin.settings),
+                    CopyCss.getMenuItem(plugin),
                     TestConnection.getMenuItem(plugin.api),
                 }
             },

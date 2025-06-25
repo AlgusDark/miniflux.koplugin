@@ -11,26 +11,7 @@ local _ = require("gettext")
 
 local HtmlUtils = {}
 
----Get the CSS content for embedding
----@return string CSS content (empty string if file cannot be read)
-function HtmlUtils.getCssContent()
-    -- Get the plugin directory path
-    local plugin_dir = debug.getinfo(1, "S").source:match("@(.*/)") or ""
-    plugin_dir = plugin_dir:gsub("/utils/$", "")
-    local css_path = plugin_dir .. "/assets/reader.css"
 
-    -- Read CSS file content following KOReader's pattern
-    local css_content = ""
-    local f = io.open(css_path, "r")
-    if f then
-        css_content = f:read("*all")
-        f:close()
-        -- Trim whitespace (basic trim implementation)
-        css_content = css_content:match("^%s*(.-)%s*$") or ""
-    end
-
-    return css_content
-end
 
 ---Create a complete HTML document for an entry
 ---@param entry MinifluxEntry Entry data
@@ -57,14 +38,14 @@ function HtmlUtils.createHtmlDocument(entry, content)
 
     -- Original URL
     if entry.url then
+        local base_url = entry.url:match("^(https?://[^/]+)") or entry.url
         table.insert(
             metadata_sections,
-            string.format('<p><strong>%s:</strong> <a href="%s">%s</a></p>', _("URL"), entry.url, entry.url)
+            string.format('<p><strong>%s:</strong> <a href="%s">%s</a></p>', _("URL"), entry.url, base_url)
         )
     end
 
     local metadata_html = table.concat(metadata_sections, "\n        ")
-    local css_content = HtmlUtils.getCssContent()
 
     return string.format(
         [[<!DOCTYPE html>
@@ -73,9 +54,6 @@ function HtmlUtils.createHtmlDocument(entry, content)
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>%s</title>
-    <style type="text/css">
-%s
-    </style>
 </head>
 <body>
     <div class="entry-meta">
@@ -88,7 +66,6 @@ function HtmlUtils.createHtmlDocument(entry, content)
 </body>
 </html>]],
         HtmlUtils.escapeHtml(entry_title), -- Title in head
-        css_content,                       -- CSS content embedded directly
         HtmlUtils.escapeHtml(entry_title), -- Title in body
         metadata_html,
         content                            -- Content is already processed, don't escape it
@@ -130,6 +107,11 @@ function HtmlUtils.cleanHtmlContent(content)
         cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*>.-<%s*/%s*iframe%s*>", "")
         cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*/%s*>", "")
         cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*>", "")
+
+        -- Remove video tags (won't work offline)
+        cleaned_content = cleaned_content:gsub("<%s*video[^>]*>.-<%s*/%s*video%s*>", "")
+        cleaned_content = cleaned_content:gsub("<%s*video[^>]*/%s*>", "")
+        cleaned_content = cleaned_content:gsub("<%s*video[^>]*>", "")
 
         -- Remove object and embed tags (multimedia that won't work offline)
         cleaned_content = cleaned_content:gsub("<%s*object[^>]*>.-<%s*/%s*object%s*>", "")
