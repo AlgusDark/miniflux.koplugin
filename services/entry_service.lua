@@ -28,7 +28,7 @@ local ImageDownload = require("utils/image_download")
 local ImageUtils = require("utils/image_utils")
 local HtmlUtils = require("utils/html_utils")
 local FileUtils = require("utils/file_utils")
-local NavigationService = require("services/navigation_service")
+local NavigationUtils = require("utils/navigation_utils")
 local MetadataLoader = require("utils/metadata_loader")
 
 -- Timeout constants for consistent UI messaging
@@ -41,7 +41,6 @@ local TIMEOUTS = {
 ---@class EntryService
 ---@field settings MinifluxSettings Settings instance
 ---@field api MinifluxAPI API client instance
----@field navigation_service NavigationService Navigation service for entry navigation
 local EntryService = {}
 
 ---Create a new EntryService instance
@@ -52,10 +51,6 @@ function EntryService:new(settings, api)
     local instance = {
         settings = settings,
         api = api,
-        navigation_service = NavigationService:new({
-            settings = settings,
-            api = api,
-        }),
     }
     setmetatable(instance, self)
     self.__index = self
@@ -352,16 +347,12 @@ end
 ---@return nil
 function EntryService:onEntryStatusChanged(entry_id, new_status)
     -- Update local metadata
-    pcall(function()
-        self:_updateLocalEntryStatus(entry_id, new_status)
-    end)
+    self:_updateLocalEntryStatus(entry_id, new_status)
 
     -- If marked as read, schedule local deletion
     if new_status == "read" then
         UIManager:scheduleIn(0.5, function()
-            pcall(function()
-                self:deleteLocalEntry(entry_id)
-            end)
+            self:deleteLocalEntry(entry_id)
         end)
     end
 end
@@ -447,18 +438,24 @@ function EntryService:showEndOfEntryDialog(entry_info)
                         text = _("← Previous"),
                         callback = function()
                             UIManager:close(dialog)
-                            pcall(function()
-                                self.navigation_service:navigateToEntry(entry_info, { direction = "previous" }, self)
-                            end)
+                            NavigationUtils.navigateToEntry(entry_info, {
+                                navigation_options = { direction = "previous" },
+                                settings = self.settings,
+                                api = self.api,
+                                entry_service = self
+                            })
                         end,
                     },
                     {
                         text = _("Next →"),
                         callback = function()
                             UIManager:close(dialog)
-                            pcall(function()
-                                self.navigation_service:navigateToEntry(entry_info, { direction = "next" }, self)
-                            end)
+                            NavigationUtils.navigateToEntry(entry_info, {
+                                navigation_options = { direction = "next" },
+                                settings = self.settings,
+                                api = self.api,
+                                entry_service = self
+                            })
                         end,
                     },
                 },
@@ -467,18 +464,14 @@ function EntryService:showEndOfEntryDialog(entry_info)
                         text = _("⚠ Delete local entry"),
                         callback = function()
                             UIManager:close(dialog)
-                            pcall(function()
-                                self:deleteLocalEntryFromInfo(entry_info)
-                            end)
+                            self:deleteLocalEntryFromInfo(entry_info)
                         end,
                     },
                     {
                         text = mark_button_text,
                         callback = function()
                             UIManager:close(dialog)
-                            pcall(function()
-                                mark_callback()
-                            end)
+                            mark_callback()
                         end,
                     },
                 },
@@ -487,9 +480,7 @@ function EntryService:showEndOfEntryDialog(entry_info)
                         text = _("⌂ Miniflux folder"),
                         callback = function()
                             UIManager:close(dialog)
-                            pcall(function()
-                                self:openMinifluxFolder()
-                            end)
+                            self:openMinifluxFolder()
                         end,
                     },
                     {
@@ -598,9 +589,7 @@ function EntryService:deleteLocalEntry(entry_id)
         }))
 
         -- Open Miniflux folder
-        pcall(function()
-            self:openMinifluxFolder()
-        end)
+        self:openMinifluxFolder()
 
         return true
     else
@@ -613,9 +602,7 @@ end
 ---@param entry_id number Entry ID
 ---@return nil
 function EntryService:_updateNavigationContext(entry_id)
-    pcall(function()
-        NavigationContext.updateCurrentEntry(entry_id)
-    end)
+    NavigationContext.updateCurrentEntry(entry_id)
 end
 
 ---Close browser and open entry file

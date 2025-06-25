@@ -11,14 +11,55 @@ local _ = require("gettext")
 
 local HtmlUtils = {}
 
----Get the path to the CSS file
----@return string CSS file path
-function HtmlUtils.getCssPath()
-    -- Get the plugin directory path
-    local plugin_dir = debug.getinfo(1, "S").source:match("@(.*/)") or ""
-    plugin_dir = plugin_dir:gsub("/utils/$", "")
-    return plugin_dir .. "/assets/reader.css"
-end
+-- Pre-compiled HTML template parts for better performance
+local HTML_TEMPLATE_HEAD = [[<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>%s</title>
+</head>
+<body>
+    <div class="entry-meta">
+        <h1>%s</h1>]]
+
+local HTML_TEMPLATE_TAIL = [[    </div>
+    <div class="entry-content">
+        %s
+    </div>
+</body>
+</html>]]
+
+-- Pre-compiled escape patterns for better performance
+local ESCAPE_PATTERNS = {
+    ["&"] = "&amp;",
+    ["<"] = "&lt;",
+    [">"] = "&gt;",
+    ['"'] = "&quot;",
+    ["'"] = "&#39;",
+}
+
+-- Simple cleanup patterns for better performance
+local CLEANUP_PATTERNS = {
+    -- Scripts (security and functionality)
+    "<%s*script[^>]*>.-<%s*/%s*script%s*>",
+    "<%s*script[^>]*>",
+    -- Iframes (won't work offline)
+    "<%s*iframe[^>]*>.-<%s*/%s*iframe%s*>",
+    "<%s*iframe[^>]*/%s*>",
+    "<%s*iframe[^>]*>",
+    -- Videos (won't work offline)
+    "<%s*video[^>]*>.-<%s*/%s*video%s*>",
+    "<%s*video[^>]*/%s*>",
+    "<%s*video[^>]*>",
+    -- Objects and embeds (multimedia)
+    "<%s*object[^>]*>.-<%s*/%s*object%s*>",
+    "<%s*embed[^>]*>",
+    -- Forms (won't work offline)
+    "<%s*form[^>]*>.-<%s*/%s*form%s*>",
+    -- Style blocks
+    "<%s*style[^>]*>.-<%s*/%s*style%s*>",
+}
 
 ---Create a complete HTML document for an entry
 ---@param entry MinifluxEntry Entry data
@@ -27,58 +68,41 @@ end
 function HtmlUtils.createHtmlDocument(entry, content)
     local entry_title = entry.title or _("Untitled Entry")
 
-    -- Build metadata sections
+    -- Escape title once and reuse
+    local escaped_title = HtmlUtils.escapeHtml(entry_title)
+
+    -- Build metadata sections using table for efficient concatenation
     local metadata_sections = {}
+    local section_count = 0
 
     -- Feed information
     if entry.feed and entry.feed.title then
-        table.insert(metadata_sections, string.format("<p><strong>%s:</strong> %s</p>", _("Feed"), entry.feed.title))
+        section_count = section_count + 1
+        metadata_sections[section_count] = "<p><strong>" ..
+            _("Feed") .. ":</strong> " .. HtmlUtils.escapeHtml(entry.feed.title) .. "</p>"
     end
 
     -- Publication date
     if entry.published_at then
-        table.insert(
-            metadata_sections,
-            string.format("<p><strong>%s:</strong> %s</p>", _("Published"), entry.published_at)
-        )
+        section_count = section_count + 1
+        metadata_sections[section_count] = "<p><strong>" ..
+            _("Published") .. ":</strong> " .. entry.published_at .. "</p>"
     end
 
     -- Original URL
     if entry.url then
-        table.insert(
-            metadata_sections,
-            string.format('<p><strong>%s:</strong> <a href="%s">%s</a></p>', _("URL"), entry.url, entry.url)
-        )
+        local base_url = entry.url:match("^(https?://[^/]+)") or entry.url
+        section_count = section_count + 1
+        metadata_sections[section_count] = '<p><strong>' ..
+            _("URL") .. ':</strong> <a href="' .. entry.url .. '">' .. HtmlUtils.escapeHtml(base_url) .. '</a></p>'
     end
 
+    -- Build final HTML using pre-compiled templates
     local metadata_html = table.concat(metadata_sections, "\n        ")
-    local css_path = HtmlUtils.getCssPath()
 
-    return string.format(
-        [[<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>%s</title>
-    <link rel="stylesheet" type="text/css" href="file://%s">
-</head>
-<body>
-    <div class="entry-meta">
-        <h1>%s</h1>
-        %s
-    </div>
-    <div class="entry-content">
-        %s
-    </div>
-</body>
-</html>]],
-        HtmlUtils.escapeHtml(entry_title), -- Title in head
-        css_path,                          -- CSS file path
-        HtmlUtils.escapeHtml(entry_title), -- Title in body
-        metadata_html,
-        content                            -- Content is already processed, don't escape it
-    )
+    return string.format(HTML_TEMPLATE_HEAD, escaped_title, escaped_title) ..
+        (metadata_html ~= "" and ("\n        " .. metadata_html) or "") ..
+        string.format(HTML_TEMPLATE_TAIL, content)
 end
 
 ---Escape HTML special characters
@@ -89,44 +113,25 @@ function HtmlUtils.escapeHtml(text)
         return ""
     end
 
-    local escape_map = {
-        ["&"] = "&amp;",
-        ["<"] = "&lt;",
-        [">"] = "&gt;",
-        ['"'] = "&quot;",
-        ["'"] = "&#39;",
-    }
-
-    return (text:gsub("[&<>\"']", escape_map))
+    return (text:gsub("[&<>\"']", ESCAPE_PATTERNS))
 end
 
----Clean and normalize HTML content
+---Clean and normalize HTML content with optimized pattern matching
 ---@param content string Raw HTML content
 ---@return string Cleaned HTML content
 function HtmlUtils.cleanHtmlContent(content)
     local cleaned_content = content
 
-    -- Remove potentially problematic elements that don't work offline
+    -- Use single pcall for all operations to reduce overhead
     pcall(function()
-        -- Remove script tags (security and functionality)
-        cleaned_content = cleaned_content:gsub("<%s*script[^>]*>.-<%s*/%s*script%s*>", "")
-        cleaned_content = cleaned_content:gsub("<%s*script[^>]*>", "")
+        -- Pre-cache patterns table to avoid repeated table access
+        local patterns = CLEANUP_PATTERNS
+        local pattern_count = #patterns
 
-        -- Remove iframe tags (won't work offline)
-        cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*>.-<%s*/%s*iframe%s*>", "")
-        cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*/%s*>", "")
-        cleaned_content = cleaned_content:gsub("<%s*iframe[^>]*>", "")
-
-        -- Remove object and embed tags (multimedia that won't work offline)
-        cleaned_content = cleaned_content:gsub("<%s*object[^>]*>.-<%s*/%s*object%s*>", "")
-        cleaned_content = cleaned_content:gsub("<%s*embed[^>]*>", "")
-
-        -- Remove form elements (won't work offline)
-        cleaned_content = cleaned_content:gsub("<%s*form[^>]*>.-<%s*/%s*form%s*>", "")
-
-        -- Remove style blocks that might interfere with our styling
-        -- Note: We keep inline styles on elements, just remove style blocks
-        cleaned_content = cleaned_content:gsub("<%s*style[^>]*>.-<%s*/%s*style%s*>", "")
+        -- Apply all cleanup patterns efficiently
+        for i = 1, pattern_count do
+            cleaned_content = cleaned_content:gsub(patterns[i], "")
+        end
     end)
 
     return cleaned_content

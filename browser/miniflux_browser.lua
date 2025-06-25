@@ -1,8 +1,8 @@
 --[[--
-Miniflux Browser - Simplified Menu-based RSS Browser
+Miniflux Browser - Clean Menu-based RSS Browser
 
-Directly extends KOReader's Menu widget to provide Miniflux RSS reader functionality.
-Replaces the over-engineered Browser abstraction with direct Menu usage.
+Extends KOReader's Menu widget with modular view system.
+Acts as coordinator between views and repositories.
 
 @module miniflux.browser.miniflux_browser
 --]]
@@ -14,9 +14,15 @@ local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
 local EntryRepository = require("repositories/entry_repository")
 local FeedRepository = require("repositories/feed_repository")
 local CategoryRepository = require("repositories/category_repository")
-local EntryService = require("services/entry_service")
 local NavigationContext = require("utils/navigation_context")
 local _ = require("gettext")
+
+-- Import view modules
+local MainView = require("browser/views/main_view")
+local FeedsView = require("browser/views/feeds_view")
+local CategoriesView = require("browser/views/categories_view")
+local EntriesView = require("browser/views/entries_view")
+local ViewUtils = require("browser/views/view_utils")
 
 -- Timeout constants for consistent UI messaging
 local TIMEOUTS = {
@@ -24,13 +30,9 @@ local TIMEOUTS = {
 }
 
 ---@class MinifluxBrowser : Menu
----@field unread_count number|nil Number of unread entries (stored from initialization)
----@field feeds_count number|nil Number of feeds (stored from initialization)
----@field categories_count number|nil Number of categories (stored from initialization)
+---@field counts table Cached counts from initialization
 ---@field entry_service EntryService Service handling entry display and dialog management
----@field entry_repository EntryRepository Repository for entry data access
----@field feed_repository FeedRepository Repository for feed data access
----@field category_repository CategoryRepository Repository for category data access
+---@field repositories table Repository instances for data access
 ---@field settings table Plugin settings
 ---@field api table API client
 ---@field download_dir string Download directory path
@@ -58,13 +60,15 @@ function MinifluxBrowser:init()
     self.api = self.api or {}
     self.download_dir = self.download_dir
 
-    -- Initialize repositories
-    self.entry_repository = EntryRepository:new(self.api, self.settings)
-    self.feed_repository = FeedRepository:new(self.api, self.settings)
-    self.category_repository = CategoryRepository:new(self.api, self.settings)
+    -- Require shared EntryService
+    self.entry_service = self.entry_service or error("entry_service required")
 
-    -- Initialize other components
-    self.entry_service = EntryService:new(self.settings, self.api)
+    -- Create repository instances
+    self.repositories = {
+        entry = EntryRepository:new(self.api, self.settings),
+        feed = FeedRepository:new(self.api, self.settings),
+        category = CategoryRepository:new(self.api, self.settings),
+    }
 
     -- Set up settings button
     self.onLeftButtonTap = function()
@@ -88,9 +92,11 @@ function MinifluxBrowser:showMainScreen()
     UIManager:show(loading_info)
     UIManager:forceRePaint()
 
-    -- Fetch initial data for browser
-    local success, error_msg = self:fetchInitialData(loading_info)
-    if not success then
+    -- Close loading dialog and load data
+    UIManager:close(loading_info)
+
+    local counts, error_msg = MainView.loadData({ repositories = self.repositories })
+    if not counts then
         UIManager:show(InfoMessage:new({
             text = _("Failed to load Miniflux: ") .. tostring(error_msg),
             timeout = TIMEOUTS.ERROR,
@@ -98,7 +104,10 @@ function MinifluxBrowser:showMainScreen()
         return
     end
 
-    -- Show main content (loading dialog already closed by fetchInitialData)
+    -- Cache counts for use in views
+    self.counts = counts
+
+    -- Show main content
     self:showMain()
 
     -- Actually show the browser
@@ -106,7 +115,7 @@ function MinifluxBrowser:showMainScreen()
 end
 
 -- =============================================================================
--- NAVIGATION METHODS (SIMPLIFIED)
+-- NAVIGATION METHODS
 -- =============================================================================
 
 ---Show main Miniflux screen with counts
@@ -114,43 +123,27 @@ function MinifluxBrowser:showMain()
     local hide_read = self.settings and self.settings.hide_read_entries
     local subtitle = hide_read and "⊘ " or "◯ "
 
-    local main_items = {
-        {
-            text = _("Unread"),
-            mandatory = tostring(self.unread_count or 0),
-            callback = function()
-                self:showUnreadEntries()
-            end
-        },
-        {
-            text = _("Feeds"),
-            mandatory = tostring(self.feeds_count or 0),
-            callback = function()
-                self:showFeeds()
-            end
-        },
-        {
-            text = _("Categories"),
-            mandatory = tostring(self.categories_count or 0),
-            callback = function()
-                self:showCategories()
-            end
-        },
-    }
+    local main_items = MainView.buildItems({
+        counts = self.counts,
+        callbacks = {
+            on_unread = function() self:showUnreadEntries() end,
+            on_feeds = function() self:showFeeds() end,
+            on_categories = function() self:showCategories() end,
+        }
+    })
 
-    -- Clear navigation stack - we're at the root (BEFORE switchItemTable)
+    -- Clear navigation stack - we're at the root
     self.paths = {}
-    self.page_state_stack = {} -- Clear page state stack too
+    self.page_state_stack = {}
     self.onReturn = nil
 
-    -- Use Menu's built-in content switching
     self:switchItemTable(_("Miniflux"), main_items, nil, nil, subtitle)
 end
 
 ---Show feeds list with counters
 function MinifluxBrowser:showFeeds()
     -- Fetch data with API-level dialog management
-    local result, error_msg = self.feed_repository:getAllWithCounters({
+    local result, error_msg = self.repositories.feed:getAllWithCounters({
         dialogs = {
             loading = { text = _("Fetching feeds...") },
             error = { text = _("Failed to fetch feeds"), timeout = TIMEOUTS.ERROR }
@@ -158,70 +151,32 @@ function MinifluxBrowser:showFeeds()
     })
 
     if not result then
-        -- Error dialog already shown by API system
-        return
+        return -- Error dialog already shown by API system
     end
 
-    -- Generate menu items
-    local menu_items = {}
-    local counters = result.counters
-
-    for _, feed in ipairs(result.feeds or {}) do
-        local feed_title = feed.title or _("Untitled Feed")
-        local feed_id_str = tostring(feed.id or 0)
-
-        -- Get counts
-        local read_count = 0
-        local unread_count = 0
-        if counters then
-            read_count = (counters.reads and counters.reads[feed_id_str]) or 0
-            unread_count = (counters.unreads and counters.unreads[feed_id_str]) or 0
+    -- Generate menu items using view
+    local menu_items = FeedsView.buildItems({
+        feeds = result.feeds,
+        counters = result.counters,
+        on_select_callback = function(feed_id)
+            self:showFeedEntries(feed_id)
         end
-
-        -- Format count display
-        local count_info = ""
-        local total_count = read_count + unread_count
-        if total_count > 0 then
-            count_info = string.format("(%d/%d)", unread_count, total_count)
-        end
-
-        table.insert(menu_items, {
-            text = feed_title,
-            mandatory = count_info,
-            action_type = "feed_entries",
-            unread_count = unread_count,
-            feed_data = { id = feed.id, title = feed_title, unread_count = unread_count }
-        })
-    end
-
-    -- Sort: unread items first, then by unread count desc, then alphabetically
-    table.sort(menu_items, function(a, b)
-        if a.unread_count > 0 and b.unread_count == 0 then return true end
-        if a.unread_count == 0 and b.unread_count > 0 then return false end
-        if a.unread_count ~= b.unread_count then return a.unread_count > b.unread_count end
-        return a.text:lower() < b.text:lower()
-    end)
-
-    -- Add callbacks to feed items
-    for _, item in ipairs(menu_items) do
-        if item.feed_data then
-            item.callback = function()
-                self:showFeedEntries(item.feed_data.id)
-            end
-        end
-    end
+    })
 
     local hide_read = self.settings.hide_read_entries
-    local subtitle = self:buildSubtitle(#result.feeds, hide_read, false, "feeds")
+    local subtitle = ViewUtils.buildSubtitle({
+        count = #result.feeds,
+        hide_read = hide_read,
+        item_type = "feeds"
+    })
 
-    -- Set up back navigation to main BEFORE calling switchItemTable
+    -- Set up navigation
     table.insert(self.paths, true)
     self.onReturn = function()
         table.remove(self.paths)
         self:showMain()
     end
 
-    -- Use Menu's built-in navigation with page state restoration
     local restore_to = self:popPageState()
     self:switchItemTable(_("Feeds"), menu_items, restore_to, nil, subtitle)
 end
@@ -229,7 +184,7 @@ end
 ---Show categories list
 function MinifluxBrowser:showCategories()
     -- Fetch data with API-level dialog management
-    local categories, error_msg = self.category_repository:getAll({
+    local categories, error_msg = self.repositories.category:getAll({
         dialogs = {
             loading = { text = _("Fetching categories...") },
             error = { text = _("Failed to fetch categories"), timeout = TIMEOUTS.ERROR }
@@ -237,54 +192,31 @@ function MinifluxBrowser:showCategories()
     })
 
     if not categories then
-        -- Error dialog already shown by API system
-        return
+        return -- Error dialog already shown by API system
     end
 
-    -- Generate menu items
-    local menu_items = {}
-
-    for _, category in ipairs(categories or {}) do
-        local category_title = category.title or _("Untitled Category")
-        local unread_count = category.total_unread or 0
-
-        table.insert(menu_items, {
-            text = category_title,
-            mandatory = string.format("(%d)", unread_count),
-            action_type = "category_entries",
-            unread_count = unread_count,
-            category_data = { id = category.id, title = category_title, unread_count = unread_count }
-        })
-    end
-
-    -- Sort: unread items first, then by unread count desc, then alphabetically
-    table.sort(menu_items, function(a, b)
-        if a.unread_count > 0 and b.unread_count == 0 then return true end
-        if a.unread_count == 0 and b.unread_count > 0 then return false end
-        if a.unread_count ~= b.unread_count then return a.unread_count > b.unread_count end
-        return a.text:lower() < b.text:lower()
-    end)
-
-    -- Add callbacks to category items
-    for _, item in ipairs(menu_items) do
-        if item.category_data then
-            item.callback = function()
-                self:showCategoryEntries(item.category_data.id)
-            end
+    -- Generate menu items using view
+    local menu_items = CategoriesView.buildItems({
+        categories = categories,
+        on_select_callback = function(category_id)
+            self:showCategoryEntries(category_id)
         end
-    end
+    })
 
     local hide_read = self.settings.hide_read_entries
-    local subtitle = self:buildSubtitle(#categories, hide_read, false, "categories")
+    local subtitle = ViewUtils.buildSubtitle({
+        count = #categories,
+        hide_read = hide_read,
+        item_type = "categories"
+    })
 
-    -- Set up back navigation to main BEFORE calling switchItemTable
+    -- Set up navigation
     table.insert(self.paths, true)
     self.onReturn = function()
         table.remove(self.paths)
         self:showMain()
     end
 
-    -- Use Menu's built-in navigation with page state restoration
     local restore_to = self:popPageState()
     self:switchItemTable(_("Categories"), menu_items, restore_to, nil, subtitle)
 end
@@ -312,63 +244,42 @@ function MinifluxBrowser:showEntries(config)
         }
     }
 
-    -- Fetch data based on type using enhanced repositories
+    -- Fetch data based on type
     local entries, error_msg
     if config.type == "unread" then
-        entries, error_msg = self.entry_repository:getUnread(dialog_config)
+        entries, error_msg = self.repositories.entry:getUnread(dialog_config)
     elseif config.type == "feed" then
-        entries, error_msg = self.entry_repository:getByFeed(config.id, dialog_config)
+        entries, error_msg = self.repositories.entry:getByFeed(config.id, dialog_config)
     elseif config.type == "category" then
-        entries, error_msg = self.entry_repository:getByCategory(config.id, dialog_config)
+        entries, error_msg = self.repositories.entry:getByCategory(config.id, dialog_config)
     end
 
     if not entries then
-        -- Error dialog already shown by API system
-        return
+        return -- Error dialog already shown by API system
     end
 
-    -- Generate menu items with appropriate configuration
+    -- Generate menu items using view
     local show_feed_names = (config.type == "unread" or config.type == "category")
-    local menu_items = {}
-
-    if not entries or #entries == 0 then
-        local hide_read = self.settings.hide_read_entries
-        local message = hide_read and _("There are no unread entries.") or _("There are no entries.")
-        menu_items = { { text = message, mandatory = "", action_type = "no_action" } }
-    else
-        for _, entry in ipairs(entries) do
-            local entry_title = entry.title or _("Untitled Entry")
-            local status_indicator = entry.status == "read" and "○ " or "● "
-            local display_text = status_indicator .. entry_title
-
-            if show_feed_names and entry.feed and entry.feed.title then
-                display_text = display_text .. " (" .. entry.feed.title .. ")"
-            end
-
-            table.insert(menu_items, {
-                text = display_text,
-                action_type = "read_entry",
-                entry_data = entry
-            })
-        end
-    end
-
-    -- Add callbacks to entry items
-    for _, item in ipairs(menu_items) do
-        if item.entry_data then
-            item.callback = function()
-                config.onItemSelect(item.entry_data)
-            end
-        end
-    end
+    local menu_items = EntriesView.buildItems({
+        entries = entries,
+        show_feed_names = show_feed_names,
+        hide_read_entries = self.settings.hide_read_entries,
+        on_select_callback = config.onItemSelect
+    })
 
     -- Build subtitle based on type
     local subtitle
     if config.type == "unread" then
-        subtitle = self:buildSubtitle(#entries, false, true) -- unread only
+        subtitle = ViewUtils.buildSubtitle({
+            count = #entries,
+            is_unread_only = true
+        })
     else
-        local hide_read = self.settings.hide_read_entries
-        subtitle = self:buildSubtitle(#entries, hide_read, false, "entries")
+        subtitle = ViewUtils.buildSubtitle({
+            count = #entries,
+            hide_read = self.settings.hide_read_entries,
+            item_type = "entries"
+        })
     end
 
     -- Determine title
@@ -389,14 +300,13 @@ function MinifluxBrowser:showEntries(config)
         end
     end
 
-    -- Set up back navigation
+    -- Set up navigation
     table.insert(self.paths, true)
     self.onReturn = function()
         table.remove(self.paths)
         config.onBack()
     end
 
-    -- Use Menu's built-in navigation
     self:switchItemTable(title, menu_items, nil, nil, subtitle)
 end
 
@@ -451,10 +361,7 @@ end
 ---@param entry_data table Entry data from API
 ---@param context? {type: "feed"|"category", id: number} Navigation context (nil = global)
 function MinifluxBrowser:openEntry(entry_data, context)
-    -- Set navigation context using unified method
     NavigationContext.setContext(entry_data.id, context)
-
-    -- Show the entry using EntryService
     self.entry_service:readEntry(entry_data, self)
 end
 
@@ -491,94 +398,21 @@ function MinifluxBrowser:showConfigDialog()
 end
 
 -- =============================================================================
--- DATA FETCHING & UTILITIES
+-- PAGE STATE MANAGEMENT
 -- =============================================================================
-
----Fetch initial data needed for browser initialization
----@param loading_info InfoMessage Loading message to close
----@return boolean success, string? error_msg
-function MinifluxBrowser:fetchInitialData(loading_info)
-    -- Close the initial loading message
-    UIManager:close(loading_info)
-
-    -- Get unread count with dialog
-    local unread_count, error_msg = self.entry_repository:getUnreadCount({
-        dialogs = {
-            loading = { text = _("Loading unread count...") }
-        }
-    })
-    if not unread_count then
-        return false, error_msg
-    end
-
-    -- Get feeds count with dialog
-    local feeds_count = self.feed_repository:getCount({
-        dialogs = {
-            loading = { text = _("Loading feeds count...") }
-        }
-    })
-
-    -- Get categories count with dialog
-    local categories_count = self.category_repository:getCount({
-        dialogs = {
-            loading = { text = _("Loading categories count...") }
-        }
-    })
-
-    -- Store counts
-    self.unread_count = unread_count
-    self.feeds_count = feeds_count
-    self.categories_count = categories_count
-
-    return true
-end
-
----Build subtitle for content views
----@param count number Number of items
----@param hide_read boolean Whether read entries are hidden
----@param is_unread_only boolean Whether this is unread-only view
----@param item_type? string Type of items ("feeds", "categories", "entries")
----@return string subtitle Formatted subtitle
-function MinifluxBrowser:buildSubtitle(count, hide_read, is_unread_only, item_type)
-    if is_unread_only then
-        return "⊘ " .. count .. " " .. _("unread entries")
-    end
-
-    local icon = hide_read and "⊘ " or "◯ "
-
-    if item_type == "entries" then
-        if hide_read then
-            return icon .. count .. " " .. _("unread entries")
-        else
-            return icon .. count .. " " .. _("entries")
-        end
-    elseif item_type == "feeds" then
-        return icon .. count .. " " .. _("feeds")
-    elseif item_type == "categories" then
-        return icon .. count .. " " .. _("categories")
-    else
-        return icon .. count .. " " .. _("items")
-    end
-end
 
 ---Get current item number for page state restoration
 ---@return number Current item number (for use with switchItemTable)
 function MinifluxBrowser:getCurrentItemNumber()
-    -- Safely get properties with fallbacks for uninitialized Menu state
     local page = tonumber(self.page) or 1
     local perpage = tonumber(self.perpage) or 20
-
-    -- For Menu widgets, the current item might be tracked differently
-    -- Use itemnumber if available, otherwise fall back to a safe default
     local current_item = tonumber(self.itemnumber) or 1
 
-    -- If we have valid page info, calculate the absolute item number
     if page > 1 then
         local item_number = (page - 1) * perpage + current_item
         return math.max(item_number, 1)
     end
 
-    -- Otherwise, just return the current item or 1
     return math.max(current_item, 1)
 end
 

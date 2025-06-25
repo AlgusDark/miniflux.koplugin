@@ -16,7 +16,7 @@ local _ = require("gettext")
 -- Import specialized modules
 local MinifluxAPI = require("api/api_client")
 local MinifluxSettings = require("settings/settings")
-local MenuManager = require("menu/menu_manager")
+local Menu = require("menu/menu")
 local EntryService = require("services/entry_service")
 local EntryUtils = require("utils/entry_utils")
 
@@ -26,7 +26,6 @@ local EntryUtils = require("utils/entry_utils")
 ---@field download_dir string Full path to download directory
 ---@field settings MinifluxSettings Settings instance
 ---@field api MinifluxAPI API client instance
----@field menu_manager MenuManager Menu construction manager
 ---@field entry_service EntryService Entry service instance
 local Miniflux = WidgetContainer:extend({
     name = "miniflux",
@@ -59,15 +58,6 @@ function Miniflux:init()
     -- Initialize EntryService instance with settings and API dependencies
     self.entry_service = EntryService:new(self.settings, self.api)
 
-    -- Create menu manager with proper dependency injection
-    self.menu_manager = MenuManager:new({
-        browser_factory = function()
-            return self:createBrowser()
-        end,
-        settings = self.settings,
-        api = self.api,
-    })
-
     -- Override ReaderStatus EndOfBook behavior for miniflux entries
     self:overrideEndOfBookBehavior()
 
@@ -99,7 +89,7 @@ end
 ---@param menu_items table The main menu items table
 ---@return nil
 function Miniflux:addToMainMenu(menu_items)
-    self.menu_manager:addToMainMenu(menu_items)
+    menu_items.miniflux = Menu.build(self)
 end
 
 ---Handle dispatcher events (method required by KOReader)
@@ -129,6 +119,7 @@ function Miniflux:createBrowser()
         settings = self.settings,
         api = self.api,
         download_dir = self.download_dir,
+        entry_service = self.entry_service, -- Pass shared EntryService
     })
     return browser
 end
