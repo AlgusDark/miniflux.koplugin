@@ -312,24 +312,14 @@ function EntryService:changeEntryStatus(entry_id, new_status)
     local messages = self:_getStatusMessages(new_status)
 
     -- Call API with automatic dialog management
-    local success, result
-    if new_status == "read" then
-        success, result = self.api.entries:markAsRead(entry_id, {
-            dialogs = {
-                loading = { text = messages.loading },
-                success = { text = messages.success, timeout = TIMEOUTS.SUCCESS },
-                error = { text = messages.error, timeout = TIMEOUTS.ERROR }
-            }
-        })
-    else
-        success, result = self.api.entries:markAsUnread(entry_id, {
-            dialogs = {
-                loading = { text = messages.loading },
-                success = { text = messages.success, timeout = TIMEOUTS.SUCCESS },
-                error = { text = messages.error, timeout = TIMEOUTS.ERROR }
-            }
-        })
-    end
+    local success, result = self.api.entries:updateEntries(entry_id, {
+        body = { status = new_status },
+        dialogs = {
+            loading = { text = messages.loading },
+            success = { text = messages.success, timeout = TIMEOUTS.SUCCESS },
+            error = { text = messages.error, timeout = TIMEOUTS.ERROR }
+        }
+    })
 
     if success then
         -- Handle side effects after successful status change

@@ -20,7 +20,7 @@ function TestConnection.getMenuItem(api)
         text = _("Test connection"),
         keep_menu_open = true,
         callback = function()
-            local success, result = api:testConnection({
+            local success, result = api:get("/me", {
                 dialogs = {
                     loading = {
                         text = _("Testing connection to Miniflux server...")
@@ -28,9 +28,16 @@ function TestConnection.getMenuItem(api)
                 }
             })
 
-            -- Show the result message (API handles loading and validation automatically)
+            -- Format result message based on API response
+            local message
+            if success then
+                message = _("Connection successful! Logged in as: ") .. result.username
+            else
+                message = result -- Error message from API
+            end
+
             UIManager:show(InfoMessage:new({
-                text = result, -- API provides good success/error messages
+                text = message,
                 timeout = success and 3 or 5,
             }))
         end,

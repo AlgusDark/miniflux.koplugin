@@ -45,6 +45,27 @@ local MinifluxAPI = {}
 ---@field error? {text?: string, timeout?: number}
 ---@field success? {text?: string, timeout?: number}
 
+---@alias EntryStatus "read"|"unread"|"removed"
+---@alias SortDirection "asc"|"desc"
+
+---@class ApiOptions
+---@field limit? number Maximum number of entries to return
+---@field order? "id"|"status"|"published_at"|"category_title"|"category_id" Field to sort by
+---@field direction? SortDirection Sort direction
+---@field status? EntryStatus[] Entry status filter
+---@field category_id? number Filter by category ID
+---@field feed_id? number Filter by feed ID
+---@field published_before? number Filter entries published before this timestamp
+---@field published_after? number Filter entries published after this timestamp
+
+---@class APIBody
+---@field status? EntryStatus Entry status to update
+
+---@class APIClientConfig
+---@field body? APIBody Request body data
+---@field query? ApiOptions Query parameters
+---@field dialogs? ApiDialogConfig Dialog configuration for loading/error/success messages
+
 ---Create a new API instance
 ---@param config MinifluxConfig Configuration table with getter functions
 ---@return MinifluxAPI
@@ -65,6 +86,44 @@ function MinifluxAPI:new(config)
     return instance
 end
 
+---Add a URL-encoded query parameter to the query parts array
+---@param query_parts table Array to append the parameter to
+---@param key string Parameter key
+---@param value string|number Parameter value
+local function addQueryParam(query_parts, key, value)
+    local encoded_key = util.urlEncode(tostring(key))
+    local encoded_value = util.urlEncode(tostring(value))
+    table.insert(query_parts, encoded_key .. "=" .. encoded_value)
+end
+
+---Build error message from HTTP response code and body
+---@param code number HTTP status code
+---@param response_text string Response body text
+---@return string Error message
+local function buildErrorMessage(code, response_text)
+    -- Try to extract error message from JSON response first (all error responses should follow this format)
+    local api_error_message = nil
+    if response_text and response_text ~= "" then
+        local success, error_data = pcall(JSON.decode, response_text)
+        if success and error_data and error_data.error_message then
+            api_error_message = error_data.error_message
+        end
+    end
+
+    -- Return API error message if available, otherwise use appropriate fallback
+    if code == 400 then
+        return api_error_message or _("Bad request")
+    elseif code == 401 then
+        return api_error_message or _("Unauthorized - please check your API token")
+    elseif code == 403 then
+        return api_error_message or _("Forbidden - access denied")
+    elseif code == 500 then
+        return api_error_message or _("Internal server error")
+    else
+        return api_error_message or (_("HTTP error: ") .. tostring(code))
+    end
+end
+
 -- =============================================================================
 -- PRIMITIVE HTTP CLIENT
 -- =============================================================================
@@ -72,7 +131,7 @@ end
 ---Make an HTTP request to the API with optional dialog support
 ---@param method "GET"|"POST"|"PUT"|"DELETE" HTTP method to use
 ---@param endpoint string API endpoint path
----@param config? table Configuration including body, query, and dialogs
+---@param config? APIClientConfig Configuration including body, query, and dialogs
 ---@return boolean success True if request succeeded
 ---@return table|string result_or_error Decoded JSON table on success, error string on failure
 function MinifluxAPI:makeRequest(method, endpoint, config)
@@ -117,14 +176,10 @@ function MinifluxAPI:makeRequest(method, endpoint, config)
             if type(value) == "table" then
                 -- Handle array values (like status filters)
                 for _, v in ipairs(value) do
-                    local encoded_key = util.urlEncode(tostring(key))
-                    local encoded_value = util.urlEncode(tostring(v))
-                    table.insert(query_parts, encoded_key .. "=" .. encoded_value)
+                    addQueryParam(query_parts, key, v)
                 end
             else
-                local encoded_key = util.urlEncode(tostring(key))
-                local encoded_value = util.urlEncode(tostring(value))
-                table.insert(query_parts, encoded_key .. "=" .. encoded_value)
+                addQueryParam(query_parts, key, value)
             end
         end
         url = url .. "?" .. table.concat(query_parts, "&")
@@ -210,7 +265,7 @@ function MinifluxAPI:makeRequest(method, endpoint, config)
 
     -- Handle error responses
     logger.err("MinifluxAPI: HTTP error", status or code, resp_headers)
-    local error_message = self:_buildErrorMessage(code, response_text)
+    local error_message = buildErrorMessage(code, response_text)
 
     if dialogs and dialogs.error then
         local error_text = dialogs.error.text or error_message
@@ -223,38 +278,13 @@ function MinifluxAPI:makeRequest(method, endpoint, config)
     return false, error_message
 end
 
----Build error message from HTTP response code and body
----@param code number HTTP status code
----@param response_text string Response body text
----@return string Error message
-function MinifluxAPI:_buildErrorMessage(code, response_text)
-    if code == 401 then
-        return _("Unauthorized - please check your API token")
-    elseif code == 403 then
-        return _("Forbidden - access denied")
-    elseif code == 400 then
-        local error_msg = _("Bad request")
-        if response_text and response_text ~= "" then
-            local success, error_data = pcall(JSON.decode, response_text)
-            if success and error_data.error_message then
-                error_msg = error_data.error_message
-            end
-        end
-        return error_msg
-    elseif code == 500 then
-        return _("Server error")
-    else
-        return _("Unexpected response: ") .. tostring(code)
-    end
-end
-
 -- =============================================================================
 -- HTTP METHODS
 -- =============================================================================
 
 ---Make a GET request
 ---@param endpoint string API endpoint path
----@param config? table Configuration with optional query, dialogs
+---@param config? APIClientConfig Configuration with optional query, dialogs
 ---@return boolean success True if request succeeded
 ---@return table|string result_or_error Decoded JSON table on success, error string on failure
 function MinifluxAPI:get(endpoint, config)
@@ -264,7 +294,7 @@ end
 
 ---Make a POST request
 ---@param endpoint string API endpoint path
----@param config? table Configuration with optional body, query, dialogs
+---@param config? APIClientConfig Configuration with optional body, query, dialogs
 ---@return boolean success True if request succeeded
 ---@return table|string result_or_error Decoded JSON table on success, error string on failure
 function MinifluxAPI:post(endpoint, config)
@@ -274,7 +304,7 @@ end
 
 ---Make a PUT request
 ---@param endpoint string API endpoint path
----@param config? table Configuration with optional body, query, dialogs
+---@param config? APIClientConfig Configuration with optional body, query, dialogs
 ---@return boolean success True if request succeeded
 ---@return table|string result_or_error Decoded JSON table on success, error string on failure
 function MinifluxAPI:put(endpoint, config)
@@ -284,28 +314,12 @@ end
 
 ---Make a DELETE request
 ---@param endpoint string API endpoint path
----@param config? table Configuration with optional query, dialogs
+---@param config? APIClientConfig Configuration with optional query, dialogs
 ---@return boolean success True if request succeeded
 ---@return table|string result_or_error Decoded JSON table on success, error string on failure
 function MinifluxAPI:delete(endpoint, config)
     config = config or {}
     return self:makeRequest("DELETE", endpoint, config)
-end
-
--- =============================================================================
--- CONNECTION TESTING
--- =============================================================================
-
----Test connection to the Miniflux server
----@param config? table Configuration including optional dialogs
----@return boolean success, string message
-function MinifluxAPI:testConnection(config)
-    local success, result = self:get("/me", config)
-    if success then
-        return true, _("Connection successful! Logged in as: ") .. result.username
-    else
-        return false, result
-    end
 end
 
 return MinifluxAPI
