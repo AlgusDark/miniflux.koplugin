@@ -14,14 +14,13 @@ local ltn12 = require("ltn12")
 local socket = require("socket")
 local socketutil = require("socketutil")
 local UIManager = require("ui/uimanager")
-local InfoMessage = require("ui/widget/infomessage")
 local _ = require("gettext")
 local logger = require("logger")
 local FileUtils = require("utils/file_utils")
 local util = require("util")
+local Notification = require("utils/notification")
 
--- Constants
-local DEFAULT_TIMEOUT = 3
+-- No timeout constants needed - handled by Notification utility
 
 -- Load specialized API modules
 local Entries = require("api/entries")
@@ -41,9 +40,9 @@ local MinifluxAPI = {}
 ---@field getAPIToken fun(): string API authentication token
 
 ---@class ApiDialogConfig
----@field loading? {text?: string, timeout?: number}
----@field error? {text?: string, timeout?: number}
----@field success? {text?: string, timeout?: number}
+---@field loading? {text?: string, timeout?: number|nil} Loading notification (timeout=nil for manual close)
+---@field error? {text?: string, timeout?: number|nil} Error notification (defaults to 5s)
+---@field success? {text?: string, timeout?: number|nil} Success notification (defaults to 2s)
 
 ---@alias EntryStatus "read"|"unread"|"removed"
 ---@alias SortDirection "asc"|"desc"
@@ -147,22 +146,21 @@ function MinifluxAPI:makeRequest(method, endpoint, config)
         -- Show error dialog if requested (no loading was shown yet)
         if dialogs and dialogs.error then
             local error_text = dialogs.error.text or _("Server address and API token must be configured")
-            UIManager:show(InfoMessage:new({
+            Notification:error({
                 text = error_text,
-                timeout = dialogs.error.timeout or DEFAULT_TIMEOUT
-            }))
+                timeout = dialogs.error.timeout
+            })
         end
         return false, _("Server address and API token must be configured")
     end
 
     -- Handle loading dialog (AFTER validation passes)
-    local loading_info
+    local loading_notification
     if dialogs and dialogs.loading and dialogs.loading.text then
-        loading_info = InfoMessage:new({
+        loading_notification = Notification:info({
             text = dialogs.loading.text,
             timeout = dialogs.loading.timeout
         })
-        UIManager:show(loading_info)
         UIManager:forceRePaint()
     end
 
@@ -212,8 +210,8 @@ function MinifluxAPI:makeRequest(method, endpoint, config)
     socketutil:reset_timeout()
 
     -- Close loading dialog
-    if loading_info then
-        UIManager:close(loading_info)
+    if loading_notification then
+        loading_notification:close()
     end
 
     -- Check for network errors first
@@ -222,10 +220,10 @@ function MinifluxAPI:makeRequest(method, endpoint, config)
         local error_message = _("Network error occurred")
         if dialogs and dialogs.error then
             local error_text = dialogs.error.text or error_message
-            UIManager:show(InfoMessage:new({
+            Notification:error({
                 text = error_text,
-                timeout = dialogs.error.timeout or DEFAULT_TIMEOUT
-            }))
+                timeout = dialogs.error.timeout
+            })
         end
         return false, error_message
     end
@@ -236,10 +234,10 @@ function MinifluxAPI:makeRequest(method, endpoint, config)
     if code == 200 or code == 201 or code == 204 then
         -- Show success message if provided
         if dialogs and dialogs.success and dialogs.success.text then
-            UIManager:show(InfoMessage:new({
+            Notification:success({
                 text = dialogs.success.text,
-                timeout = dialogs.success.timeout or DEFAULT_TIMEOUT
-            }))
+                timeout = dialogs.success.timeout
+            })
         end
 
         if response_text and response_text ~= "" then
@@ -251,10 +249,10 @@ function MinifluxAPI:makeRequest(method, endpoint, config)
                 local error_message = _("Invalid JSON response from server")
                 if dialogs and dialogs.error then
                     local error_text = dialogs.error.text or error_message
-                    UIManager:show(InfoMessage:new({
+                    Notification:error({
                         text = error_text,
-                        timeout = dialogs.error.timeout or DEFAULT_TIMEOUT
-                    }))
+                        timeout = dialogs.error.timeout
+                    })
                 end
                 return false, error_message
             end
@@ -269,10 +267,10 @@ function MinifluxAPI:makeRequest(method, endpoint, config)
 
     if dialogs and dialogs.error then
         local error_text = dialogs.error.text or error_message
-        UIManager:show(InfoMessage:new({
+        Notification:error({
             text = error_text,
-            timeout = dialogs.error.timeout or DEFAULT_TIMEOUT
-        }))
+            timeout = dialogs.error.timeout
+        })
     end
 
     return false, error_message

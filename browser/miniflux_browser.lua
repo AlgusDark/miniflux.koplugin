@@ -9,12 +9,12 @@ Acts as coordinator between views and repositories.
 
 local Menu = require("ui/widget/menu")
 local UIManager = require("ui/uimanager")
-local InfoMessage = require("ui/widget/infomessage")
 local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
 local EntryRepository = require("repositories/entry_repository")
 local FeedRepository = require("repositories/feed_repository")
 local CategoryRepository = require("repositories/category_repository")
 local NavigationContext = require("utils/navigation_context")
+local Notification = require("utils/notification")
 local _ = require("gettext")
 
 -- Import view modules
@@ -24,10 +24,7 @@ local CategoriesView = require("browser/views/categories_view")
 local EntriesView = require("browser/views/entries_view")
 local ViewUtils = require("browser/views/view_utils")
 
--- Timeout constants for consistent UI messaging
-local TIMEOUTS = {
-    ERROR = 5, -- Error messages
-}
+-- No timeout constants needed - handled by Notification utility
 
 ---@class MinifluxBrowserOptions : MenuOptions
 ---@field settings MinifluxSettings Plugin settings
@@ -93,21 +90,18 @@ end
 ---Show the main Miniflux browser screen with initial data
 function MinifluxBrowser:showMainScreen()
     -- Show loading message while fetching initial data
-    local loading_info = InfoMessage:new({
+    local loading_notification = Notification:info({
         text = _("Loading Miniflux data..."),
+        timeout = nil,
     })
-    UIManager:show(loading_info)
     UIManager:forceRePaint()
 
     -- Close loading dialog and load data
-    UIManager:close(loading_info)
+    loading_notification:close()
 
     local counts, error_msg = MainView.loadData({ repositories = self.repositories })
     if not counts then
-        UIManager:show(InfoMessage:new({
-            text = _("Failed to load Miniflux: ") .. tostring(error_msg),
-            timeout = TIMEOUTS.ERROR,
-        }))
+        Notification:error(_("Failed to load Miniflux: ") .. tostring(error_msg))
         return
     end
 
@@ -153,7 +147,7 @@ function MinifluxBrowser:showFeeds()
     local result, error_msg = self.repositories.feed:getAllWithCounters({
         dialogs = {
             loading = { text = _("Fetching feeds...") },
-            error = { text = _("Failed to fetch feeds"), timeout = TIMEOUTS.ERROR }
+            error = { text = _("Failed to fetch feeds"), timeout = 5 }
         }
     })
 
@@ -194,7 +188,7 @@ function MinifluxBrowser:showCategories()
     local categories, error_msg = self.repositories.category:getAll({
         dialogs = {
             loading = { text = _("Fetching categories...") },
-            error = { text = _("Failed to fetch categories"), timeout = TIMEOUTS.ERROR }
+            error = { text = _("Failed to fetch categories"), timeout = 5 }
         }
     })
 
@@ -247,7 +241,7 @@ function MinifluxBrowser:showEntries(config)
     local dialog_config = {
         dialogs = {
             loading = { text = loading_messages[config.type] },
-            error = { text = _("Failed to fetch entries"), timeout = TIMEOUTS.ERROR }
+            error = { text = _("Failed to fetch entries"), timeout = 5 }
         }
     }
 
@@ -378,10 +372,7 @@ end
 
 function MinifluxBrowser:showConfigDialog()
     if not self.settings then
-        UIManager:show(InfoMessage:new({
-            text = _("Settings not available"),
-            timeout = TIMEOUTS.ERROR,
-        }))
+        Notification:error(_("Settings not available"))
         return
     end
 

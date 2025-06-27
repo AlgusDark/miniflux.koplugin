@@ -6,8 +6,7 @@ Handles connection testing to the Miniflux server.
 @module miniflux.menu.settings.test_connection
 --]]
 
-local InfoMessage = require("ui/widget/infomessage")
-local UIManager = require("ui/uimanager")
+local Notification = require("utils/notification")
 local _ = require("gettext")
 
 local TestConnection = {}
@@ -28,18 +27,12 @@ function TestConnection.getMenuItem(api)
                 }
             })
 
-            -- Format result message based on API response
-            local message
+            -- Show result based on API response
             if success then
-                message = _("Connection successful! Logged in as: ") .. result.username
+                Notification:success(_("Connection successful! Logged in as: ") .. result.username)
             else
-                message = result -- Error message from API
+                Notification:error(result) -- Error message from API
             end
-
-            UIManager:show(InfoMessage:new({
-                text = message,
-                timeout = success and 3 or 5,
-            }))
         end,
     }
 end

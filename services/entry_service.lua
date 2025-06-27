@@ -11,7 +11,6 @@ and dialog management.
 
 local lfs = require("libs/libkoreader-lfs")
 local socket_url = require("socket.url")
-local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 local ReaderUI = require("apps/reader/readerui")
 local FFIUtil = require("ffi/util")
@@ -19,6 +18,8 @@ local FileManager = require("apps/filemanager/filemanager")
 local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
 local _ = require("gettext")
 local T = require("ffi/util").template
+local dump = require("dump")
+local Notification = require("utils/notification")
 
 -- Import dependencies
 local EntryUtils = require("utils/entry_utils")
@@ -31,12 +32,7 @@ local FileUtils = require("utils/file_utils")
 local NavigationUtils = require("utils/navigation_utils")
 local MetadataLoader = require("utils/metadata_loader")
 
--- Timeout constants for consistent UI messaging
-local TIMEOUTS = {
-    SUCCESS = 2, -- Success messages
-    ERROR = 5,   -- Error messages
-    WARNING = 3, -- Warning/info messages
-}
+-- No timeout constants needed - handled by Notification utility
 
 ---@class EntryService
 ---@field settings MinifluxSettings Settings instance
@@ -69,7 +65,7 @@ function EntryService:readEntry(entry_data, browser)
     -- Validate entry data
     local valid, error_msg = EntryUtils.validateForDownload(entry_data)
     if not valid then
-        self:_showError(error_msg)
+        Notification:error(error_msg)
         return false
     end
 
@@ -79,7 +75,7 @@ function EntryService:readEntry(entry_data, browser)
     -- Download entry if needed
     local success = self:_downloadEntryContent(entry_data, browser)
     if not success then
-        self:_showError(_("Failed to download and show entry"))
+        Notification:error(_("Failed to download and show entry"))
         return false
     end
 
@@ -108,23 +104,21 @@ function EntryService:_downloadEntryContent(entry_data, browser)
     end
 
     -- Simple progress using close/recreate approach (inline, no abstraction)
-    local progress_info = InfoMessage:new({
+    local progress_info = Notification:info({
         text = T(_("Downloading: %1\n\nPreparing download…"), title),
         timeout = nil,
     })
-    UIManager:show(progress_info)
 
     -- Get entry content
     local content = entry_data.content or entry_data.summary or ""
     local include_images = self.settings.include_images
 
     -- Update progress
-    UIManager:close(progress_info)
-    progress_info = InfoMessage:new({
+    progress_info:close()
+    progress_info = Notification:info({
         text = T(_("Downloading: %1\n\nScanning for images…"), title),
         timeout = nil,
     })
-    UIManager:show(progress_info)
     UIManager:forceRePaint()
 
     -- Process images
@@ -132,18 +126,17 @@ function EntryService:_downloadEntryContent(entry_data, browser)
     local images, seen_images = ImageDiscovery.discoverImages(content, base_url)
 
     -- Update progress with image info
-    UIManager:close(progress_info)
+    progress_info:close()
     local image_info = ""
     if include_images and #images > 0 then
         image_info = T(_("\n\nImages found: %1"), #images)
     elseif not include_images and #images > 0 then
         image_info = T(_("\n\nImages: %1 found (skipped)"), #images)
     end
-    progress_info = InfoMessage:new({
+    progress_info = Notification:info({
         text = T(_("Downloading: %1\n\nFound images%2"), title, image_info),
         timeout = nil,
     })
-    UIManager:show(progress_info)
     UIManager:forceRePaint()
 
     -- Download images if enabled
@@ -152,12 +145,11 @@ function EntryService:_downloadEntryContent(entry_data, browser)
     end
 
     -- Update progress
-    UIManager:close(progress_info)
-    progress_info = InfoMessage:new({
+    progress_info:close()
+    progress_info = Notification:info({
         text = T(_("Downloading: %1\n\nProcessing content…"), title),
         timeout = nil,
     })
-    UIManager:show(progress_info)
     UIManager:forceRePaint()
 
     -- Process and clean content
@@ -165,30 +157,28 @@ function EntryService:_downloadEntryContent(entry_data, browser)
     processed_content = HtmlUtils.cleanHtmlContent(processed_content)
 
     -- Update progress
-    UIManager:close(progress_info)
-    progress_info = InfoMessage:new({
+    progress_info:close()
+    progress_info = Notification:info({
         text = T(_("Downloading: %1\n\nCreating HTML file…"), title),
         timeout = nil,
     })
-    UIManager:show(progress_info)
     UIManager:forceRePaint()
 
     -- Create and save HTML document
     local html_content = HtmlUtils.createHtmlDocument(entry_data, processed_content)
     local file_success = FileUtils.writeFile(html_file, html_content)
     if not file_success then
-        UIManager:close(progress_info)
-        self:_showError(_("Failed to save HTML file"))
+        progress_info:close()
+        Notification:error(_("Failed to save HTML file"))
         return false
     end
 
     -- Update progress
-    UIManager:close(progress_info)
-    progress_info = InfoMessage:new({
+    progress_info:close()
+    progress_info = Notification:info({
         text = T(_("Downloading: %1\n\nCreating metadata…"), title),
         timeout = nil,
     })
-    UIManager:show(progress_info)
     UIManager:forceRePaint()
 
     -- Save metadata
@@ -198,18 +188,18 @@ function EntryService:_downloadEntryContent(entry_data, browser)
         images_count = #images,
     })
     local metadata_file = EntryUtils.getEntryMetadataPath(entry_data.id)
-    local metadata_content = "return " .. self:_tableToString(metadata)
+    local metadata_content = "return " .. dump(metadata)
     FileUtils.writeFile(metadata_file, metadata_content)
 
     -- Close progress dialog
-    UIManager:close(progress_info)
+    progress_info:close()
 
     -- Show completion summary
     local image_summary = ImageUtils.createDownloadSummary(include_images, images)
-    UIManager:show(InfoMessage:new({
+    Notification:success({
         text = _("Download completed!") .. "\n\n" .. image_summary,
         timeout = 1,
-    }))
+    })
 
     -- Close browser and open entry
     self:_closeBrowserAndOpenEntry(browser, html_file)
@@ -219,21 +209,20 @@ end
 ---Download images with progress tracking
 ---@param images table Array of image info
 ---@param entry_dir string Entry directory path
----@param progress_info InfoMessage Progress dialog (will be updated by reference)
+---@param progress_info NotificationInstance Progress dialog (will be updated by reference)
 ---@param title string Entry title
----@return InfoMessage Updated progress dialog
+---@return NotificationInstance Updated progress dialog
 function EntryService:_downloadImages(images, entry_dir, progress_info, title)
     local images_downloaded = 0
 
     for i, img in ipairs(images) do
         -- Update progress for current image
-        UIManager:close(progress_info)
-        progress_info = InfoMessage:new({
+        progress_info:close()
+        progress_info = Notification:info({
             text = T(_("Downloading: %1\n\nDownloading image %2 of %3…\n\nImages: %4 / %5 downloaded"),
                 title, i, #images, images_downloaded, #images),
             timeout = nil,
         })
-        UIManager:show(progress_info)
         UIManager:forceRePaint()
 
         local success = ImageDownload.downloadImage({
@@ -249,13 +238,12 @@ function EntryService:_downloadImages(images, entry_dir, progress_info, title)
     end
 
     -- Final update
-    UIManager:close(progress_info)
-    progress_info = InfoMessage:new({
+    progress_info:close()
+    progress_info = Notification:info({
         text = T(_("Downloading: %1\n\nImage downloads completed\n\nImages: %2 / %3 downloaded"),
             title, images_downloaded, #images),
         timeout = nil,
     })
-    UIManager:show(progress_info)
     UIManager:forceRePaint()
 
     return progress_info
@@ -304,7 +292,7 @@ end
 ---@return boolean success
 function EntryService:changeEntryStatus(entry_id, new_status)
     if not EntryUtils.isValidId(entry_id) then
-        self:_showError(_("Cannot change status: invalid entry ID"))
+        Notification:error(_("Cannot change status: invalid entry ID"))
         return false
     end
 
@@ -316,8 +304,8 @@ function EntryService:changeEntryStatus(entry_id, new_status)
         body = { status = new_status },
         dialogs = {
             loading = { text = messages.loading },
-            success = { text = messages.success, timeout = TIMEOUTS.SUCCESS },
-            error = { text = messages.error, timeout = TIMEOUTS.ERROR }
+            success = { text = messages.success, timeout = 2 },
+            error = { text = messages.error, timeout = 5 }
         }
     })
 
@@ -490,10 +478,7 @@ function EntryService:showEndOfEntryDialog(entry_info)
         return dialog
     else
         -- If dialog creation fails, show a simple error message
-        UIManager:show(InfoMessage:new({
-            text = _("Failed to create end of entry dialog"),
-            timeout = TIMEOUTS.ERROR,
-        }))
+        Notification:error(_("Failed to create end of entry dialog"))
         return nil
     end
 end
@@ -523,10 +508,7 @@ function EntryService:deleteLocalEntryFromInfo(entry_info)
     local entry_id = entry_info.entry_id
 
     if not EntryUtils.isValidId(entry_id) then
-        UIManager:show(InfoMessage:new({
-            text = _("Cannot delete: invalid entry ID"),
-            timeout = TIMEOUTS.WARNING,
-        }))
+        Notification:warning(_("Cannot delete: invalid entry ID"))
         return
     end
 
@@ -554,7 +536,7 @@ function EntryService:_updateLocalEntryStatus(entry_id, new_status)
     end
 
     metadata.status = new_status
-    local metadata_content = "return " .. self:_tableToString(metadata)
+    local metadata_content = "return " .. dump(metadata)
     return FileUtils.writeFile(metadata_file, metadata_content)
 end
 
@@ -573,17 +555,14 @@ function EntryService:deleteLocalEntry(entry_id)
     end)
 
     if success then
-        UIManager:show(InfoMessage:new({
-            text = _("Local entry deleted successfully"),
-            timeout = TIMEOUTS.SUCCESS,
-        }))
+        Notification:success(_("Local entry deleted successfully"))
 
         -- Open Miniflux folder
         self:openMinifluxFolder()
 
         return true
     else
-        self:_showError(_("Failed to delete local entry"))
+        Notification:error(_("Failed to delete local entry"))
         return false
     end
 end
@@ -625,43 +604,6 @@ function EntryService:openMinifluxFolder()
     else
         FileManager:showFiles(download_dir)
     end
-end
-
----Show error message
----@param message string Error message
----@return nil
-function EntryService:_showError(message)
-    UIManager:show(InfoMessage:new({
-        text = message,
-        timeout = TIMEOUTS.ERROR,
-    }))
-end
-
----Convert table to Lua string representation
----@param tbl table Table to convert
----@param indent? number Current indentation level
----@return string Lua code representation of table
-function EntryService:_tableToString(tbl, indent)
-    indent = indent or 0
-    local result = {}
-    local spaces = string.rep("  ", indent)
-
-    table.insert(result, "{\n")
-    for k, v in pairs(tbl) do
-        local key = type(k) == "string" and string.format('"%s"', k) or tostring(k)
-        local value
-        if type(v) == "string" then
-            value = string.format('"%s"', v:gsub('"', '\\"'))
-        elseif type(v) == "table" then
-            value = self:_tableToString(v, indent + 1)
-        else
-            value = tostring(v)
-        end
-        table.insert(result, string.format("%s  [%s] = %s,\n", spaces, key, value))
-    end
-    table.insert(result, spaces .. "}")
-
-    return table.concat(result)
 end
 
 return EntryService

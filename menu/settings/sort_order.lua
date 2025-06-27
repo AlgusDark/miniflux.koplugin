@@ -6,8 +6,8 @@ Handles sort order submenu with various sorting options.
 @module miniflux.menu.settings.sort_order
 --]]
 
-local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
+local Notification = require("utils/notification")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
@@ -96,13 +96,17 @@ end
 function SortOrder.updateSetting(settings, new_order, touchmenu_instance)
     settings.order = new_order
     settings:save()
-    UIManager:show(InfoMessage:new({
+
+    local notification = Notification:success({
         text = _("Sort order updated"),
         timeout = 2,
-        dismiss_callback = function()
-            touchmenu_instance:backToUpperMenu()
-        end,
-    }))
+    })
+
+    -- Close notification and navigate back after a brief delay
+    UIManager:scheduleIn(0.5, function()
+        notification:close()
+        touchmenu_instance:backToUpperMenu()
+    end)
 end
 
 return SortOrder

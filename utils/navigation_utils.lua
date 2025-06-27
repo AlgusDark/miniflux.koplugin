@@ -8,9 +8,9 @@ Pure functions with no state - memory efficient for low-powered devices.
 @module miniflux.utils.navigation_utils
 --]]
 
-local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 local lfs = require("libs/libkoreader-lfs")
+local Notification = require("utils/notification")
 local _ = require("gettext")
 
 -- Import dependencies
@@ -48,30 +48,21 @@ function NavigationUtils.navigateToEntry(entry_info, config)
     -- Validate input
     local valid, error_msg = NavigationUtils.validateNavigationInput(entry_info, api)
     if not valid then
-        UIManager:show(InfoMessage:new({
-            text = error_msg,
-            timeout = 3,
-        }))
+        Notification:warning(error_msg)
         return
     end
 
     -- Load metadata
     local metadata, published_unix, metadata_error = NavigationUtils.loadEntryMetadata(entry_info)
     if not metadata then
-        UIManager:show(InfoMessage:new({
-            text = metadata_error,
-            timeout = 3,
-        }))
+        Notification:warning(metadata_error)
         return
     end
 
     -- Build navigation options
     local nav_options, options_error = NavigationUtils.buildNavigationOptions(published_unix, direction, settings)
     if not nav_options then
-        UIManager:show(InfoMessage:new({
-            text = options_error,
-            timeout = 3,
-        }))
+        Notification:warning(options_error)
         return
     end
 
@@ -90,10 +81,7 @@ function NavigationUtils.navigateToEntry(entry_info, config)
             and _("No previous entry available")
             or _("No next entry available")
 
-        UIManager:show(InfoMessage:new({
-            text = no_entry_msg,
-            timeout = 3,
-        }))
+        Notification:info(no_entry_msg)
     end
 end
 

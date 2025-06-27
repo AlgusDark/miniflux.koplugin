@@ -6,8 +6,8 @@ Handles include images submenu with ON/OFF toggle for image downloading.
 @module miniflux.menu.settings.include_images
 --]]
 
-local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
+local Notification = require("utils/notification")
 local _ = require("gettext")
 
 local IncludeImages = {}
@@ -62,13 +62,16 @@ function IncludeImages.updateSetting(options)
     options.settings.include_images = options.new_value
     options.settings:save()
 
-    UIManager:show(InfoMessage:new({
+    local notification = Notification:success({
         text = options.message,
         timeout = 2,
-        dismiss_callback = function()
-            options.touchmenu_instance:backToUpperMenu()
-        end,
-    }))
+    })
+
+    -- Close notification and navigate back after a brief delay
+    UIManager:scheduleIn(0.5, function()
+        notification:close()
+        options.touchmenu_instance:backToUpperMenu()
+    end)
 end
 
 return IncludeImages
