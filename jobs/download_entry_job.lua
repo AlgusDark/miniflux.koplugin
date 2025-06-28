@@ -14,7 +14,6 @@ local FFIUtil = require("ffi/util")
 local time = require("ui/time")
 local _ = require("gettext")
 local T = require("ffi/util").template
-local dump = require("dump")
 
 -- Import consolidated dependencies
 local EntryUtils = require("utils/entry_utils")
@@ -107,7 +106,11 @@ local function downloadImagesWithProgress(images, context, settings)
     local time_prev = time.now()
 
     for i, img in ipairs(images) do
-        -- Time-throttled cancellation check (every 1000ms like newsdownloader)
+        -- Performance optimization for eink devices downloading many images:
+        -- 1. Throttle cancellation checks to every 1000ms to avoid UI sluggishness
+        -- 2. Use fast_refresh (3rd parameter = true) to update progress without
+        --    full UI repaints between cancellation checks
+        -- This pattern is proven in newsdownloader.koplugin for RSS feeds with 30+ images
         local go_on
         if time.to_ms(time.since(time_prev)) > 1000 then
             time_prev = time.now()
@@ -130,7 +133,7 @@ local function downloadImagesWithProgress(images, context, settings)
                 end
             end
         else
-            -- Fast refresh without cancellation check (like newsdownloader)
+            -- Fast refresh without cancellation check - updates UI without full repaint (eink optimization)
             Trapper:info(T(_("Downloading Images:\n%1\n\nDownloading: %2\n\nProgress: %3 / %4 images"),
                 context.title, img.filename or T(_("image_%1"), i), i, #images), true, true)
         end
@@ -243,10 +246,10 @@ end
 ---Save entry metadata
 ---@param entry_data table Entry data from API
 ---@param context table Download context
----@param images table Images array
+---@param images_count number Count of successfully downloaded images
 ---@param settings table Settings instance
 ---@return boolean success
-local function saveMetadata(entry_data, context, images, settings)
+local function saveMetadata(entry_data, context, images_count, settings)
     -- Phase 6: Creating metadata
     local go_on = Trapper:info(T(_("Creating Article:\n%1\n\nSaving metadata…"), context.title))
     if not go_on then
@@ -255,15 +258,17 @@ local function saveMetadata(entry_data, context, images, settings)
         end
     end
 
-    -- Save metadata
-    local metadata = EntryUtils.createMetadata({
+    -- Save metadata using DocSettings
+    local metadata_saved = EntryUtils.saveMetadata({
         entry_data = entry_data,
         include_images = settings.include_images,
-        images_count = #images,
+        images_count = images_count,
     })
-    local metadata_file = EntryUtils.getEntryMetadataPath(entry_data.id)
-    local metadata_content = "return " .. dump(metadata)
-    Files.writeFile(metadata_file, metadata_content)
+
+    if not metadata_saved then
+        Notification:error(_("Failed to save entry metadata"))
+        return false
+    end
 
     return true
 end
@@ -350,8 +355,9 @@ function DownloadEntryJob.startCancellableDownload(deps)
             return false
         end
 
-        -- Save metadata
-        if not saveMetadata(entry_data, context, images, settings) then
+        -- Save metadata with actual download counts
+        local download_summary = analyzeDownloadResults(images)
+        if not saveMetadata(entry_data, context, download_summary.success_count, settings) then
             return false
         end
 

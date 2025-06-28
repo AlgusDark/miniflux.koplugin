@@ -171,7 +171,7 @@ end
 -- IMAGE DOWNLOADING
 -- =============================================================================
 
----Download a single image from URL with atomic .tmp file handling
+---Download a single image from URL (simplified without atomic operations)
 ---@param config {url: string, entry_dir: string, filename: string} Configuration table
 ---@return boolean True if download successful
 function Images.downloadImage(config)
@@ -182,20 +182,14 @@ function Images.downloadImage(config)
     end
 
     local filepath = config.entry_dir .. config.filename
-    local temp_filepath = filepath .. ".tmp"
-
-    -- Simple cleanup helper
-    local function cleanup_temp()
-        os.remove(temp_filepath)
-    end
 
     -- Set network timeout
     socketutil:set_timeout(10, 30)
 
-    -- Perform HTTP request
+    -- Perform HTTP request - download directly to final file
     local result, status_code, headers = http.request({
         url = config.url,
-        sink = ltn12.sink.file(io.open(temp_filepath, "wb")),
+        sink = ltn12.sink.file(io.open(filepath, "wb")),
     })
 
     -- Always reset timeout
@@ -203,7 +197,7 @@ function Images.downloadImage(config)
 
     -- Check for basic failure conditions
     if not result or status_code ~= 200 then
-        cleanup_temp()
+        os.remove(filepath) -- Clean up failed download
         return false
     end
 
@@ -212,25 +206,25 @@ function Images.downloadImage(config)
         local content_type = headers["content-type"]:lower()
         if not (content_type:find("image/", 1, true) or
                 content_type:find("application/octet-stream", 1, true)) then
-            cleanup_temp()
+            os.remove(filepath) -- Clean up invalid content
             return false
         end
     end
 
-    -- Check file was actually created and has reasonable size
-    local temp_file = io.open(temp_filepath, "rb")
-    if not temp_file then
-        cleanup_temp()
+    -- Check file was created and has reasonable size
+    local file = io.open(filepath, "rb")
+    if not file then
+        os.remove(filepath)
         return false
     end
 
-    temp_file:seek("end")
-    local file_size = temp_file:seek()
-    temp_file:close()
+    file:seek("end")
+    local file_size = file:seek()
+    file:close()
 
     -- Sanity check file size (10 bytes minimum, 50MB maximum)
     if file_size < 10 or file_size > 50 * 1024 * 1024 then
-        cleanup_temp()
+        os.remove(filepath) -- Clean up invalid size
         return false
     end
 
@@ -238,32 +232,15 @@ function Images.downloadImage(config)
     if headers and headers["content-length"] then
         local expected_size = tonumber(headers["content-length"])
         if expected_size and file_size ~= expected_size then
-            cleanup_temp()
+            os.remove(filepath) -- Clean up incomplete download
             return false
         end
     end
 
-    -- Atomic rename from .tmp to final file
-    os.remove(filepath) -- Remove target if exists
-    local rename_success = os.rename(temp_filepath, filepath)
-
-    if not rename_success then
-        cleanup_temp()
-        return false
-    end
-
-    -- Final verification that target file exists
-    local final_file = io.open(filepath, "rb")
-    if not final_file then
-        os.remove(filepath)
-        return false
-    end
-    final_file:close()
-
     return true
 end
 
----Clean up temporary files in entry directory
+---Clean up temporary files in entry directory (legacy function - no longer creates .tmp files)
 ---@param entry_dir string Entry directory path
 ---@return number Number of temp files cleaned
 function Images.cleanupTempFiles(entry_dir)

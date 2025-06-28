@@ -41,13 +41,6 @@ function EntryUtils.getEntryHtmlPath(entry_id)
     return EntryUtils.getEntryDirectory(entry_id) .. "entry.html"
 end
 
----Get the local metadata file path for a specific entry
----@param entry_id number Entry ID
----@return string Metadata file path
-function EntryUtils.getEntryMetadataPath(entry_id)
-    return EntryUtils.getEntryDirectory(entry_id) .. "metadata.lua"
-end
-
 -- =============================================================================
 -- VALIDATION UTILITIES
 -- =============================================================================
@@ -124,62 +117,59 @@ end
 -- METADATA OPERATIONS
 -- =============================================================================
 
----Create metadata for an entry
+---Save metadata for an entry using DocSettings
 ---@param params table Parameters: entry_data, include_images, images_count
----@return table Metadata table
-function EntryUtils.createMetadata(params)
+---@return boolean True if metadata was saved successfully
+function EntryUtils.saveMetadata(params)
     local entry_data = params.entry_data
     local include_images = params.include_images or false
     local images_count = params.images_count or 0
 
-    return {
-        -- Entry identification
-        id = entry_data.id,
-        title = entry_data.title,
-        url = entry_data.url,
+    local html_file = EntryUtils.getEntryHtmlPath(entry_data.id)
+    local DocSettings = require("docsettings")
+    local doc_settings = DocSettings:open(html_file)
 
-        -- Entry status and properties
-        status = entry_data.status,
-        published_at = entry_data.published_at,
+    -- Save flattened metadata with miniflux_ prefix
+    doc_settings:saveSetting("miniflux_entry_id", entry_data.id)
+    doc_settings:saveSetting("miniflux_title", entry_data.title)
+    doc_settings:saveSetting("miniflux_url", entry_data.url)
+    doc_settings:saveSetting("miniflux_status", entry_data.status)
+    doc_settings:saveSetting("miniflux_published_at", entry_data.published_at)
 
-        -- Feed and category information (for navigation context)
-        feed = {
-            id = entry_data.feed.id,
-            title = entry_data.feed.title,
-        },
-        category = {
-            id = entry_data.feed.category.id,
-            title = entry_data.feed.category.title,
-        },
+    -- Feed information
+    doc_settings:saveSetting("miniflux_feed_id", entry_data.feed.id)
+    doc_settings:saveSetting("miniflux_feed_title", entry_data.feed.title)
 
-        -- Image processing results
-        images_included = include_images,
-        images_count = images_count,
-    }
+    -- Category information
+    doc_settings:saveSetting("miniflux_category_id", entry_data.feed.category.id)
+    doc_settings:saveSetting("miniflux_category_title", entry_data.feed.category.title)
+
+    -- Image processing results
+    doc_settings:saveSetting("miniflux_images_included", include_images)
+    doc_settings:saveSetting("miniflux_images_count", images_count)
+
+    return doc_settings:flush()
 end
 
----Update local entry metadata status
+---Update local entry status using DocSettings
 ---@param entry_id number Entry ID
 ---@param new_status string New status ("read" or "unread")
 ---@return boolean success
 function EntryUtils.updateEntryStatus(entry_id, new_status)
-    local dump = require("dump")
-    local Files = require("utils/files")
+    local html_file = EntryUtils.getEntryHtmlPath(entry_id)
+    local DocSettings = require("docsettings")
 
-    local metadata_file = EntryUtils.getEntryMetadataPath(entry_id)
-
-    if lfs.attributes(metadata_file, "mode") ~= "file" then
+    -- Check if HTML file exists first
+    if lfs.attributes(html_file, "mode") ~= "file" then
         return false
     end
 
-    local success, metadata = pcall(dofile, metadata_file)
-    if not success or not metadata then
-        return false
-    end
+    local doc_settings = DocSettings:open(html_file)
 
-    metadata.status = new_status
-    local metadata_content = "return " .. dump(metadata)
-    return Files.writeFile(metadata_file, metadata_content)
+    -- Update status
+    doc_settings:saveSetting("miniflux_status", new_status)
+
+    return doc_settings:flush()
 end
 
 -- =============================================================================

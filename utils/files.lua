@@ -44,7 +44,7 @@ end
 -- METADATA LOADING
 -- =============================================================================
 
----Load current entry metadata from filesystem
+---Load current entry metadata from DocSettings
 ---@param entry_info table Entry information with file_path and entry_id
 ---@return table|nil Metadata table or nil if failed
 function Files.loadCurrentEntryMetadata(entry_info)
@@ -52,22 +52,40 @@ function Files.loadCurrentEntryMetadata(entry_info)
         return nil
     end
 
-    local entry_dir = entry_info.file_path:match("(.*)/entry%.html$")
-    if not entry_dir then
+    local html_file = entry_info.file_path
+    local DocSettings = require("docsettings")
+
+    -- Check if HTML file exists
+    if lfs.attributes(html_file, "mode") ~= "file" then
         return nil
     end
 
-    local metadata_file = entry_dir .. "/metadata.lua"
-    if lfs.attributes(metadata_file, "mode") ~= "file" then
+    local doc_settings = DocSettings:open(html_file)
+
+    -- Check if this is actually a miniflux entry by checking for our metadata
+    local entry_id = doc_settings:readSetting("miniflux_entry_id")
+    if not entry_id then
         return nil
     end
 
-    local success, metadata = pcall(dofile, metadata_file)
-    if success and metadata then
-        return metadata
-    end
-
-    return nil
+    -- Return metadata in the same structure as before for compatibility
+    return {
+        id = entry_id,
+        title = doc_settings:readSetting("miniflux_title"),
+        url = doc_settings:readSetting("miniflux_url"),
+        status = doc_settings:readSetting("miniflux_status"),
+        published_at = doc_settings:readSetting("miniflux_published_at"),
+        feed = {
+            id = doc_settings:readSetting("miniflux_feed_id"),
+            title = doc_settings:readSetting("miniflux_feed_title"),
+        },
+        category = {
+            id = doc_settings:readSetting("miniflux_category_id"),
+            title = doc_settings:readSetting("miniflux_category_title"),
+        },
+        images_included = doc_settings:readSetting("miniflux_images_included"),
+        images_count = doc_settings:readSetting("miniflux_images_count"),
+    }
 end
 
 return Files
