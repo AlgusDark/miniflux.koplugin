@@ -16,7 +16,7 @@ local socketutil = require("socketutil")
 local UIManager = require("ui/uimanager")
 local _ = require("gettext")
 local logger = require("logger")
-local FileUtils = require("utils/file_utils")
+local Files = require("utils/files")
 local util = require("util")
 local Notification = require("utils/notification")
 
@@ -164,7 +164,7 @@ function MinifluxAPI:makeRequest(method, endpoint, config)
         UIManager:forceRePaint()
     end
 
-    local base_url = FileUtils.rtrimSlashes(server_address) .. "/v1"
+    local base_url = Files.rtrimSlashes(server_address) .. "/v1"
     local url = base_url .. endpoint
 
     -- Build query string from config.query

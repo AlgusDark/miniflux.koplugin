@@ -20,6 +20,9 @@ local Menu = require("menu/menu")
 local EntryService = require("services/entry_service")
 local EntryUtils = require("utils/entry_utils")
 
+-- Static browser context shared across all plugin instances
+local _static_browser_context = nil
+
 ---@class Miniflux : WidgetContainer
 ---@field name string Plugin name identifier
 ---@field is_doc_only boolean Whether plugin is document-only
@@ -31,6 +34,7 @@ local Miniflux = WidgetContainer:extend({
     name = "miniflux",
     is_doc_only = false,
     settings = nil,
+    -- Note: browser_context is now static (_static_browser_context) to handle multiple plugin instances
 })
 
 ---Initialize the plugin by setting up all components
@@ -55,8 +59,8 @@ function Miniflux:init()
         getAPIToken = function() return self.settings.api_token end,
     })
 
-    -- Initialize EntryService instance with settings and API dependencies
-    self.entry_service = EntryService:new(self.settings, self.api)
+    -- Initialize EntryService instance with settings, API, and plugin dependencies
+    self.entry_service = EntryService:new(self.settings, self.api, self)
 
     -- Override ReaderStatus EndOfBook behavior for miniflux entries
     self:overrideEndOfBookBehavior()
@@ -120,6 +124,7 @@ function Miniflux:createBrowser()
         api = self.api,
         download_dir = self.download_dir,
         entry_service = self.entry_service,
+        miniflux_plugin = self, -- Pass plugin reference for context management
     })
     return browser
 end
@@ -166,6 +171,23 @@ function Miniflux:overrideEndOfBookBehavior()
     end
 
     logger.info("Successfully overrode ReaderStatus EndOfBook behavior for miniflux entries")
+end
+
+-- =============================================================================
+-- BROWSER CONTEXT MANAGEMENT
+-- =============================================================================
+
+---Set the browser context (called when browser opens entry)
+---@param context {type: "feed"|"category"|"global"}|nil Browser context or nil
+---@return nil
+function Miniflux:setBrowserContext(context)
+    _static_browser_context = context
+end
+
+---Get the current browser context
+---@return {type: "feed"|"category"|"global"}|nil Current context or nil
+function Miniflux:getBrowserContext()
+    return _static_browser_context
 end
 
 return Miniflux

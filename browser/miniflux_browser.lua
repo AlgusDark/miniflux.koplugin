@@ -13,7 +13,7 @@ local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
 local EntryRepository = require("repositories/entry_repository")
 local FeedRepository = require("repositories/feed_repository")
 local CategoryRepository = require("repositories/category_repository")
-local NavigationContext = require("utils/navigation_context")
+
 local Notification = require("utils/notification")
 local _ = require("gettext")
 
@@ -31,6 +31,7 @@ local ViewUtils = require("browser/views/view_utils")
 ---@field api MinifluxAPI API client
 ---@field download_dir string Download directory path
 ---@field entry_service EntryService Service handling entry display and dialog management
+---@field miniflux_plugin Miniflux Plugin instance for context management
 
 ---@class MinifluxBrowser : Menu
 ---@field counts table Cached counts from initialization
@@ -39,6 +40,7 @@ local ViewUtils = require("browser/views/view_utils")
 ---@field settings table Plugin settings
 ---@field api table API client
 ---@field download_dir string Download directory path
+---@field miniflux_plugin Miniflux Plugin instance for context management
 ---@field page_state_stack number[] Stack of page states for each navigation level
 ---@field new fun(self: MinifluxBrowser, o: MinifluxBrowserOptions): MinifluxBrowser Create new MinifluxBrowser instance
 local MinifluxBrowser = Menu:extend({
@@ -63,6 +65,7 @@ function MinifluxBrowser:init()
     self.settings = self.settings or {}
     self.api = self.api or {}
     self.download_dir = self.download_dir
+    self.miniflux_plugin = self.miniflux_plugin or error("miniflux_plugin required")
 
     -- Require shared EntryService
     self.entry_service = self.entry_service or error("entry_service required")
@@ -362,7 +365,11 @@ end
 ---@param entry_data table Entry data from API
 ---@param context? {type: "feed"|"category", id: number} Navigation context (nil = global)
 function MinifluxBrowser:openEntry(entry_data, context)
-    NavigationContext.setContext(entry_data.id, context)
+    -- Set browser context before opening entry
+    self.miniflux_plugin:setBrowserContext({
+        type = context and context.type or "global"
+    })
+
     self.entry_service:readEntry(entry_data, self)
 end
 
