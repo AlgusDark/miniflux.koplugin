@@ -1,10 +1,10 @@
 version: '3'
 
 vars:
-  PLUGIN: miniflux.koplugin
-  DIST: dist
-  OUTDIR: {{.DIST}}/{{.PLUGIN}}
-  EXCL: "-path ./{{.DIST}} -prune -o -path ./.git -prune -o -path ./.github -prune -o -path ./scripts -prune -o -path '*/typedefs/*' -prune -o"
+  PLUGIN: "miniflux.koplugin"
+  DIST: "dist"
+  OUTDIR: "{{.DIST}}/{{.PLUGIN}}"
+  EXCL: "-path ./{{.DIST}} -prune -o -path ./.git -prune -o -path ./.github -prune -o -path ./scripts -prune -o -path '*/typedefs/*' -prune -o -path ./Taskfile.yml -prune -o"
 
 tasks:
 
@@ -24,8 +24,8 @@ tasks:
       - mkdir -p {{.OUTDIR}}
       - |
         find . {{.EXCL}} \
-          ! -name Taskfile.yml \
           -type f \
+          ! -name Taskfile.yml \
           -print | while read f; do
             rel=${f#./}
             dst={{.OUTDIR}}/$rel
