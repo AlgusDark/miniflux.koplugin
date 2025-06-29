@@ -39,7 +39,7 @@ tasks:
       - echo "Clean complete."
 
   ci_minify:
-    desc: "(CI) Checks Lua syntax using luac5.3 and minifies plugin"
+    desc: "(CI) Checks Lua syntax using luac and minifies plugin"
     deps: [setup_luasrcdiet]
     cmds:
       - |
@@ -49,12 +49,12 @@ tasks:
         echo "Minifying plugin..."
         mkdir -p {{.DIST_PLUGIN_DIR}}
         find . {{.EXCLUDE_PATHS_FIND}} -type d -name "typedefs" -exec rm -rf {} +
-        find . {{.EXCLUDE_PATHS_FIND}} -name "*.lua" -print | while read file; do
+        find . {{.EXCLUDE_PATHS_FIND}} -type f -name "*.lua" -print | while read file; do
           relative_path=$(echo "$file" | sed 's|^\./||')
           output_file="{{.DIST_PLUGIN_DIR}}/$relative_path"
           mkdir -p "$(dirname "$output_file")"
           echo "Minifying $file to $output_file"
-          LUA_PATH="luasrcdiet_tool/?.lua;luasrcdiet_tool/?/init.lua;;" {{.LUASRCDIET_BIN}} {{.LUASRCDIET_OPTS}} "$file" -o "$output_file"
+          LUA_PATH="luasrcdiet_tool/lib/?.lua;luasrcdiet_tool/lib/?/init.lua;;" {{.LUASRCDIET_BIN}} {{.LUASRCDIET_OPTS}} "$file" -o "$output_file"
         done
 
   release_zip:
