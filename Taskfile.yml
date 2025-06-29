@@ -7,7 +7,7 @@ vars:
   LUASRCDIET_GIT_REPO: https://github.com/jirutka/luasrcdiet.git
   LUASRCDIET_TOOL_DIR: luasrcdiet_tool
   LUASRCDIET_BIN: "{{.LUASRCDIET_TOOL_DIR}}/luasrcdiet"
-  LUASRCDIET_OPTS: "--opt-comments --opt-whitespace"
+  LUASRCDIET_OPTS: "--noopt-base --opt-comments"
   EXCLUDE_PATHS_FIND: "-path './{{.DIST_DIR}}' -prune -o -path './.git' -prune -o -path './.github' -prune -o -path './{{.LUASRCDIET_TOOL_DIR}}' -prune -o"
 
 tasks:
@@ -53,7 +53,7 @@ tasks:
           mkdir -p "$(dirname "$output_file")"
           echo "Minifying $file to $output_file"
           LUA_PATH="luasrcdiet_tool/?.lua;luasrcdiet_tool/?/init.lua;;" \
-            lua luasrcdiet_tool/bin/luasrcdiet --opt-comments --opt-whitespace "$file" -o "$output_file"
+            lua luasrcdiet_tool/bin/luasrcdiet {{.LUASRCDIET_OPTS}} "$file" -o "$output_file"
         done
 
   release_zip:
