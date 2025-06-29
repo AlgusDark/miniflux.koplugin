@@ -4,70 +4,52 @@ vars:
   PLUGIN_NAME: miniflux.koplugin
   DIST_DIR: dist
   DIST_PLUGIN_DIR: "{{.DIST_DIR}}/{{.PLUGIN_NAME}}"
-  LUASRCDIET_GIT_REPO: https://github.com/jirutka/luasrcdiet.git
-  LUASRCDIET_TOOL_DIR: luasrcdiet_tool
-  LUASRCDIET_BIN: "{{.LUASRCDIET_TOOL_DIR}}/luasrcdiet"
-  LUASRCDIET_OPTS: "--opt-comments --no-opt-whitespace --no-opt-emptylines --no-opt-eols --no-opt-strings --no-opt-numbers --no-opt-locals --no-opt-entropy --no-opt-experimental"
-  EXCLUDE_PATHS_FIND: "-path './{{.DIST_DIR}}' -prune -o -path './.git' -prune -o -path './.github' -prune -o -path './{{.LUASRCDIET_TOOL_DIR}}' -prune -o"
+  STRIP_TOOL: "lua scripts/strip_comments.lua"
+  EXCLUDE: >
+    -path './{{.DIST_DIR}}' -prune -o
+    -path './.git'        -prune -o
+    -path './.github'     -prune -o
+    -path './scripts'     -prune -o
 
 tasks:
   default:
-    desc: "Cleans, checks syntax, and minifies Lua files (default task)."
+    desc: "Strip comments, check syntax, remove typedefs, and prepare dist/"
     deps: [ci_minify]
 
   setup_luasrcdiet:
-    desc: "Clones LuaSrcDiet fully (no symlinks needed)."
-    cmds:
-      - echo "Cloning LuaSrcDiet..."
-      - rm -rf luasrcdiet_tool
-      - git clone --depth=1 https://github.com/jirutka/luasrcdiet.git luasrcdiet_tool
-      - chmod +x luasrcdiet_tool/bin/luasrcdiet
-      - echo "LuaSrcDiet ready at luasrcdiet_tool/bin/luasrcdiet"
-    status:
-      - test -f luasrcdiet_tool/bin/luasrcdiet
-    generates:
-      - luasrcdiet_tool/bin/luasrcdiet
+    # you can actually remove this entire task now if you're not using luasrcdiet
+    desc: "(unused)"
 
   clean:
-    desc: "Removes build artifacts (dist/ and *.zip)."
+    desc: "Remove dist/ and any leftover zips"
     cmds:
-      - echo "Cleaning up..."
-      - rm -rf {{.DIST_DIR}}
-      - rm -f *.zip
-      - echo "Clean complete."
+      - rm -rf {{.DIST_DIR}}  *.zip || true
 
   ci_minify:
-    desc: "(CI) Checks Lua syntax using luac and minifies plugin"
-    deps: [setup_luasrcdiet]
+    desc: "(CI) strip comments, remove typedefs, copy into dist/"
+    deps: [clean]
     cmds:
       - |
-        echo "CI: Checking Lua syntax..."
-        find . {{.EXCLUDE_PATHS_FIND}} -type f -name "*.lua" -print0 | xargs -0 -I {} luac -p {}
+        echo "CI: Checking Lua syntax…"
+        find . {{.EXCLUDE}} -type f -name "*.lua" -print0 \
+          | xargs -0 -I{} luac -p {} 
       - |
-        echo "Minifying plugin..."
+        echo "Stripping comments and copying…"
         mkdir -p {{.DIST_PLUGIN_DIR}}
-        find . {{.EXCLUDE_PATHS_FIND}} -type d -name "typedefs" -exec rm -rf {} +
-        find . {{.EXCLUDE_PATHS_FIND}} -type f -name "*.lua" -print | while read file; do
-          relative_path=$(echo "$file" | sed 's|^\./||')
-          output_file="{{.DIST_PLUGIN_DIR}}/$relative_path"
-          mkdir -p "$(dirname "$output_file")"
-          echo "Minifying $file to $output_file"
-          LUA_PATH="luasrcdiet_tool/?.lua;luasrcdiet_tool/?/init.lua;;" \
-            lua luasrcdiet_tool/bin/luasrcdiet {{.LUASRCDIET_OPTS}} "$file" -o "$output_file"
-        done
+        find . {{.EXCLUDE}} -type d -name "typedefs" -exec rm -rf {} +
+        find . {{.EXCLUDE}} -type f -name "*.lua" -print \
+          | while read src; do
+              dst="{{.DIST_PLUGIN_DIR}}/${src#./}"
+              mkdir -p "$(dirname "$dst")"
+              echo "  → $src"
+              {{.STRIP_TOOL}} "$src" "$dst"
+            done
 
   release_zip:
-    desc: "Zips the minified plugin directory for GitHub release"
+    desc: "Zip the dist directory for release"
     deps: [ci_minify]
     cmds:
       - |
         echo "Packaging {{.DIST_PLUGIN_DIR}} into {{.PLUGIN_NAME}}.zip"
         cd {{.DIST_DIR}} && zip -r ../{{.PLUGIN_NAME}}.zip {{.PLUGIN_NAME}}
         echo "Created {{.PLUGIN_NAME}}.zip"
-    generates:
-      - "{{.PLUGIN_NAME}}.zip"
-
-  show_luasrcdiet_path:
-    desc: "Shows the path to the LuaSrcDiet binary used by tasks."
-    cmds:
-      - echo "{{.LUASRCDIET_BIN}}"
