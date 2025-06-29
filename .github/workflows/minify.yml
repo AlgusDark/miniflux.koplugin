@@ -10,7 +10,7 @@ on:
       - dev
   release:
     types:
-      - [published]
+      - published
 jobs:
   minify_and_package:
     runs-on: ubuntu-latest
