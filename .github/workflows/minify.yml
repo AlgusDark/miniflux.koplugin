@@ -50,20 +50,6 @@ jobs:
           sudo ln -sf /usr/bin/lua5.3 /usr/local/bin/lua
           sudo ln -sf /usr/bin/luac5.3 /usr/local/bin/luac
 
-      # Cache LuaSrcDiet clone
-      - name: Cache LuaSrcDiet
-        id: cache_luasrcdiet
-        uses: actions/cache@v3
-        with:
-          path: luasrcdiet_tool
-          key: luasrcdiet-${{ steps.date.outputs.day }}
-
-      - name: Install LuaSrcDiet (if not cached)
-        if: steps.cache_luasrcdiet.outputs.cache-hit != 'true'
-        run: |
-          git clone --depth=1 https://github.com/jirutka/luasrcdiet.git luasrcdiet_tool
-          chmod +x luasrcdiet_tool/bin/luasrcdiet
-
       # Task setup
       - name: Install Task
         uses: arduino/setup-task@v1
@@ -74,9 +60,9 @@ jobs:
       - name: Verify Task installation
         run: task --version
 
-      # Strip comments and copy into dist/
-      - name: Strip comments & copy Lua files
-        run: task ci_strip_comments
+      # Copy Lua files
+      - name: Copy Lua files into dist/
+        run: task ci_copy_lua
 
       # Package
       - name: Create zip

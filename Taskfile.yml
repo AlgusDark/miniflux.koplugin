@@ -4,29 +4,12 @@ vars:
   PLUGIN_NAME: miniflux.koplugin
   DIST_DIR: dist
   DIST_PLUGIN_DIR: "{{.DIST_DIR}}/{{.PLUGIN_NAME}}"
-  LUASRCDIET_GIT_REPO: https://github.com/jirutka/luasrcdiet.git
-  LUASRCDIET_TOOL_DIR: luasrcdiet_tool
-  LUASRCDIET_BIN: "{{.LUASRCDIET_TOOL_DIR}}/luasrcdiet"
-  LUASRCDIET_OPTS: "--opt-comments --no-opt-whitespace --no-opt-emptylines --no-opt-eols --no-opt-strings --no-opt-numbers --no-opt-locals --no-opt-entropy --no-opt-experimental"
-  EXCLUDE_PATHS_FIND: "-path './{{.DIST_DIR}}' -prune -o -path './.git' -prune -o -path './.github' -prune -o -path './{{.LUASRCDIET_TOOL_DIR}}' -prune -o"
+  EXCLUDE_PATHS_FIND: "-path './{{.DIST_DIR}}' -prune -o -path './.git' -prune -o -path './.github' -prune -o -path './.github' -prune -o"
 
 tasks:
   default:
-    desc: "Cleans, strips comments, and packages (default)."
-    deps: [ci_strip_comments]
-
-  setup_luasrcdiet:
-    desc: "Clones LuaSrcDiet fully (no symlinks needed)."
-    cmds:
-      - echo "Cloning LuaSrcDiet..."
-      - rm -rf luasrcdiet_tool
-      - git clone --depth=1 https://github.com/jirutka/luasrcdiet.git luasrcdiet_tool
-      - chmod +x luasrcdiet_tool/bin/luasrcdiet
-      - echo "LuaSrcDiet ready at luasrcdiet_tool/bin/luasrcdiet"
-    status:
-      - test -f luasrcdiet_tool/bin/luasrcdiet
-    generates:
-      - luasrcdiet_tool/bin/luasrcdiet
+    desc: "Clean, copy Lua files, and package (default)."
+    deps: [ci_copy_lua]
 
   clean:
     desc: "Removes build artifacts (dist/ and *.zip)."
@@ -36,30 +19,28 @@ tasks:
       - rm -f *.zip
       - echo "Clean complete."
 
-  ci_strip_comments:
-    desc: "(CI) Strip comments and copy Lua files"
-    deps: [setup_luasrcdiet]
+  ci_copy_lua:
+    desc: "(CI) Check syntax and copy Lua files"
+    deps: [clean]
     cmds:
       - |
-        echo "CI: Checking Lua syntax..."
+        echo "CI: Checking Lua syntax…"
         find . {{.EXCLUDE_PATHS_FIND}} -type f -name "*.lua" -print0 \
           | xargs -0 -I {} luac -p {}
       - |
-        echo "Stripping comments and copying..."
+        echo "Copying Lua files…"
         mkdir -p {{.DIST_PLUGIN_DIR}}
-        find . {{.EXCLUDE_PATHS_FIND}} -type d -name "typedefs" -exec rm -rf {} +
         find . {{.EXCLUDE_PATHS_FIND}} -type f -name "*.lua" -print | while read file; do
           rel=${file#./}
           out="{{.DIST_PLUGIN_DIR}}/$rel"
           mkdir -p "$(dirname "$out")"
-          echo "Processing $file → $out"
-          LUA_PATH="luasrcdiet_tool/?.lua;luasrcdiet_tool/?/init.lua;;" \
-            lua luasrcdiet_tool/bin/luasrcdiet {{.LUASRCDIET_OPTS}} "$file" -o "$out"
+          echo "  $file → $out"
+          cp "$file" "$out"
         done
 
   release_zip:
     desc: "Zips the dist folder for release"
-    deps: [ci_strip_comments]
+    deps: [ci_copy_lua]
     cmds:
       - |
         echo "Packaging {{.DIST_PLUGIN_DIR}} into {{.PLUGIN_NAME}}.zip"
@@ -67,8 +48,3 @@ tasks:
         echo "Created {{.PLUGIN_NAME}}.zip"
     generates:
       - "{{.PLUGIN_NAME}}.zip"
-
-  show_luasrcdiet_path:
-    desc: "Shows the path to the LuaSrcDiet binary used by tasks."
-    cmds:
-      - echo "{{.LUASRCDIET_BIN}}"
