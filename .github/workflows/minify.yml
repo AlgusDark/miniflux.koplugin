@@ -69,12 +69,14 @@ jobs:
           echo "Downloading LuaSrcDiet..."
           git clone https://github.com/jirutka/luasrcdiet.git luasrcdiet_tool
 
-          # Create a symlink to run it as a command
+          # Make the tool executable BEFORE symlinking
+          chmod +x luasrcdiet_tool/src/luasrcdiet.lua
+
+          # Create or update symlink to make it callable as a CLI
           sudo ln -sf "$(pwd)/luasrcdiet_tool/src/luasrcdiet.lua" /usr/local/bin/luasrcdiet
-          sudo chmod +x /usr/local/bin/luasrcdiet
 
           echo "LuaSrcDiet installed as /usr/local/bin/luasrcdiet"
-          luasrcdiet --version || echo "LuaSrcDiet is ready (no version info)"
+          luasrcdiet --help | head -n 1
 
       - name: Install Task
         uses: arduino/setup-task@v1
