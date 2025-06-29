@@ -17,15 +17,56 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Lua
+      - name: Set up Lua with leafo/gh-actions-lua
+        id: setup_lua_action
         uses: leafo/gh-actions-lua@v9
         with:
           luaVersion: "5.3"
+        continue-on-error: true
+
+      - name: Verify Lua installation from action
+        id: verify_lua
+        run: |
+          echo "Verifying Lua installation..."
+          if command -v lua && lua -v 2>&1 | grep -q "Lua 5.3"; then
+            echo "Lua 5.3 installed successfully by leafo/gh-actions-lua."
+            echo "fallback_needed=false" >> $GITHUB_OUTPUT
+          else
+            echo "Failed to install Lua 5.3 using leafo/gh-actions-lua or wrong version detected."
+            echo "fallback_needed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Fallback: Install Lua 5.3 manually
+        if: steps.verify_lua.outputs.fallback_needed == 'true'
+        run: |
+          echo "Attempting manual installation of Lua 5.3..."
+          sudo apt-get update -y
+          sudo apt-get install -y lua5.3 liblua5.3-dev
+          # Create symlinks to make lua5.3 the default lua and luac
+          # Check if symlinks exist or if the targets are already the desired executables
+          if [ ! -L /usr/local/bin/lua ] || [ "$(readlink -f /usr/local/bin/lua)" != "/usr/bin/lua5.3" ]; then
+            sudo ln -sf /usr/bin/lua5.3 /usr/local/bin/lua
+          fi
+          if [ ! -L /usr/local/bin/luac ] || [ "$(readlink -f /usr/local/bin/luac)" != "/usr/bin/luac5.3" ];
+            sudo ln -sf /usr/bin/luac5.3 /usr/local/bin/luac
+          fi
+          # Verify installation
+          echo "Verifying manual installation:"
+          lua -v
+          luac -v
+          echo "Manual Lua 5.3 installation attempt complete."
 
       - name: Install LuaSrcDiet
         run: |
+          # Ensure Lua 5.3 is actually available before proceeding
+          if ! (command -v lua && lua -v 2>&1 | grep -q "Lua 5.3"); then
+            echo "Critical: Lua 5.3 is not available after setup attempts. Aborting."
+            exit 1
+          fi
+          echo "Proceeding with LuaSrcDiet installation."
           git clone https://github.com/jirutka/luasrcdiet.git
           cd luasrcdiet
+          # Ensure make uses the correct Lua version if multiple are somehow present
           make install LUA_VERSION_SUFFIX=5.3 PREFIX=/usr/local
           cd ..
           luasrcdiet --version

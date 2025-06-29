@@ -206,4 +206,58 @@ The plugin uses API token authentication (recommended by Miniflux) via the `X-Au
 
 ## License
 
-This plugin follows the same license as KOReader. 
+This plugin follows the same license as KOReader.
+
+---
+
+## Local Development & Building
+
+This project uses [Task](https://taskfile.dev/) for managing local development tasks, such as building the plugin for testing.
+
+### Prerequisites
+
+1.  **Lua 5.3**: Ensure Lua 5.3 (including `luac5.3` for syntax checking) is installed and available in your system's PATH.
+2.  **Task**: Install Task by following the instructions on the [official Task installation page](https://taskfile.dev/installation/).
+3.  **Git**: Required for `Task` to clone LuaSrcDiet.
+4.  **Make**: Required by LuaSrcDiet's build process.
+
+### Building the Plugin Locally
+
+The `Taskfile.yml` in the root of this repository defines the available tasks.
+
+1.  **Install LuaSrcDiet (if not already done by Task):**
+    The first time you run a build task, `Task` will automatically attempt to download and build `luasrcdiet` into a local `luasrcdiet_tool` directory. This requires `git` and `make` to be installed.
+
+2.  **Available Task Commands:**
+
+    *   `task` or `task default` or `task minify`:
+        This is the default command. It will:
+        *   Ensure LuaSrcDiet is available.
+        *   Check the Lua syntax of all `.lua` files.
+        *   Remove any existing `typedefs/` directories from the source (they are for linting/IDE only).
+        *   Minify all `.lua` files from the project root (excluding build artifacts and tooling directories).
+        *   Output the minified plugin structure to `dist/miniflux.koplugin/`.
+        This `dist/miniflux.koplugin/` directory can then be copied to your KOReader `plugins/` directory for testing.
+
+    *   `task check_lua_syntax`:
+        Only runs the Lua syntax check using `luac5.3 -p` on the source files.
+
+    *   `task clean`:
+        Removes the `dist/` directory and any `*.zip` files from the project root. It also cleans the locally built LuaSrcDiet tool.
+
+    *   `task --list-all` or `task -a`:
+        Lists all available tasks defined in `Taskfile.yml`, including descriptions.
+
+### Example Workflow
+
+```bash
+# To build the plugin for the first time (or after a clean)
+task minify
+
+# After making changes, to rebuild
+task minify
+
+# To clean up build artifacts
+task clean
+```
+The output plugin will be located in the `dist/miniflux.koplugin` directory.
