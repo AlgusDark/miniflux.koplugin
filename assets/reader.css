@@ -1,38 +1,6 @@
-figure {
-  margin: 0 1.5rem 1rem;
-  font-size: 0;
-  color: #ffffff;
-}
-
-figure figcaption {
-  font-size: 0.9rem;
-  color: #000;
-  font-style: italic;
-  margin-bottom: 1rem;
-}
-
-aside {
-  display: flex;
-  flex-direction: column;
-  margin: 0 1.5rem 1rem;
-}
-
-aside img {
-  margin-bottom: 1rem;
-}
-
-img {
-  width: 100% !important;
-  height: auto !important;
-  display: block;
-  margin: 0 auto 1rem auto;
-}
-
-img[src^="http://"],
-img[src^="https://"]
-{
-  display: none;
-}
+/********************
+ * Entry Meta
+ ********************/
 
 .entry-meta {
   border-bottom: 5px solid #cccccc;
@@ -48,6 +16,66 @@ img[src^="https://"]
 .entry-meta h1 {
   margin: 0;
   margin-bottom: 1rem;
+}
+
+/********************
+ * Entry Content
+ ********************/
+
+.entry-content table,
+.entry-content tbody,
+.entry-content tr {
+  display: block;
+  width: 100%;
+}
+
+.entry-content tr {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1rem;
+}
+
+.entry-content td {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0;
+}
+
+
+.entry-content figure {
+  margin: 0 1.5rem 1rem;
+  font-size: 0;
+  color: #ffffff;
+}
+
+.entry-content figure figcaption {
+  font-size: 0.9rem;
+  color: #000;
+  font-style: italic;
+  margin-bottom: 1rem;
+}
+
+.entry-content aside {
+  display: flex;
+  flex-direction: column;
+  margin: 0 1.5rem 1rem;
+}
+
+.entry-content aside img {
+  margin-bottom: 1rem;
+}
+
+.entry-content img {
+  width: 100% !important;
+  height: auto !important;
+  display: block;
+  margin: 0 auto 1rem auto;
+}
+
+.entry-content img[src^="http://"],
+.entry-content img[src^="https://"]
+{
+  display: none;
 }
 
 .entry-content p {

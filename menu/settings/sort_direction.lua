@@ -6,8 +6,8 @@ Handles sort direction submenu with ascending/descending options.
 @module miniflux.menu.settings.sort_direction
 --]]
 
-local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
+local Notification = require("utils/notification")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
@@ -62,13 +62,17 @@ end
 function SortDirection.updateSetting(settings, new_direction, touchmenu_instance)
     settings.direction = new_direction
     settings:save()
-    UIManager:show(InfoMessage:new({
+
+    local notification = Notification:success({
         text = _("Sort direction updated"),
         timeout = 2,
-        dismiss_callback = function()
-            touchmenu_instance:backToUpperMenu()
-        end,
-    }))
+    })
+
+    -- Close notification and navigate back after a brief delay
+    UIManager:scheduleIn(0.5, function()
+        notification:close()
+        touchmenu_instance:backToUpperMenu()
+    end)
 end
 
 return SortDirection

@@ -6,9 +6,9 @@ Handles server address and API token configuration dialog.
 @module miniflux.menu.settings.server_config
 --]]
 
-local InfoMessage = require("ui/widget/infomessage")
 local MultiInputDialog = require("ui/widget/multiinputdialog")
 local UIManager = require("ui/uimanager")
+local Notification = require("utils/notification")
 local _ = require("gettext")
 
 local ServerConfig = {}
@@ -68,10 +68,7 @@ function ServerConfig.showDialog(settings)
                             settings.api_token = fields[2]
                         end
                         settings:save()
-                        UIManager:show(InfoMessage:new({
-                            text = _("Settings saved"),
-                            timeout = 2,
-                        }))
+                        Notification:success(_("Settings saved"))
                         UIManager:close(settings_dialog)
                     end,
                 },

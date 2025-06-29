@@ -8,10 +8,10 @@ Handles copying the plugin's CSS file to the styletweaks directory for use with 
 
 local ConfirmBox = require("ui/widget/confirmbox")
 local DataStorage = require("datastorage")
-local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
+local Notification = require("utils/notification")
 local _ = require("gettext")
 
 local CopyCss = {}
@@ -48,10 +48,7 @@ function CopyCss.copyCssToStyletweaks(plugin)
             styletweaks_created = true
             logger.dbg("Created styletweaks directory:", styletweaks_dir)
         else
-            UIManager:show(InfoMessage:new({
-                text = _("Failed to create styletweaks directory"),
-                timeout = 3,
-            }))
+            Notification:error(_("Failed to create styletweaks directory"))
             return
         end
     end
@@ -59,19 +56,13 @@ function CopyCss.copyCssToStyletweaks(plugin)
     -- Check if source file exists
     if lfs.attributes(source_css, "mode") ~= "file" then
         logger.warn("Source CSS file not found:", source_css)
-        UIManager:show(InfoMessage:new({
-            text = _("Source CSS file not found"),
-            timeout = 3,
-        }))
+        Notification:error(_("Source CSS file not found"))
         return
     end
 
     -- If we created the styletweaks directory, inform the user
     if styletweaks_created then
-        UIManager:show(InfoMessage:new({
-            text = _("Created styletweaks directory"),
-            timeout = 2,
-        }))
+        Notification:info(_("Created styletweaks directory"))
     end
 
     -- Check if destination file already exists
@@ -99,10 +90,7 @@ function CopyCss._performCSSCopy(source_css, dest_css)
     local source_file = io.open(source_css, "rb")
     if not source_file then
         logger.warn("Could not open source CSS file:", source_css)
-        UIManager:show(InfoMessage:new({
-            text = _("Could not open source CSS file"),
-            timeout = 3,
-        }))
+        Notification:error(_("Could not open source CSS file"))
         return
     end
 
@@ -110,10 +98,7 @@ function CopyCss._performCSSCopy(source_css, dest_css)
     if not dest_file then
         source_file:close()
         logger.warn("Could not create destination CSS file:", dest_css)
-        UIManager:show(InfoMessage:new({
-            text = _("Could not create destination CSS file"),
-            timeout = 3,
-        }))
+        Notification:error(_("Could not create destination CSS file"))
         return
     end
 
@@ -125,10 +110,7 @@ function CopyCss._performCSSCopy(source_css, dest_css)
     dest_file:close()
 
     logger.info("Successfully copied CSS to styletweaks:", dest_css)
-    UIManager:show(InfoMessage:new({
-        text = _("miniflux.css successfully copied to styletweaks"),
-        timeout = 3,
-    }))
+    Notification:success(_("miniflux.css successfully copied to styletweaks"))
 end
 
 return CopyCss
