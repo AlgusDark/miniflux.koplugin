@@ -17,17 +17,16 @@ tasks:
 
   setup_luasrcdiet:
     desc: "Downloads and sets up LuaSrcDiet locally if not already present."
-    dir: "{{.LUASRCDIET_TOOL_DIR}}"
     cmds:
       - echo "LuaSrcDiet not found or setup incomplete. Cloning and linking..."
-      - git clone {{.LUASRCDIET_GIT_REPO}} . # Clone into LUASRCDIET_TOOL_DIR
-      - chmod +x src/luasrcdiet.lua
-      - ln -sf "$(pwd)/src/luasrcdiet.lua" "{{.USER_WORKING_DIR}}/{{.LUASRCDIET_BIN}}"
-      - echo "LuaSrcDiet symlinked to {{.USER_WORKING_DIR}}/{{.LUASRCDIET_BIN}}"
+      - git clone https://github.com/jirutka/luasrcdiet.git {{.LUASRCDIET_TOOL_DIR}}
+      - chmod +x {{.LUASRCDIET_TOOL_DIR}}/src/luasrcdiet.lua
+      - ln -sf "$(pwd)/{{.LUASRCDIET_TOOL_DIR}}/src/luasrcdiet.lua" "{{.LUASRCDIET_BIN}}"
+      - echo "LuaSrcDiet symlinked to {{.LUASRCDIET_BIN}}"
     status:
-      - test -f {{.USER_WORKING_DIR}}/{{.LUASRCDIET_BIN}}
+      - test -f {{.LUASRCDIET_BIN}}
     generates:
-      - "{{.USER_WORKING_DIR}}/{{.LUASRCDIET_BIN}}"
+      - "{{.LUASRCDIET_BIN}}"
 
   clean:
     desc: "Removes build artifacts (dist/ and *.zip)."
