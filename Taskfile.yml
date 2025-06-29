@@ -8,14 +8,12 @@ vars:
   LUASRCDIET_TOOL_DIR: luasrcdiet_tool
   LUASRCDIET_BIN: "{{.LUASRCDIET_TOOL_DIR}}/luasrcdiet"
   LUASRCDIET_OPTS: "--noopt-base --opt-comments --opt-whitespace"
-  # Exclude pattern for find commands, ensuring paths are relative to execution directory
-  # Note: Taskfile executes commands from the Taskfile.yml directory by default.
   EXCLUDE_PATHS_FIND: "-path './{{.DIST_DIR}}' -prune -o -path './.git' -prune -o -path './.github' -prune -o -path './{{.LUASRCDIET_TOOL_DIR}}' -prune -o"
 
 tasks:
   default:
     desc: "Cleans, checks syntax, and minifies Lua files (default task)."
-    deps: [minify]
+    deps: [ci_minify]
 
   setup_luasrcdiet:
     desc: "Downloads and sets up LuaSrcDiet locally if not already present."
@@ -37,109 +35,39 @@ tasks:
       - echo "Cleaning up..."
       - rm -rf {{.DIST_DIR}}
       - rm -f *.zip
-      # To clean the LuaSrcDiet tool too:
-      # - rm -rf {{.LUASRCDIET_TOOL_DIR}}
       - echo "Clean complete."
 
-  check_lua_syntax:
-    desc: "Checks Lua syntax using luac5.3 -p."
+  ci_minify:
+    desc: "(CI) Checks Lua syntax using luac5.3 and minifies plugin"
+    deps: [setup_luasrcdiet]
     cmds:
-      - echo "Checking Lua syntax..."
-      # Using sh -c to handle potential issues with find and xargs in Taskfile when spaces or special chars might appear (though unlikely for .lua files)
       - |
+        echo "CI: Checking Lua syntax..."
         find . {{.EXCLUDE_PATHS_FIND}} -name "*.lua" -print0 | xargs -0 -I {} luac5.3 -p {}
-        if [ $? -ne 0 ]; then
-          echo "Lua syntax check failed."
-          exit 1
-        fi
-        echo "Lua syntax check passed."
-
-  minify:
-    desc: "Minifies Lua files using LuaSrcDiet."
-    deps: [setup_luasrcdiet, check_lua_syntax]
-    cmds:
-      - echo "Minifying Lua files..."
-      - mkdir -p {{.DIST_PLUGIN_DIR}}
-      - echo "Removing typedefs directories if they exist..."
-      - find . -type d {{.EXCLUDE_PATHS_FIND}} -name "typedefs" -exec rm -rf {} +
-      - echo "Minifying files to {{.DIST_PLUGIN_DIR}}/"
-      # The find command will be executed from the directory containing Taskfile.yml
       - |
+        echo "Minifying plugin..."
+        mkdir -p {{.DIST_PLUGIN_DIR}}
+        find . {{.EXCLUDE_PATHS_FIND}} -type d -name "typedefs" -exec rm -rf {} +
         find . {{.EXCLUDE_PATHS_FIND}} -name "*.lua" -print | while read file; do
           relative_path=$(echo "$file" | sed 's|^\./||')
           output_file="{{.DIST_PLUGIN_DIR}}/$relative_path"
           mkdir -p "$(dirname "$output_file")"
           echo "Minifying $file to $output_file"
           {{.LUASRCDIET_BIN}} {{.LUASRCDIET_OPTS}} "$file" -o "$output_file"
-          if [ $? -ne 0 ]; then
-            echo "Failed to minify $file"
-            exit 1
-          fi
         done
-      - echo "Minification complete. Output in {{.DIST_PLUGIN_DIR}}/"
-    sources: # Only re-run if non-excluded .lua files change
-      - "**/*.lua"
-      - "!{{.DIST_DIR}}/**/*"
-      - "!{{.LUASRCDIET_TOOL_DIR}}/**/*"
-      - "!.git/**/*"
-      - "!.github/**/*"
-    generates:
-      - "{{.DIST_PLUGIN_DIR}}/**/*" # Marks that this task generates files in this pattern
-      # This isn't perfect for "generates" as it's a pattern, but helps Task understand output.
-      # A more precise `generates` would list specific output files, which is complex for wildcards.
 
-  # A helper to explicitly show the path to the luasrcdiet binary being used
+  release_zip:
+    desc: "Zips the minified plugin directory for GitHub release"
+    deps: [ci_minify]
+    cmds:
+      - |
+        echo "Packaging {{.DIST_PLUGIN_DIR}} into {{.PLUGIN_NAME}}.zip"
+        cd {{.DIST_DIR}} && zip -r ../{{.PLUGIN_NAME}}.zip {{.PLUGIN_NAME}}
+        echo "Created {{.PLUGIN_NAME}}.zip"
+    generates:
+      - "{{.PLUGIN_NAME}}.zip"
+
   show_luasrcdiet_path:
-    desc: "Shows the path to the LuaSrcDiet binary used by local tasks."
+    desc: "Shows the path to the LuaSrcDiet binary used by tasks."
     cmds:
-      - echo {{.LUASRCDIET_BIN}}
-
-  # --- CI Specific Tasks ---
-  # These tasks assume certain tools (luac5.3, luasrcdiet) are already in PATH,
-  # as they will be set up by the GitHub Actions workflow.
-
-  ci_check_lua_syntax:
-    desc: "(CI) Checks Lua syntax using luac5.3 (assumed to be in PATH)."
-    cmds:
-      - echo "CI: Checking Lua syntax..."
-      - |
-        find . {{.EXCLUDE_PATHS_FIND}} -name "*.lua" -print0 | xargs -0 -I {} luac5.3 -p {}
-        if [ $? -ne 0 ]; then
-          echo "CI: Lua syntax check failed."
-          exit 1
-        fi
-        echo "CI: Lua syntax check passed."
-
-  ci_minify:
-    desc: "(CI) Minifies Lua files using global luasrcdiet."
-    deps: [ci_check_lua_syntax]
-    cmds:
-      - echo "CI: Minifying Lua files..."
-      - mkdir -p {{.DIST_PLUGIN_DIR}}
-      - echo "CI: Removing typedefs directories if they exist..."
-      # For CI, LUASRCDIET_TOOL_DIR might not exist, so exclude_paths might be slightly different if we wanted to be super precise,
-      # but current EXCLUDE_PATHS_FIND is safe as it just prunes non-existent paths.
-      - find . -type d {{.EXCLUDE_PATHS_FIND}} -name "typedefs" -exec rm -rf {} +
-      - echo "CI: Minifying files to {{.DIST_PLUGIN_DIR}}/"
-      - |
-        find . {{.EXCLUDE_PATHS_FIND}} -name "*.lua" -print | while read file; do
-          relative_path=$(echo "$file" | sed 's|^\./||')
-          output_file="{{.DIST_PLUGIN_DIR}}/$relative_path"
-          mkdir -p "$(dirname "$output_file")"
-          echo "CI: Minifying $file to $output_file"
-          # Uses global luasrcdiet, assumed to be in PATH
-          luasrcdiet {{.LUASRCDIET_OPTS}} "$file" -o "$output_file"
-          if [ $? -ne 0 ]; then
-            echo "CI: Failed to minify $file"
-            exit 1
-          fi
-        done
-      - echo "CI: Minification complete. Output in {{.DIST_PLUGIN_DIR}}/"
-    sources: # Using similar source tracking as the local minify
-      - "**/*.lua"
-      - "!{{.DIST_DIR}}/**/*"
-      - "!{{.LUASRCDIET_TOOL_DIR}}/**/*" # Still good to exclude this, even if not used by ci_minify directly
-      - "!.git/**/*"
-      - "!.github/**/*"
-    generates:
-      - "{{.DIST_PLUGIN_DIR}}/**/*"
+      - echo "{{.LUASRCDIET_BIN}}"
