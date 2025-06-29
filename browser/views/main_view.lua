@@ -1,7 +1,8 @@
 --[[--
 Main View for Miniflux Browser
 
-Handles main screen data loading and menu item construction.
+Complete React-style component for main screen display.
+Handles data fetching, menu building, and UI rendering.
 
 @module miniflux.browser.views.main_view
 --]]
@@ -10,7 +11,43 @@ local _ = require("gettext")
 
 local MainView = {}
 
----Load initial data needed for main screen
+---Complete main view component (React-style) - returns view data for rendering
+---@param config {repositories: table, settings: table, onSelectUnread: function, onSelectFeeds: function, onSelectCategories: function}
+---@return table|nil View data for browser rendering, or nil on error
+function MainView.show(config)
+    -- Load initial data
+    local counts, error_msg = MainView.loadData({ repositories = config.repositories })
+    if not counts then
+        local Notification = require("utils/notification")
+        Notification:error(_("Failed to load Miniflux: ") .. tostring(error_msg))
+        return nil
+    end
+
+    -- Generate menu items using internal builder
+    local main_items = MainView.buildItems({
+        counts = counts,
+        callbacks = {
+            onSelectUnread = config.onSelectUnread,
+            onSelectFeeds = config.onSelectFeeds,
+            onSelectCategories = config.onSelectCategories,
+        }
+    })
+
+    -- Build subtitle
+    local hide_read = config.settings and config.settings.hide_read_entries
+    local subtitle = hide_read and "⊘ " or "◯ "
+
+    -- Return view data for browser to render
+    return {
+        title = _("Miniflux"),
+        items = main_items,
+        page_state = nil,
+        subtitle = subtitle,
+        is_root = true -- Signals browser to clear navigation history
+    }
+end
+
+---Load initial data needed for main screen (internal helper)
 ---@param config {repositories: {entry: EntryRepository, feed: FeedRepository, category: CategoryRepository}}
 ---@return table|nil result Data with counts or nil on error
 ---@return string|nil error Error message if failed
@@ -48,8 +85,8 @@ function MainView.loadData(config)
     }
 end
 
----Build main menu items
----@param config {counts: table, callbacks: {on_unread: function, on_feeds: function, on_categories: function}}
+---Build main menu items (internal helper)
+---@param config {counts: table, callbacks: {onSelectUnread: function, onSelectFeeds: function, onSelectCategories: function}}
 ---@return table[] Menu items for main screen
 function MainView.buildItems(config)
     local counts = config.counts
@@ -59,17 +96,17 @@ function MainView.buildItems(config)
         {
             text = _("Unread"),
             mandatory = tostring(counts.unread_count or 0),
-            callback = callbacks.on_unread
+            callback = callbacks.onSelectUnread
         },
         {
             text = _("Feeds"),
             mandatory = tostring(counts.feeds_count or 0),
-            callback = callbacks.on_feeds
+            callback = callbacks.onSelectFeeds
         },
         {
             text = _("Categories"),
             mandatory = tostring(counts.categories_count or 0),
-            callback = callbacks.on_categories
+            callback = callbacks.onSelectCategories
         },
     }
 end

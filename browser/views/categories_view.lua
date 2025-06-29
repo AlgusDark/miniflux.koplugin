@@ -1,7 +1,8 @@
 --[[--
 Categories View for Miniflux Browser
 
-Handles categories list view construction.
+Complete React-style component for categories display.
+Handles data fetching, menu building, and UI rendering.
 
 @module miniflux.browser.views.categories_view
 --]]
@@ -11,12 +12,50 @@ local _ = require("gettext")
 
 local CategoriesView = {}
 
----Build categories menu items
----@param config {categories: table[], on_select_callback: function}
+---Complete categories view component (React-style) - returns view data for rendering
+---@param config {repositories: table, settings: table, page_state?: number, onSelectItem: function}
+---@return table|nil View data for browser rendering, or nil on error
+function CategoriesView.show(config)
+    -- Fetch data with API-level dialog management
+    local categories, error_msg = config.repositories.category:getAll({
+        dialogs = {
+            loading = { text = _("Fetching categories...") },
+            error = { text = _("Failed to fetch categories"), timeout = 5 }
+        }
+    })
+
+    if not categories then
+        return nil -- Error dialog already shown by API system
+    end
+
+    -- Generate menu items using internal builder
+    local menu_items = CategoriesView.buildItems({
+        categories = categories,
+        onSelectItem = config.onSelectItem
+    })
+
+    local hide_read = config.settings.hide_read_entries
+    local subtitle = ViewUtils.buildSubtitle({
+        count = #categories,
+        hide_read = hide_read,
+        item_type = "categories"
+    })
+
+    -- Return view data for browser to render
+    return {
+        title = _("Categories"),
+        items = menu_items,
+        page_state = config.page_state,
+        subtitle = subtitle
+    }
+end
+
+---Build categories menu items (internal helper)
+---@param config {categories: table[], onSelectItem: function}
 ---@return table[] Menu items for categories view
 function CategoriesView.buildItems(config)
     local categories = config.categories or {}
-    local on_select_callback = config.on_select_callback
+    local onSelectItem = config.onSelectItem
 
     local menu_items = {}
 
@@ -31,7 +70,7 @@ function CategoriesView.buildItems(config)
             unread_count = unread_count,
             category_data = { id = category.id, title = category_title, unread_count = unread_count },
             callback = function()
-                on_select_callback(category.id)
+                onSelectItem(category.id)
             end
         })
     end

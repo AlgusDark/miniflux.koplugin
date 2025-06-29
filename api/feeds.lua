@@ -7,7 +7,7 @@ feed entries retrieval, and feed statistics management.
 @module koplugin.miniflux.api.feeds
 --]]
 
-local apiUtils = require("api/utils")
+
 
 ---@class MinifluxFeed
 ---@field id number Feed ID
@@ -35,7 +35,7 @@ end
 -- =============================================================================
 
 ---Get all feeds
----@param config? table Configuration including optional dialogs
+---@param config? APIClientConfig Configuration including optional dialogs
 ---@return boolean success, MinifluxFeed[]|string result_or_error
 function Feeds:getAll(config)
     config = config or {}
@@ -55,16 +55,15 @@ end
 ---Get entries for a specific feed
 ---@param feed_id number The feed ID
 ---@param options? ApiOptions Query options for filtering and sorting
----@param config? table Configuration including optional dialogs
+---@param config? APIClientConfig Configuration including optional dialogs
 ---@return boolean success, EntriesResponse|string result_or_error
 function Feeds:getEntries(feed_id, options, config)
     config = config or {}
-    local query_params = apiUtils.buildQueryParams(options)
     local endpoint = "/feeds/" .. tostring(feed_id) .. "/entries"
 
     -- Build request configuration
     local request_config = {
-        query = query_params,
+        query = options,
         dialogs = config.dialogs
     }
 

@@ -7,7 +7,7 @@ main API client and uses its HTTP methods for communication.
 @module koplugin.miniflux.api.entries
 --]]
 
-local apiUtils = require("api/utils")
+
 
 ---@class MinifluxEntry
 ---@field id number Entry ID
@@ -45,15 +45,14 @@ end
 
 ---Get entries from the server
 ---@param options? ApiOptions Query options for filtering and sorting
----@param config? table Configuration including optional dialogs
+---@param config? APIClientConfig Configuration including optional dialogs
 ---@return boolean success, EntriesResponse|string result_or_error
 function Entries:getEntries(options, config)
     config = config or {}
-    local query_params = apiUtils.buildQueryParams(options)
 
     -- Build request configuration
     local request_config = {
-        query = query_params,
+        query = options,
         dialogs = config.dialogs
     }
 
@@ -61,45 +60,33 @@ function Entries:getEntries(options, config)
 end
 
 -- =============================================================================
--- ENTRY STATUS MANAGEMENT
+-- ENTRY MANAGEMENT
 -- =============================================================================
 
----Mark entries with status
----@param entry_ids number|number[] Entry ID or array of entry IDs
----@param status EntryStatus New status for entries
----@param config? table Configuration including optional dialogs
+---Update entry status for one or multiple entries
+---@param entry_ids number|number[] Entry ID or array of entry IDs to update
+---@param config? APIClientConfig Configuration with body containing status and dialogs
 ---@return boolean success, any result_or_error
-local function markEntries(api, entry_ids, status, config)
+function Entries:updateEntries(entry_ids, config)
     config = config or {}
+
+    -- Convert single ID to array
     local ids_array = type(entry_ids) == "table" and entry_ids or { entry_ids }
-    local body = {
-        entry_ids = ids_array,
-        status = status,
-    }
 
-    -- Pass through the entire config (including dialogs)
-    local request_config = {
-        body = body,
+    -- Start with entry_ids
+    local request_body = { entry_ids = ids_array }
+
+    -- Merge additional properties from config.body
+    if config.body then
+        for key, value in pairs(config.body) do
+            request_body[key] = value
+        end
+    end
+
+    return self.api:put("/entries", {
+        body = request_body,
         dialogs = config.dialogs
-    }
-
-    return api:put("/entries", request_config)
-end
-
----Mark an entry as read
----@param entry_id number The entry ID to mark as read
----@param config? table Configuration including optional dialogs
----@return boolean success, any result_or_error
-function Entries:markAsRead(entry_id, config)
-    return markEntries(self.api, entry_id, "read", config)
-end
-
----Mark an entry as unread
----@param entry_id number The entry ID to mark as unread
----@param config? table Configuration including optional dialogs
----@return boolean success, any result_or_error
-function Entries:markAsUnread(entry_id, config)
-    return markEntries(self.api, entry_id, "unread", config)
+    })
 end
 
 return Entries

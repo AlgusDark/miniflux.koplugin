@@ -6,9 +6,9 @@ Handles entries limit configuration dialog.
 @module miniflux.menu.settings.entries
 --]]
 
-local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local UIManager = require("ui/uimanager")
+local Notification = require("utils/notification")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
@@ -60,19 +60,13 @@ function Entries.showDialog(settings, refresh_callback)
                             settings.limit = new_limit
                             settings:save()
                             UIManager:close(limit_dialog)
-                            UIManager:show(InfoMessage:new({
-                                text = _("Entries limit saved"),
-                                timeout = 2,
-                            }))
+                            Notification:success(_("Entries limit saved"))
                             -- Refresh the menu to show updated limit
                             if refresh_callback then
                                 refresh_callback()
                             end
                         else
-                            UIManager:show(InfoMessage:new({
-                                text = _("Please enter a valid number greater than 0"),
-                                timeout = 3,
-                            }))
+                            Notification:warning(_("Please enter a valid number greater than 0"))
                         end
                     end,
                 },
