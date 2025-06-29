@@ -44,7 +44,7 @@ function Menu.build(plugin)
                     SortDirection.getMenuItem(plugin.settings),
                     IncludeImages.getMenuItem(plugin.settings),
                     CopyCss.getMenuItem(plugin),
-                    TestConnection.getMenuItem(plugin.api),
+                    TestConnection.getMenuItem(plugin.miniflux_api),
                 }
             },
         },

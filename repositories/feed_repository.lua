@@ -7,23 +7,22 @@ Provides a clean interface for feed data without UI concerns.
 @module miniflux.browser.repositories.feed_repository
 --]]
 
----@class FeedsWithCountersResult
----@field feeds table[] Array of feeds
----@field counters table Feed counters with reads/unreads maps
+---@class MinifluxFeedsWithCountersResult
+---@field feeds MinifluxFeed[] Array of feeds
+---@field counters MinifluxFeedCounters Feed counters with reads/unreads maps
 
 ---@class FeedRepository
----@field api MinifluxAPI API client instance
+---@field miniflux_api MinifluxAPI Miniflux API instance
 ---@field settings MinifluxSettings Settings instance
 local FeedRepository = {}
 
 ---Create a new FeedRepository instance
----@param api MinifluxAPI The API client instance
----@param settings MinifluxSettings The settings instance
+---@param deps {miniflux_api: MinifluxAPI, settings: MinifluxSettings} Dependencies table
 ---@return FeedRepository
-function FeedRepository:new(api, settings)
+function FeedRepository:new(deps)
     local obj = {
-        api = api,
-        settings = settings,
+        miniflux_api = deps.miniflux_api,
+        settings = deps.settings,
     }
     setmetatable(obj, self)
     self.__index = self
@@ -39,7 +38,7 @@ end
 ---@return table[]|nil feeds Array of feeds or nil on error
 ---@return string|nil error Error message if failed
 function FeedRepository:getAll(config)
-    local success, feeds = self.api.feeds:getAll(config)
+    local success, feeds = self.miniflux_api:getFeeds(config)
     if not success then
         return nil, feeds
     end
@@ -49,7 +48,7 @@ end
 
 ---Get feeds with their read/unread counters
 ---@param config? table Configuration with optional dialogs
----@return FeedsWithCountersResult|nil result Result containing feeds and counters, or nil on error
+---@return MinifluxFeedsWithCountersResult|nil result Result containing feeds and counters, or nil on error
 ---@return string|nil error Error message if failed
 function FeedRepository:getAllWithCounters(config)
     -- Get feeds first
@@ -59,7 +58,7 @@ function FeedRepository:getAllWithCounters(config)
     end
 
     -- Get counters (optional - continue without if it fails)
-    local counters_success, counters = self.api.feeds:getCounters()
+    local counters_success, counters = self.miniflux_api:getFeedCounters()
     if not counters_success then
         counters = { reads = {}, unreads = {} } -- Empty counters on failure
     end

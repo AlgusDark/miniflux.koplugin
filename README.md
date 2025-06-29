@@ -1,2 +1,1 @@
 # Miniflux Plugin for KOReader
-

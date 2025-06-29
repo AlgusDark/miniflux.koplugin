@@ -25,19 +25,19 @@ local DownloadEntryJob = require("jobs/download_entry_job")
 
 ---@class EntryService
 ---@field settings MinifluxSettings Settings instance
----@field api MinifluxAPI API client instance
+---@field miniflux_api MinifluxAPI Miniflux API instance
 ---@field miniflux_plugin Miniflux Plugin instance for context management
 local EntryService = {}
 
 ---Create a new EntryService instance
 ---@param settings MinifluxSettings Settings instance
----@param api MinifluxAPI API client instance
+---@param miniflux_api MinifluxAPI Miniflux API instance
 ---@param miniflux_plugin Miniflux Plugin instance for context management
 ---@return EntryService
-function EntryService:new(settings, api, miniflux_plugin)
+function EntryService:new(settings, miniflux_api, miniflux_plugin)
     local instance = {
         settings = settings,
-        api = api,
+        miniflux_api = miniflux_api,
         miniflux_plugin = miniflux_plugin,
     }
     setmetatable(instance, self)
@@ -106,7 +106,7 @@ function EntryService:changeEntryStatus(entry_id, new_status)
     local error_text = T(_("Failed to mark entry as %1"), new_status)
 
     -- Call API with automatic dialog management
-    local success, result = self.api.entries:updateEntries(entry_id, {
+    local success, result = self.miniflux_api:updateEntries(entry_id, {
         body = { status = new_status },
         dialogs = {
             loading = { text = loading_text },
@@ -179,7 +179,7 @@ function EntryService:showEndOfEntryDialog(entry_info)
                             Navigation.navigateToEntry(entry_info, {
                                 navigation_options = { direction = "previous" },
                                 settings = self.settings,
-                                api = self.api,
+                                miniflux_api = self.miniflux_api,
                                 entry_service = self,
                                 miniflux_plugin = self.miniflux_plugin
                             })
@@ -192,7 +192,7 @@ function EntryService:showEndOfEntryDialog(entry_info)
                             Navigation.navigateToEntry(entry_info, {
                                 navigation_options = { direction = "next" },
                                 settings = self.settings,
-                                api = self.api,
+                                miniflux_api = self.miniflux_api,
                                 entry_service = self,
                                 miniflux_plugin = self.miniflux_plugin
                             })

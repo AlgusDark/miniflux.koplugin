@@ -12,14 +12,14 @@ local _ = require("gettext")
 local TestConnection = {}
 
 ---Get the menu item for connection testing
----@param api MinifluxAPI API client instance
+---@param miniflux_api MinifluxAPI Miniflux API instance
 ---@return table Menu item configuration
-function TestConnection.getMenuItem(api)
+function TestConnection.getMenuItem(miniflux_api)
     return {
         text = _("Test connection"),
         keep_menu_open = true,
         callback = function()
-            local success, result = api:get("/me", {
+            local success, result = miniflux_api:getMe({
                 dialogs = {
                     loading = {
                         text = _("Testing connection to Miniflux server...")

@@ -65,19 +65,20 @@ end
 
 ---Navigate to an entry in specified direction
 ---@param entry_info table Current entry information with file_path and entry_id
----@param config table Configuration with navigation_options, settings, api, entry_service, miniflux_plugin
+---@param config {navigation_options: {direction: string}, settings: MinifluxSettings, miniflux_api: MinifluxAPI, entry_service: EntryService, miniflux_plugin: Miniflux}
 ---@return nil
 function Navigation.navigateToEntry(entry_info, config)
     local navigation_options = config.navigation_options
     local settings = config.settings
-    local api = config.api
+    local miniflux_api = config.miniflux_api
     local entry_service = config.entry_service
     local miniflux_plugin = config.miniflux_plugin
     local direction = navigation_options.direction
 
     -- Validate input
-    local valid, error_msg = Navigation.validateNavigationInput(entry_info, api, miniflux_plugin)
+    local valid, error_msg = Navigation.validateNavigationInput(entry_info, miniflux_api)
     if not valid then
+        ---@cast error_msg string
         Notification:warning(error_msg)
         return
     end
@@ -85,6 +86,7 @@ function Navigation.navigateToEntry(entry_info, config)
     -- Load metadata
     local metadata, published_unix, metadata_error = Navigation.loadEntryMetadata(entry_info)
     if not metadata then
+        ---@cast metadata_error string
         Notification:warning(metadata_error)
         return
     end
@@ -107,6 +109,7 @@ function Navigation.navigateToEntry(entry_info, config)
         metadata = metadata
     })
     if not nav_options then
+        ---@cast options_error string
         Notification:warning(options_error)
         return
     end
@@ -115,7 +118,7 @@ function Navigation.navigateToEntry(entry_info, config)
     local success, result = Navigation.performNavigationSearch({
         options = nav_options,
         direction = direction,
-        api = api,
+        miniflux_api = miniflux_api,
         current_entry_id = entry_info.entry_id
     })
 
@@ -123,7 +126,7 @@ function Navigation.navigateToEntry(entry_info, config)
         local target_entry = result.entries[1]
 
         -- Try local file first, fallback to reading entry
-        if not Navigation.tryLocalFileFirst(entry_info, target_entry, entry_service) then
+        if not Navigation.tryLocalFileFirst(entry_info, target_entry) then
             entry_service:readEntry(target_entry)
         end
     else
@@ -152,15 +155,15 @@ end
 
 ---Validate navigation input parameters
 ---@param entry_info table Entry information with file_path and entry_id
----@param api table API client instance
+---@param miniflux_api table Miniflux API instance
 ---@return boolean success, string? error_message
-function Navigation.validateNavigationInput(entry_info, api)
+function Navigation.validateNavigationInput(entry_info, miniflux_api)
     if not entry_info.entry_id then
         return false, _("Cannot navigate: missing entry ID")
     end
 
-    if not api then
-        return false, _("Cannot navigate: API not available")
+    if not miniflux_api then
+        return false, _("Cannot navigate: Miniflux API not available")
     end
 
     -- Note: Plugin can be nil (for direct file opening), context will default to global
@@ -229,9 +232,8 @@ end
 ---Try to open local file if it exists
 ---@param entry_info table Current entry information
 ---@param entry_data table Entry data from API
----@param entry_service table Entry service instance
 ---@return boolean success True if local file was opened
-function Navigation.tryLocalFileFirst(entry_info, entry_data, entry_service)
+function Navigation.tryLocalFileFirst(entry_info, entry_data)
     local entry_id = tostring(entry_data.id)
     local miniflux_dir = entry_info.file_path:match("(.*)/miniflux/")
 
@@ -250,18 +252,18 @@ function Navigation.tryLocalFileFirst(entry_info, entry_data, entry_service)
 end
 
 ---Perform navigation search with offline fallback
----@param config {options: ApiOptions, direction: string, api: MinifluxAPI, current_entry_id: number}
+---@param config {options: ApiOptions, direction: string, miniflux_api: MinifluxAPI, current_entry_id: number}
 ---@return boolean success, table|string result_or_error
 function Navigation.performNavigationSearch(config)
     local options = config.options
     local direction = config.direction
-    local api = config.api
+    local miniflux_api = config.miniflux_api
     local current_entry_id = config.current_entry_id
 
     local loading_message = direction == DIRECTION_PREVIOUS and MSG_FINDING_PREVIOUS or MSG_FINDING_NEXT
 
     -- Try API call first
-    local success, result = api.entries:getEntries(options, {
+    local success, result = miniflux_api:getEntries(options, {
         dialogs = {
             loading = { text = loading_message }
         }

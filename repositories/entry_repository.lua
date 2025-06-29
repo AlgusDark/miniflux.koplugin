@@ -8,18 +8,17 @@ Provides a clean interface for entry data without UI concerns.
 --]]
 
 ---@class EntryRepository
----@field api MinifluxAPI API client instance
+---@field miniflux_api MinifluxAPI Miniflux API instance
 ---@field settings MinifluxSettings Settings instance
 local EntryRepository = {}
 
 ---Create a new EntryRepository instance
----@param api MinifluxAPI The API client instance
----@param settings MinifluxSettings The settings instance
+---@param deps {miniflux_api: MinifluxAPI, settings: MinifluxSettings} Dependencies table
 ---@return EntryRepository
-function EntryRepository:new(api, settings)
+function EntryRepository:new(deps)
     local obj = {
-        api = api,
-        settings = settings,
+        miniflux_api = deps.miniflux_api,
+        settings = deps.settings,
     }
     setmetatable(obj, self)
     self.__index = self
@@ -66,7 +65,7 @@ function EntryRepository:getUnread(config)
         limit = self.settings.limit,
     }
 
-    local success, result = self.api.entries:getEntries(options, config)
+    local success, result = self.miniflux_api:getEntries(options, config)
     if not success then
         return nil, result
     end
@@ -83,7 +82,7 @@ function EntryRepository:getByFeed(feed_id, config)
     local options = self:getApiOptions()
     options.feed_id = feed_id
 
-    local success, result = self.api.feeds:getEntries(feed_id, options, config)
+    local success, result = self.miniflux_api:getFeedEntries(feed_id, options, config)
     if not success then
         return nil, result
     end
@@ -100,7 +99,7 @@ function EntryRepository:getByCategory(category_id, config)
     local options = self:getApiOptions()
     options.category_id = category_id
 
-    local success, result = self.api.categories:getEntries(category_id, options, config)
+    local success, result = self.miniflux_api:getCategoryEntries(category_id, options, config)
     if not success then
         return nil, result
     end
@@ -120,7 +119,7 @@ function EntryRepository:getUnreadCount(config)
         status = { "unread" }, -- Only unread for count
     }
 
-    local success, result = self.api.entries:getEntries(options, config)
+    local success, result = self.miniflux_api:getEntries(options, config)
     if not success then
         return nil, result
     end

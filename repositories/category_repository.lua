@@ -8,18 +8,17 @@ Provides a clean interface for category data without UI concerns.
 --]]
 
 ---@class CategoryRepository
----@field api MinifluxAPI API client instance
+---@field miniflux_api MinifluxAPI Miniflux API instance
 ---@field settings MinifluxSettings Settings instance
 local CategoryRepository = {}
 
 ---Create a new CategoryRepository instance
----@param api MinifluxAPI The API client instance
----@param settings MinifluxSettings The settings instance
+---@param deps {miniflux_api: MinifluxAPI, settings: MinifluxSettings} Dependencies table
 ---@return CategoryRepository
-function CategoryRepository:new(api, settings)
+function CategoryRepository:new(deps)
     local obj = {
-        api = api,
-        settings = settings,
+        miniflux_api = deps.miniflux_api,
+        settings = deps.settings,
     }
     setmetatable(obj, self)
     self.__index = self
@@ -35,7 +34,7 @@ end
 ---@return table[]|nil categories Array of categories or nil on error
 ---@return string|nil error Error message if failed
 function CategoryRepository:getAll(config)
-    local success, categories = self.api.categories:getAll(true, config) -- include counts
+    local success, categories = self.miniflux_api:getCategories(true, config) -- include counts
     if not success then
         return nil, categories
     end

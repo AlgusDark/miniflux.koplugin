@@ -93,12 +93,4 @@ function MinifluxSettings:save()
     self.settings:flush()
 end
 
----Toggle hide read entries setting
----@return boolean New value after toggle
-function MinifluxSettings:toggleHideReadEntries()
-    local new_value = not self.hide_read_entries
-    self.hide_read_entries = new_value
-    return new_value
-end
-
 return MinifluxSettings

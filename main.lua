@@ -14,7 +14,8 @@ local Dispatcher = require("dispatcher")
 local _ = require("gettext")
 
 -- Import specialized modules
-local MinifluxAPI = require("api/api_client")
+local APIClient = require("api/api_client")
+local MinifluxAPI = require("api/miniflux_api")
 local MinifluxSettings = require("settings/settings")
 local Menu = require("menu/menu")
 local EntryService = require("services/entry_service")
@@ -28,13 +29,13 @@ local _static_browser_context = nil
 ---@field is_doc_only boolean Whether plugin is document-only
 ---@field download_dir string Full path to download directory
 ---@field settings MinifluxSettings Settings instance
----@field api MinifluxAPI API client instance
+---@field api_client APIClient Generic API client instance
+---@field miniflux_api MinifluxAPI Miniflux-specific API instance
 ---@field entry_service EntryService Entry service instance
 local Miniflux = WidgetContainer:extend({
     name = "miniflux",
     is_doc_only = false,
     settings = nil,
-    -- Note: browser_context is now static (_static_browser_context) to handle multiple plugin instances
 })
 
 ---Initialize the plugin by setting up all components
@@ -53,14 +54,16 @@ function Miniflux:init()
     -- Initialize settings instance
     self.settings = MinifluxSettings:new()
 
-    -- Initialize API client
-    self.api = MinifluxAPI:new({
-        getServerAddress = function() return self.settings.server_address end,
-        getAPIToken = function() return self.settings.api_token end,
+    -- Initialize API client (generic HTTP client)
+    self.api_client = APIClient:new({
+        settings = self.settings
     })
 
-    -- Initialize EntryService instance with settings, API, and plugin dependencies
-    self.entry_service = EntryService:new(self.settings, self.api, self)
+    -- Initialize Miniflux-specific API
+    self.miniflux_api = MinifluxAPI:new({ api_client = self.api_client })
+
+    -- Initialize EntryService instance with settings, miniflux API, and plugin dependencies
+    self.entry_service = EntryService:new(self.settings, self.miniflux_api, self)
 
     -- Override ReaderStatus EndOfBook behavior for miniflux entries
     self:overrideEndOfBookBehavior()
@@ -121,7 +124,7 @@ function Miniflux:createBrowser()
     local browser = MinifluxBrowser:new({
         title = _("Miniflux"),
         settings = self.settings,
-        api = self.api,
+        miniflux_api = self.miniflux_api,
         download_dir = self.download_dir,
         entry_service = self.entry_service,
         miniflux_plugin = self, -- Pass plugin reference for context management

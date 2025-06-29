@@ -22,22 +22,12 @@ local Notification = require("utils/notification")
 
 -- No timeout constants needed - handled by Notification utility
 
--- Load specialized API modules
-local Entries = require("api/entries")
-local Feeds = require("api/feeds")
-local Categories = require("api/categories")
+---@class APIClient
+---@field settings MinifluxSettings Settings instance for configuration
+local APIClient = {}
 
----@class MinifluxAPI
----@field getServerAddress function Function to get server address
----@field getAPIToken function Function to get API token
----@field entries Entries Entry operations module
----@field feeds Feeds Feed operations module
----@field categories Categories Category operations module
-local MinifluxAPI = {}
-
----@class MinifluxConfig
----@field getServerAddress fun(): string Server base URL
----@field getAPIToken fun(): string API authentication token
+---@class APIClientConfig
+---@field settings MinifluxSettings Settings instance containing server address and API token
 
 ---@class ApiDialogConfig
 ---@field loading? {text?: string, timeout?: number|nil} Loading notification (timeout=nil for manual close)
@@ -66,21 +56,15 @@ local MinifluxAPI = {}
 ---@field dialogs? ApiDialogConfig Dialog configuration for loading/error/success messages
 
 ---Create a new API instance
----@param config MinifluxConfig Configuration table with getter functions
----@return MinifluxAPI
-function MinifluxAPI:new(config)
+---@param config APIClientConfig Configuration table with settings
+---@return APIClient
+function APIClient:new(config)
     local instance = {}
     setmetatable(instance, self)
     self.__index = self
 
-    -- Store getter functions
-    instance.getServerAddress = config.getServerAddress
-    instance.getAPIToken = config.getAPIToken
-
-    -- Create module instances
-    instance.entries = Entries:new(instance)
-    instance.feeds = Feeds:new(instance)
-    instance.categories = Categories:new(instance)
+    -- Store settings reference
+    instance.settings = config.settings
 
     return instance
 end
@@ -130,16 +114,16 @@ end
 ---Make an HTTP request to the API with optional dialog support
 ---@param method "GET"|"POST"|"PUT"|"DELETE" HTTP method to use
 ---@param endpoint string API endpoint path
----@param config? APIClientConfig Configuration including body, query, and dialogs
+---@param config? table Configuration including body, query, and dialogs
 ---@return boolean success True if request succeeded
 ---@return table|string result_or_error Decoded JSON table on success, error string on failure
-function MinifluxAPI:makeRequest(method, endpoint, config)
+function APIClient:makeRequest(method, endpoint, config)
     config = config or {}
     local dialogs = config.dialogs
 
-    -- Get fresh configuration values (VALIDATION FIRST)
-    local server_address = self.getServerAddress()
-    local api_token = self.getAPIToken()
+    -- Get fresh configuration values
+    local server_address = self.settings.server_address
+    local api_token = self.settings.api_token
 
     if not server_address or not api_token or
         server_address == "" or api_token == "" then
@@ -281,42 +265,42 @@ end
 
 ---Make a GET request
 ---@param endpoint string API endpoint path
----@param config? APIClientConfig Configuration with optional query, dialogs
+---@param config? table Configuration with optional query, dialogs
 ---@return boolean success True if request succeeded
 ---@return table|string result_or_error Decoded JSON table on success, error string on failure
-function MinifluxAPI:get(endpoint, config)
+function APIClient:get(endpoint, config)
     config = config or {}
     return self:makeRequest("GET", endpoint, config)
 end
 
 ---Make a POST request
 ---@param endpoint string API endpoint path
----@param config? APIClientConfig Configuration with optional body, query, dialogs
+---@param config? table Configuration with optional body, query, dialogs
 ---@return boolean success True if request succeeded
 ---@return table|string result_or_error Decoded JSON table on success, error string on failure
-function MinifluxAPI:post(endpoint, config)
+function APIClient:post(endpoint, config)
     config = config or {}
     return self:makeRequest("POST", endpoint, config)
 end
 
 ---Make a PUT request
 ---@param endpoint string API endpoint path
----@param config? APIClientConfig Configuration with optional body, query, dialogs
+---@param config? table Configuration with optional body, query, dialogs
 ---@return boolean success True if request succeeded
 ---@return table|string result_or_error Decoded JSON table on success, error string on failure
-function MinifluxAPI:put(endpoint, config)
+function APIClient:put(endpoint, config)
     config = config or {}
     return self:makeRequest("PUT", endpoint, config)
 end
 
 ---Make a DELETE request
 ---@param endpoint string API endpoint path
----@param config? APIClientConfig Configuration with optional query, dialogs
+---@param config? table Configuration with optional query, dialogs
 ---@return boolean success True if request succeeded
 ---@return table|string result_or_error Decoded JSON table on success, error string on failure
-function MinifluxAPI:delete(endpoint, config)
+function APIClient:delete(endpoint, config)
     config = config or {}
     return self:makeRequest("DELETE", endpoint, config)
 end
 
-return MinifluxAPI
+return APIClient

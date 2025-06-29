@@ -23,7 +23,7 @@ local EntriesView = require("browser/views/entries_view")
 ---@class MinifluxBrowser : Browser
 ---@field repositories table Repository instances for data access
 ---@field settings MinifluxSettings Plugin settings
----@field api MinifluxAPI API client
+---@field miniflux_api MinifluxAPI Miniflux API
 ---@field download_dir string Download directory path
 ---@field entry_service EntryService Entry service instance
 ---@field miniflux_plugin Miniflux Plugin instance for context management
@@ -37,16 +37,16 @@ local MinifluxBrowser = Browser:extend({})
 function MinifluxBrowser:init()
     -- Initialize Miniflux-specific dependencies
     self.settings = self.settings or {}
-    self.api = self.api or {}
+    self.miniflux_api = self.miniflux_api or {}
     self.download_dir = self.download_dir
     self.miniflux_plugin = self.miniflux_plugin or error("miniflux_plugin required")
     self.entry_service = self.entry_service or error("entry_service required")
 
     -- Create Miniflux-specific repository instances
     self.repositories = {
-        entry = EntryRepository:new(self.api, self.settings),
-        feed = FeedRepository:new(self.api, self.settings),
-        category = CategoryRepository:new(self.api, self.settings),
+        entry = EntryRepository:new({ miniflux_api = self.miniflux_api, settings = self.settings }),
+        feed = FeedRepository:new({ miniflux_api = self.miniflux_api, settings = self.settings }),
+        category = CategoryRepository:new({ miniflux_api = self.miniflux_api, settings = self.settings }),
     }
 
     -- Initialize Browser parent (handles generic setup)
