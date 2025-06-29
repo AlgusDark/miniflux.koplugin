@@ -98,15 +98,26 @@ function Navigation.navigateToEntry(entry_info, config)
     end
 
     -- Build navigation options
-    local nav_options, options_error = Navigation.buildNavigationOptions(published_unix, direction, settings, context,
-        metadata)
+    local nav_options, options_error = Navigation.buildNavigationOptions({
+        ---@cast published_unix number
+        published_unix = published_unix,
+        direction = direction,
+        settings = settings,
+        context = context,
+        metadata = metadata
+    })
     if not nav_options then
         Notification:warning(options_error)
         return
     end
 
     -- Perform search
-    local success, result = Navigation.performNavigationSearch(nav_options, direction, api)
+    local success, result = Navigation.performNavigationSearch({
+        options = nav_options,
+        direction = direction,
+        api = api,
+        current_entry_id = entry_info.entry_id
+    })
 
     if success and result and result.entries and #result.entries > 0 then
         local target_entry = result.entries[1]
@@ -116,9 +127,20 @@ function Navigation.navigateToEntry(entry_info, config)
             entry_service:readEntry(target_entry)
         end
     else
-        local no_entry_msg = direction == DIRECTION_PREVIOUS
-            and _("No previous entry available")
-            or _("No next entry available")
+        -- Handle different failure scenarios with appropriate messages
+        local no_entry_msg
+
+        if result == "offline_no_entries" then
+            -- Offline mode but no local entries available
+            no_entry_msg = direction == DIRECTION_PREVIOUS
+                and _("No previous entry available in local files")
+                or _("No next entry available in local files")
+        else
+            -- Online mode but server has no more entries
+            no_entry_msg = direction == DIRECTION_PREVIOUS
+                and _("No previous entry available on server")
+                or _("No next entry available on server")
+        end
 
         Notification:info(no_entry_msg)
     end
@@ -131,9 +153,8 @@ end
 ---Validate navigation input parameters
 ---@param entry_info table Entry information with file_path and entry_id
 ---@param api table API client instance
----@param miniflux_plugin table Plugin instance for context
 ---@return boolean success, string? error_message
-function Navigation.validateNavigationInput(entry_info, api, miniflux_plugin)
+function Navigation.validateNavigationInput(entry_info, api)
     if not entry_info.entry_id then
         return false, _("Cannot navigate: missing entry ID")
     end
@@ -168,13 +189,15 @@ function Navigation.loadEntryMetadata(entry_info)
 end
 
 ---Build navigation options based on direction
----@param published_unix number Unix timestamp of current entry
----@param direction string Navigation direction ("previous" or "next")
----@param settings table Settings instance
----@param context table Browser context from plugin
----@param metadata table Entry metadata for deriving IDs
+---@param config {published_unix: number, direction: string, settings: table, context: table, metadata: table}
 ---@return table? options, string? error_message
-function Navigation.buildNavigationOptions(published_unix, direction, settings, context, metadata)
+function Navigation.buildNavigationOptions(config)
+    local published_unix = config.published_unix
+    local direction = config.direction
+    local settings = config.settings
+    local context = config.context
+    local metadata = config.metadata
+
     local base_options = {
         limit = settings.limit,
         order = settings.order,
@@ -226,19 +249,84 @@ function Navigation.tryLocalFileFirst(entry_info, entry_data, entry_service)
     return false
 end
 
----Perform navigation search
----@param options table API options for search
----@param direction string Navigation direction for loading message
----@param api table API client instance
+---Perform navigation search with offline fallback
+---@param config {options: ApiOptions, direction: string, api: MinifluxAPI, current_entry_id: number}
 ---@return boolean success, table|string result_or_error
-function Navigation.performNavigationSearch(options, direction, api)
+function Navigation.performNavigationSearch(config)
+    local options = config.options
+    local direction = config.direction
+    local api = config.api
+    local current_entry_id = config.current_entry_id
+
     local loading_message = direction == DIRECTION_PREVIOUS and MSG_FINDING_PREVIOUS or MSG_FINDING_NEXT
 
-    return api.entries:getEntries(options, {
+    -- Try API call first
+    local success, result = api.entries:getEntries(options, {
         dialogs = {
             loading = { text = loading_message }
         }
     })
+
+    -- If API call succeeds, return result
+    if success then
+        return success, result
+    end
+
+    -- API call failed - try simple offline navigation
+    local target_entry_id = Navigation.findAdjacentEntryId(current_entry_id, direction)
+    if target_entry_id then
+        Notification:info(_("Found a local entry"))
+        -- Create minimal entry data for navigation
+        return true, {
+            entries = { { id = target_entry_id } }
+        }
+    else
+        -- Both API and offline failed - return special marker for offline failure
+        return false, "offline_no_entries"
+    end
+end
+
+---Find adjacent entry ID by scanning miniflux folder names
+---@param current_entry_id number Current entry ID
+---@param direction string Navigation direction ("previous" or "next")
+---@return number|nil target_entry_id Adjacent entry ID, or nil if not found
+function Navigation.findAdjacentEntryId(current_entry_id, direction)
+    local EntryUtils = require("utils/entry_utils")
+    local miniflux_dir = EntryUtils.getDownloadDir()
+
+    if lfs.attributes(miniflux_dir, "mode") ~= "directory" then
+        return nil
+    end
+
+    local target_id = nil
+
+    for entry_dir_name in lfs.dir(miniflux_dir) do
+        local entry_id = tonumber(entry_dir_name)
+        if entry_id then
+            local is_candidate = false
+            local is_better_candidate = false
+
+            if direction == DIRECTION_PREVIOUS then
+                -- Looking for largest ID smaller than current
+                is_candidate = entry_id < current_entry_id
+                is_better_candidate = target_id == nil or entry_id > target_id
+            else -- DIRECTION_NEXT
+                -- Looking for smallest ID larger than current
+                is_candidate = entry_id > current_entry_id
+                is_better_candidate = target_id == nil or entry_id < target_id
+            end
+
+            if is_candidate and is_better_candidate then
+                -- Only check file existence for potential candidates
+                local html_file = miniflux_dir .. entry_dir_name .. "/entry.html"
+                if lfs.attributes(html_file, "mode") == "file" then
+                    target_id = entry_id
+                end
+            end
+        end
+    end
+
+    return target_id
 end
 
 return Navigation
