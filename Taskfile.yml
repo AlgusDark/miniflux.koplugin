@@ -1,50 +1,48 @@
 version: '3'
 
 vars:
-  PLUGIN_NAME: miniflux.koplugin
-  DIST_DIR: dist
-  DIST_PLUGIN_DIR: "{{.DIST_DIR}}/{{.PLUGIN_NAME}}"
-  EXCLUDE_PATHS_FIND: "-path './{{.DIST_DIR}}' -prune -o -path './.git' -prune -o -path './.github' -prune -o -path './.github' -prune -o"
+  PLUGIN: miniflux.koplugin
+  DIST: dist
+  OUTDIR: {{.DIST}}/{{.PLUGIN}}
+  EXCL: "-path ./{{.DIST}} -prune -o -path ./.git -prune -o -path ./.github -prune -o -path ./scripts -prune -o -path '*/typedefs/*' -prune -o"
 
 tasks:
+
   default:
-    desc: "Clean, copy Lua files, and package (default)."
-    deps: [ci_copy_lua]
+    desc: Build & package
+    deps: [ci_build, release_zip]
 
   clean:
-    desc: "Removes build artifacts (dist/ and *.zip)."
+    desc: Remove old artifacts
     cmds:
-      - echo "Cleaning up..."
-      - rm -rf {{.DIST_DIR}}
-      - rm -f *.zip
-      - echo "Clean complete."
+      - rm -rf {{.DIST}} *.zip
 
-  ci_copy_lua:
-    desc: "(CI) Check syntax and copy Lua files"
+  ci_build:
+    desc: Strip comments & assemble dist/
     deps: [clean]
     cmds:
+      - mkdir -p {{.OUTDIR}}
       - |
-        echo "CI: Checking Lua syntax…"
-        find . {{.EXCLUDE_PATHS_FIND}} -type f -name "*.lua" -print0 \
-          | xargs -0 -I {} luac -p {}
-      - |
-        echo "Copying Lua files…"
-        mkdir -p {{.DIST_PLUGIN_DIR}}
-        find . {{.EXCLUDE_PATHS_FIND}} -type f -name "*.lua" -print | while read file; do
-          rel=${file#./}
-          out="{{.DIST_PLUGIN_DIR}}/$rel"
-          mkdir -p "$(dirname "$out")"
-          echo "  $file → $out"
-          cp "$file" "$out"
-        done
+        find . {{.EXCL}} \
+          ! -name Taskfile.yml \
+          -type f \
+          -print | while read f; do
+            rel=${f#./}
+            dst={{.OUTDIR}}/$rel
+            mkdir -p "$(dirname "$dst")"
+            echo "✔ $rel"
+            if [[ "$f" == *.lua ]]; then
+              # strip Lua comments
+              sed -E 's/--.*$//' "$f" > "$dst"
+            else
+              cp "$f" "$dst"
+            fi
+          done
 
   release_zip:
-    desc: "Zips the dist folder for release"
-    deps: [ci_copy_lua]
+    desc: Zip up dist folder
+    deps: [ci_build]
     cmds:
-      - |
-        echo "Packaging {{.DIST_PLUGIN_DIR}} into {{.PLUGIN_NAME}}.zip"
-        cd {{.DIST_DIR}} && zip -r ../{{.PLUGIN_NAME}}.zip {{.PLUGIN_NAME}}
-        echo "Created {{.PLUGIN_NAME}}.zip"
+      - cd {{.DIST}} && zip -r ../{{.PLUGIN}}.zip {{.PLUGIN}}
     generates:
-      - "{{.PLUGIN_NAME}}.zip"
+      - "{{.PLUGIN}}.zip"

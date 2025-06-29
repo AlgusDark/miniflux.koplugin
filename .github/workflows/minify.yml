@@ -1,99 +1,61 @@
-name: Minify Lua Plugin
+name: Build & Package Plugin
 
 on:
   push:
-    branches:
-      - main
-      - dev
+    branches: [ main, dev ]
   pull_request:
-    branches:
-      - main
-      - dev
+    branches: [ main, dev ]
   release:
-    types:
-      - published
+    types: [ published ]
 
 jobs:
-  minify_and_package:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Set date var for caching
-        id: date
-        run: echo "day=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
-
-      # Lua setup
-      - name: Set up Lua with leafo/gh-actions-lua
-        id: setup_lua_action
+      - name: Set up Lua 5.3
         uses: leafo/gh-actions-lua@v11
         with:
           luaVersion: "5.3"
         continue-on-error: true
 
-      - name: Verify Lua installation
-        id: verify_lua
-        run: |
-          if command -v lua && lua -v | grep -q "Lua 5.3"; then
-            echo "fallback_needed=false" >> $GITHUB_OUTPUT
-          else
-            echo "fallback_needed=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: "Fallback: Install Lua manually"
-        if: steps.verify_lua.outputs.fallback_needed == 'true'
+      - name: 'Fallback install Lua'
+        if: failure() && steps.setup_lua.outcome != 'success'
         run: |
           sudo apt-get update
           sudo apt-get install -y lua5.3 liblua5.3-dev
           sudo ln -sf /usr/bin/lua5.3 /usr/local/bin/lua
           sudo ln -sf /usr/bin/luac5.3 /usr/local/bin/luac
 
-      # Task setup
       - name: Install Task
         uses: arduino/setup-task@v1
         with:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify Task installation
+      - name: Verify Task
         run: task --version
 
-      # Copy Lua files
-      - name: Copy Lua files into dist/
-        run: task ci_copy_lua
+      - name: Build dist/
+        run: task ci_build
 
-      # Package
-      - name: Create zip
+      - name: Package ZIP
         run: task release_zip
 
-      # Auto-tag dev branch builds
-      - name: Auto-tag dev build
-        if: github.ref == 'refs/heads/dev'
-        run: |
-          TIMESTAMP=$(date +'%Y%m%d-%H%M')
-          git config --global user.name "github-actions"
-          git config --global user.email "actions@github.com"
-          git tag "dev-$TIMESTAMP"
-          git push origin "dev-$TIMESTAMP"
-
-      # Upload artifact on PRs & non-release pushes
-      - name: Upload build artifact
-        if: github.event_name != 'release'
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: miniflux.koplugin
-          path: dist/miniflux.koplugin
+          path: miniflux.koplugin.zip
 
-      # Publish ZIP on actual releases
-      - name: Upload Release Asset
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./miniflux.koplugin.zip
-          asset_name: miniflux.koplugin.zip
-          asset_content_type: application/zip
+      - name: Auto‐tag dev
+        if: github.ref == 'refs/heads/dev'
+        run: |
+          TAG="dev-$(date +'%Y%m%d-%H%M')"
+          git config user.name github-actions
+          git config user.email actions@github.com
+          git tag "$TAG"
+          git push origin "$TAG"
