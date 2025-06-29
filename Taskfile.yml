@@ -18,18 +18,18 @@ tasks:
     deps: [minify]
 
   setup_luasrcdiet:
-    desc: "Downloads and builds LuaSrcDiet locally if not already present."
+    desc: "Downloads and sets up LuaSrcDiet locally if not already present."
     dir: "{{.LUASRCDIET_TOOL_DIR}}"
     cmds:
-      - echo "LuaSrcDiet not found or build incomplete. Cloning and building..."
+      - echo "LuaSrcDiet not found or setup incomplete. Cloning and linking..."
       - git clone {{.LUASRCDIET_GIT_REPO}} . # Clone into LUASRCDIET_TOOL_DIR
-      - make install LUA_VERSION_SUFFIX=5.3 PREFIX={{.USER_WORKING_DIR}}/{{.LUASRCDIET_TOOL_DIR}}/local
-      - mv local/bin/luasrcdiet {{.USER_WORKING_DIR}}/{{.LUASRCDIET_BIN}}
-      - echo "LuaSrcDiet installed to {{.USER_WORKING_DIR}}/{{.LUASRCDIET_BIN}}"
+      - chmod +x src/luasrcdiet.lua
+      - ln -sf "$(pwd)/src/luasrcdiet.lua" "{{.USER_WORKING_DIR}}/{{.LUASRCDIET_BIN}}"
+      - echo "LuaSrcDiet symlinked to {{.USER_WORKING_DIR}}/{{.LUASRCDIET_BIN}}"
     status:
       - test -f {{.USER_WORKING_DIR}}/{{.LUASRCDIET_BIN}}
     generates:
-      - "{{.USER_WORKING_DIR}}/{{.LUASRCDIET_BIN}}" # Relative to Taskfile.yml location
+      - "{{.USER_WORKING_DIR}}/{{.LUASRCDIET_BIN}}"
 
   clean:
     desc: "Removes build artifacts (dist/ and *.zip)."
