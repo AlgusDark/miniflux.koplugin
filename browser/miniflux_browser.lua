@@ -22,6 +22,11 @@ local EntriesView = require("browser/views/entries_view")
 
 ---@class MinifluxBrowser : Browser
 ---@field repositories table Repository instances for data access
+---@field settings MinifluxSettings Plugin settings
+---@field api MinifluxAPI API client
+---@field download_dir string Download directory path
+---@field entry_service EntryService Entry service instance
+---@field miniflux_plugin Miniflux Plugin instance for context management
 ---@field new fun(self: MinifluxBrowser, o: BrowserOptions): MinifluxBrowser Create new MinifluxBrowser instance
 local MinifluxBrowser = Browser:extend({})
 
@@ -30,6 +35,13 @@ local MinifluxBrowser = Browser:extend({})
 -- =============================================================================
 
 function MinifluxBrowser:init()
+    -- Initialize Miniflux-specific dependencies
+    self.settings = self.settings or {}
+    self.api = self.api or {}
+    self.download_dir = self.download_dir
+    self.miniflux_plugin = self.miniflux_plugin or error("miniflux_plugin required")
+    self.entry_service = self.entry_service or error("entry_service required")
+
     -- Create Miniflux-specific repository instances
     self.repositories = {
         entry = EntryRepository:new(self.api, self.settings),
@@ -44,6 +56,36 @@ end
 -- =============================================================================
 -- MINIFLUX-SPECIFIC FUNCTIONALITY
 -- =============================================================================
+
+---Override settings dialog with Miniflux-specific implementation
+function MinifluxBrowser:showConfigDialog()
+    if not self.settings then
+        local Notification = require("utils/notification")
+        Notification:error(_("Settings not available"))
+        return
+    end
+
+    local UIManager = require("ui/uimanager")
+    local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
+
+    local buttons = {
+        {
+            {
+                text = _("Close"),
+                callback = function()
+                    UIManager:close(self.config_dialog)
+                end,
+            },
+        },
+    }
+
+    self.config_dialog = ButtonDialogTitle:new({
+        title = _("Miniflux Settings"),
+        title_align = "center",
+        buttons = buttons,
+    })
+    UIManager:show(self.config_dialog)
+end
 
 ---Open an entry with optional navigation context (implements Browser:openItem)
 ---@param entry_data table Entry data from API

@@ -10,7 +10,6 @@ abstract methods for provider-specific behavior.
 
 local Menu = require("ui/widget/menu")
 local UIManager = require("ui/uimanager")
-local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
 local _ = require("gettext")
 
 -- Navigation type definitions for generic browser functionality
@@ -20,13 +19,10 @@ local _ = require("gettext")
 ---@alias RouteConfig {view_name: string, page_state?: number, context?: NavigationContext}
 
 ---@class BrowserOptions : MenuOptions
+-- Constructor options table - fields defined by specific browser implementations
 
 ---@class Browser : Menu
----@field settings MinifluxSettings Plugin settings
----@field api MinifluxAPI API client
----@field download_dir string Download directory path
----@field entry_service EntryService Entry service instance
----@field miniflux_plugin Miniflux Plugin instance for context management
+-- Generic browser base class - specific browsers define their own dependencies and configuration
 local Browser = Menu:extend({
     title_shrink_font_to_fit = true,
     is_popout = false,
@@ -42,16 +38,7 @@ local Browser = Menu:extend({
 -- =============================================================================
 
 function Browser:init()
-    -- Required properties from constructor
-    self.settings = self.settings or {}
-    self.api = self.api or {}
-    self.download_dir = self.download_dir
-    self.miniflux_plugin = self.miniflux_plugin or error("miniflux_plugin required")
-
-    -- Require shared EntryService
-    self.entry_service = self.entry_service or error("entry_service required")
-
-    -- Set up settings button
+    -- Set up settings button (generic functionality)
     self.onLeftButtonTap = function()
         self:showConfigDialog()
     end
@@ -75,29 +62,9 @@ end
 -- =============================================================================
 
 function Browser:showConfigDialog()
-    if not self.settings then
-        local Notification = require("utils/notification")
-        Notification:error(_("Settings not available"))
-        return
-    end
-
-    local buttons = {
-        {
-            {
-                text = _("Close"),
-                callback = function()
-                    UIManager:close(self.config_dialog)
-                end,
-            },
-        },
-    }
-
-    self.config_dialog = ButtonDialogTitle:new({
-        title = _("Settings"),
-        title_align = "center",
-        buttons = buttons,
-    })
-    UIManager:show(self.config_dialog)
+    -- Default implementation - subclasses can override for custom settings dialogs
+    local Notification = require("utils/notification")
+    Notification:info(_("Settings dialog not implemented for this browser"))
 end
 
 -- =============================================================================
