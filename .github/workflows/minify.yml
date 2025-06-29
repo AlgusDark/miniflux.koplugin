@@ -66,14 +66,10 @@ jobs:
             exit 1
           fi
 
-          echo "Downloading LuaSrcDiet..."
-          git clone https://github.com/jirutka/luasrcdiet.git luasrcdiet_tool
-
-          # Make the tool executable BEFORE symlinking
-          chmod +x luasrcdiet_tool/src/luasrcdiet.lua
-
-          # Create or update symlink to make it callable as a CLI
-          sudo ln -sf "$(pwd)/luasrcdiet_tool/src/luasrcdiet.lua" /usr/local/bin/luasrcdiet
+          echo "Downloading LuaSrcDiet script directly..."
+          curl -sSL https://raw.githubusercontent.com/jirutka/luasrcdiet/master/src/luasrcdiet.lua -o luasrcdiet
+          chmod +x luasrcdiet
+          sudo mv luasrcdiet /usr/local/bin/luasrcdiet
 
           echo "LuaSrcDiet installed as /usr/local/bin/luasrcdiet"
           luasrcdiet --help | head -n 1
