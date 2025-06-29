@@ -1,0 +1,9 @@
+# Ignore build artifacts
+dist/
+*.zip
+
+# Ignore local tooling scripts directory (even if Makefile is in root)
+scripts/
+
+# Ignore LuaSrcDiet downloaded for Makefile
+luasrcdiet_tool/

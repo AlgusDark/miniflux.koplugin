@@ -1,0 +1,95 @@
+version: '3'
+
+vars:
+  PLUGIN_NAME: miniflux.koplugin
+  DIST_DIR: dist
+  DIST_PLUGIN_DIR: "{{.DIST_DIR}}/{{.PLUGIN_NAME}}"
+  LUASRCDIET_GIT_REPO: https://github.com/jirutka/luasrcdiet.git
+  LUASRCDIET_TOOL_DIR: luasrcdiet_tool
+  LUASRCDIET_BIN: "{{.LUASRCDIET_TOOL_DIR}}/luasrcdiet"
+  LUASRCDIET_OPTS: "--noopt-base --opt-comments --opt-whitespace"
+  # Exclude pattern for find commands, ensuring paths are relative to execution directory
+  # Note: Taskfile executes commands from the Taskfile.yml directory by default.
+  EXCLUDE_PATHS_FIND: "-path './{{.DIST_DIR}}' -prune -o -path './.git' -prune -o -path './.github' -prune -o -path './{{.LUASRCDIET_TOOL_DIR}}' -prune -o"
+
+tasks:
+  default:
+    desc: "Cleans, checks syntax, and minifies Lua files (default task)."
+    deps: [minify]
+
+  setup_luasrcdiet:
+    desc: "Downloads and builds LuaSrcDiet locally if not already present."
+    dir: "{{.LUASRCDIET_TOOL_DIR}}"
+    cmds:
+      - echo "LuaSrcDiet not found or build incomplete. Cloning and building..."
+      - git clone {{.LUASRCDIET_GIT_REPO}} . # Clone into LUASRCDIET_TOOL_DIR
+      - make install LUA_VERSION_SUFFIX=5.3 PREFIX={{.USER_WORKING_DIR}}/{{.LUASRCDIET_TOOL_DIR}}/local
+      - mv local/bin/luasrcdiet {{.USER_WORKING_DIR}}/{{.LUASRCDIET_BIN}}
+      - echo "LuaSrcDiet installed to {{.USER_WORKING_DIR}}/{{.LUASRCDIET_BIN}}"
+    status:
+      - test -f {{.USER_WORKING_DIR}}/{{.LUASRCDIET_BIN}}
+    generates:
+      - "{{.USER_WORKING_DIR}}/{{.LUASRCDIET_BIN}}" # Relative to Taskfile.yml location
+
+  clean:
+    desc: "Removes build artifacts (dist/ and *.zip)."
+    cmds:
+      - echo "Cleaning up..."
+      - rm -rf {{.DIST_DIR}}
+      - rm -f *.zip
+      # To clean the LuaSrcDiet tool too:
+      # - rm -rf {{.LUASRCDIET_TOOL_DIR}}
+      - echo "Clean complete."
+
+  check_lua_syntax:
+    desc: "Checks Lua syntax using luac5.3 -p."
+    cmds:
+      - echo "Checking Lua syntax..."
+      # Using sh -c to handle potential issues with find and xargs in Taskfile when spaces or special chars might appear (though unlikely for .lua files)
+      - |
+        find . {{.EXCLUDE_PATHS_FIND}} -name "*.lua" -print0 | xargs -0 -I {} luac5.3 -p {}
+        if [ $? -ne 0 ]; then
+          echo "Lua syntax check failed."
+          exit 1
+        fi
+        echo "Lua syntax check passed."
+
+  minify:
+    desc: "Minifies Lua files using LuaSrcDiet."
+    deps: [setup_luasrcdiet, check_lua_syntax]
+    cmds:
+      - echo "Minifying Lua files..."
+      - mkdir -p {{.DIST_PLUGIN_DIR}}
+      - echo "Removing typedefs directories if they exist..."
+      - find . -type d {{.EXCLUDE_PATHS_FIND}} -name "typedefs" -exec rm -rf {} +
+      - echo "Minifying files to {{.DIST_PLUGIN_DIR}}/"
+      # The find command will be executed from the directory containing Taskfile.yml
+      - |
+        find . {{.EXCLUDE_PATHS_FIND}} -name "*.lua" -print | while read file; do
+          relative_path=$(echo "$file" | sed 's|^\./||')
+          output_file="{{.DIST_PLUGIN_DIR}}/$relative_path"
+          mkdir -p "$(dirname "$output_file")"
+          echo "Minifying $file to $output_file"
+          {{.LUASRCDIET_BIN}} {{.LUASRCDIET_OPTS}} "$file" -o "$output_file"
+          if [ $? -ne 0 ]; then
+            echo "Failed to minify $file"
+            exit 1
+          fi
+        done
+      - echo "Minification complete. Output in {{.DIST_PLUGIN_DIR}}/"
+    sources: # Only re-run if non-excluded .lua files change
+      - "**/*.lua"
+      - "!{{.DIST_DIR}}/**/*"
+      - "!{{.LUASRCDIET_TOOL_DIR}}/**/*"
+      - "!.git/**/*"
+      - "!.github/**/*"
+    generates:
+      - "{{.DIST_PLUGIN_DIR}}/**/*" # Marks that this task generates files in this pattern
+      # This isn't perfect for "generates" as it's a pattern, but helps Task understand output.
+      # A more precise `generates` would list specific output files, which is complex for wildcards.
+
+  # A helper to explicitly show the path to the luasrcdiet binary being used
+  show_luasrcdiet_path:
+    desc: "Shows the path to the LuaSrcDiet binary used by tasks."
+    cmds:
+      - echo {{.LUASRCDIET_BIN}}
