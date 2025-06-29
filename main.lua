@@ -111,7 +111,7 @@ end
 ---@return nil
 function Miniflux:onReadMinifluxEntries()
     local browser = self:createBrowser()
-    browser:showMainScreen()
+    browser:open()
 end
 
 ---Create and return a new browser instance

@@ -29,15 +29,15 @@ local Notification = require("utils/notification")
 
 ---Check if entry is already downloaded and open it if so
 ---@param entry_data table Entry data from API
----@param browser table|nil Browser instance to close
+---@param browser MinifluxBrowser|nil Browser instance to close
 ---@return boolean success True if already downloaded and opened
 local function handleExistingEntry(entry_data, browser)
     if EntryUtils.isEntryDownloaded(entry_data.id) then
         local html_file = EntryUtils.getEntryHtmlPath(entry_data.id)
         EntryUtils.openEntry(html_file, {
             before_open = function()
-                if browser and browser.closeAll then
-                    browser:closeAll()
+                if browser then
+                    browser:close()
                 end
             end
         })
@@ -277,7 +277,7 @@ end
 ---@param context table Download context
 ---@param images table Images array
 ---@param settings table Settings instance
----@param browser table|nil Browser instance to close
+---@param browser MinifluxBrowser|nil Browser instance to close
 ---@return boolean success
 local function openCompletedEntry(context, images, settings, browser)
     -- Show completion summary
@@ -287,8 +287,8 @@ local function openCompletedEntry(context, images, settings, browser)
     -- Open entry with browser cleanup
     EntryUtils.openEntry(context.html_file, {
         before_open = function()
-            if browser and browser.closeAll then
-                browser:closeAll()
+            if browser then
+                browser:close()
             end
         end
     })

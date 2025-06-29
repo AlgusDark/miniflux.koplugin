@@ -237,8 +237,12 @@ function EntryUtils.showCancellationDialog(context)
     choice_dialog = ButtonDialog:new {
         title = dialog_config.title,
         title_align = "center",
-        dismissible = false,
+        dismissable = false,
         buttons = dialog_buttons,
+        -- Handle tap outside dialog - behave like "Cancel entry creation"
+        -- tap_close_callback = function()
+        --     user_choice = "cancel_entry"
+        -- end,
     }
 
     UIManager:show(choice_dialog)

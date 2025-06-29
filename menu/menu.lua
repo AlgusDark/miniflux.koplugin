@@ -31,7 +31,7 @@ function Menu.build(plugin)
                 text = _("Read entries"),
                 callback = function()
                     local browser = plugin:createBrowser()
-                    browser:showMainScreen()
+                    browser:open()
                 end,
             },
             {
