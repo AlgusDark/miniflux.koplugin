@@ -16,13 +16,15 @@ tasks:
     deps: [ci_minify]
 
   setup_luasrcdiet:
-    desc: "Downloads and sets up LuaSrcDiet locally if not already present."
+    desc: "Downloads LuaSrcDiet shell wrapper and Lua script."
     cmds:
-      - echo "LuaSrcDiet not found or setup incomplete. Cloning and linking..."
-      - git clone https://github.com/jirutka/luasrcdiet.git {{.LUASRCDIET_TOOL_DIR}}
-      - chmod +x {{.LUASRCDIET_TOOL_DIR}}/src/luasrcdiet.lua
-      - ln -sf "$(pwd)/{{.LUASRCDIET_TOOL_DIR}}/src/luasrcdiet.lua" "{{.LUASRCDIET_BIN}}"
-      - echo "LuaSrcDiet symlinked to {{.LUASRCDIET_BIN}}"
+      - echo "Setting up LuaSrcDiet..."
+      - mkdir -p {{.LUASRCDIET_TOOL_DIR}}/bin
+      - curl -sSL https://raw.githubusercontent.com/jirutka/luasrcdiet/master/bin/luasrcdiet.lua -o {{.LUASRCDIET_TOOL_DIR}}/bin/luasrcdiet.lua
+      - curl -sSL https://raw.githubusercontent.com/jirutka/luasrcdiet/master/bin/luasrcdiet -o {{.LUASRCDIET_TOOL_DIR}}/bin/luasrcdiet
+      - chmod +x {{.LUASRCDIET_TOOL_DIR}}/bin/luasrcdiet
+      - ln -sf "$(pwd)/{{.LUASRCDIET_TOOL_DIR}}/bin/luasrcdiet" "{{.LUASRCDIET_BIN}}"
+      - echo "LuaSrcDiet ready at {{.LUASRCDIET_BIN}}"
     status:
       - test -f {{.LUASRCDIET_BIN}}
     generates:
