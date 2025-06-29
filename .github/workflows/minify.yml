@@ -42,14 +42,16 @@ jobs:
           echo "Attempting manual installation of Lua 5.3..."
           sudo apt-get update -y
           sudo apt-get install -y lua5.3 liblua5.3-dev
+
           # Create symlinks to make lua5.3 the default lua and luac
-          # Check if symlinks exist or if the targets are already the desired executables
           if [ ! -L /usr/local/bin/lua ] || [ "$(readlink -f /usr/local/bin/lua)" != "/usr/bin/lua5.3" ]; then
             sudo ln -sf /usr/bin/lua5.3 /usr/local/bin/lua
           fi
-          if [ ! -L /usr/local/bin/luac ] || [ "$(readlink -f /usr/local/bin/luac)" != "/usr/bin/luac5.3" ];
+
+          if [ ! -L /usr/local/bin/luac ] || [ "$(readlink -f /usr/local/bin/luac)" != "/usr/bin/luac5.3" ]; then
             sudo ln -sf /usr/bin/luac5.3 /usr/local/bin/luac
           fi
+
           # Verify installation
           echo "Verifying manual installation:"
           lua -v
