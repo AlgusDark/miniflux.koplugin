@@ -1,8 +1,11 @@
+# .github/workflows/minify_and_package.yml
 name: Minify & Package
 
 on:
   push:
-    branches: [main]
+    branches:
+      - dev       # ← re-added
+      - master    # ← your primary branch
   workflow_dispatch:
 
 jobs:
