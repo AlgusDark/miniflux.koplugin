@@ -19,7 +19,7 @@ jobs:
 
       - name: Set up Lua with leafo/gh-actions-lua
         id: setup_lua_action
-        uses: leafo/gh-actions-lua@v9
+        uses: leafo/gh-actions-lua@v11
         with:
           luaVersion: "5.3"
         continue-on-error: true
