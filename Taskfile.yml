@@ -4,52 +4,38 @@ vars:
   PLUGIN_NAME: miniflux.koplugin
   DIST_DIR: dist
   DIST_PLUGIN_DIR: "{{.DIST_DIR}}/{{.PLUGIN_NAME}}"
-  STRIP_TOOL: "lua scripts/strip_comments.lua"
-  EXCLUDE: >
-    -path './{{.DIST_DIR}}' -prune -o
-    -path './.git'        -prune -o
-    -path './.github'     -prune -o
-    -path './scripts'     -prune -o
+  STRIP_SCRIPT: scripts/strip_comments.sh
+
+  # <-- no trailing "-o" here anymore
+  EXCLUDE_FIND: "-path './{{.DIST_DIR}}' -prune -o -path './.git' -prune -o \
+                -path './.github' -prune -o -path './scripts' -prune"
 
 tasks:
-  default:
-    desc: "Strip comments, check syntax, remove typedefs, and prepare dist/"
-    deps: [ci_minify]
-
-  setup_luasrcdiet:
-    # you can actually remove this entire task now if you're not using luasrcdiet
-    desc: "(unused)"
-
-  clean:
-    desc: "Remove dist/ and any leftover zips"
-    cmds:
-      - rm -rf {{.DIST_DIR}}  *.zip || true
-
-  ci_minify:
-    desc: "(CI) strip comments, remove typedefs, copy into dist/"
-    deps: [clean]
+  ci_strip_comments:
+    desc: "(CI) Strip comments and copy Lua files"
     cmds:
       - |
         echo "CI: Checking Lua syntax…"
-        find . {{.EXCLUDE}} -type f -name "*.lua" -print0 \
-          | xargs -0 -I{} luac -p {} 
+        find . {{.EXCLUDE_FIND}} -type f -name "*.lua" -print0 \
+          | xargs -0 -I{} luac -p {}
+
       - |
-        echo "Stripping comments and copying…"
+        echo "Stripping comments into dist/…"
+        rm -rf {{.DIST_DIR}}
         mkdir -p {{.DIST_PLUGIN_DIR}}
-        find . {{.EXCLUDE}} -type d -name "typedefs" -exec rm -rf {} +
-        find . {{.EXCLUDE}} -type f -name "*.lua" -print \
-          | while read src; do
-              dst="{{.DIST_PLUGIN_DIR}}/${src#./}"
-              mkdir -p "$(dirname "$dst")"
-              echo "  → $src"
-              {{.STRIP_TOOL}} "$src" "$dst"
+        find . {{.EXCLUDE_FIND}} -type d -name "typedefs" -exec rm -rf {} +
+        find . {{.EXCLUDE_FIND}} -type f -name "*.lua" -print \
+          | while read file; do
+              rel=${file#./}
+              out="{{.DIST_PLUGIN_DIR}}/$rel"
+              mkdir -p "$(dirname "$out")"
+              bash {{.STRIP_SCRIPT}} < "$file" > "$out"
             done
 
   release_zip:
-    desc: "Zip the dist directory for release"
-    deps: [ci_minify]
+    desc: "Zip up the dist folder for release"
+    deps: [ci_strip_comments]
     cmds:
       - |
-        echo "Packaging {{.DIST_PLUGIN_DIR}} into {{.PLUGIN_NAME}}.zip"
-        cd {{.DIST_DIR}} && zip -r ../{{.PLUGIN_NAME}}.zip {{.PLUGIN_NAME}}
-        echo "Created {{.PLUGIN_NAME}}.zip"
+        cd {{.DIST_DIR}}
+        zip -r ../{{.PLUGIN_NAME}}.zip {{.PLUGIN_NAME}}
