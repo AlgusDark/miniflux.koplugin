@@ -7,7 +7,7 @@ vars:
   LUASRCDIET_GIT_REPO: https://github.com/jirutka/luasrcdiet.git
   LUASRCDIET_TOOL_DIR: luasrcdiet_tool
   LUASRCDIET_BIN: "{{.LUASRCDIET_TOOL_DIR}}/luasrcdiet"
-  LUASRCDIET_OPTS: " --no-opt-locals --no-opt-whitespace --no-opt-emptylines --no-opt-eols --opt-comments"
+  LUASRCDIET_OPTS: "--opt-comments --no-opt-whitespace --no-opt-emptylines --no-opt-eols --no-opt-strings --no-opt-numbers --no-opt-locals --no-opt-entropy --no-opt-experimental"
   EXCLUDE_PATHS_FIND: "-path './{{.DIST_DIR}}' -prune -o -path './.git' -prune -o -path './.github' -prune -o -path './{{.LUASRCDIET_TOOL_DIR}}' -prune -o"
 
 tasks:
