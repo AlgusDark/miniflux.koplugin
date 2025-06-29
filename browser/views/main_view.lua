@@ -54,34 +54,27 @@ end
 function MainView.loadData(config)
     local repositories = config.repositories
 
-    -- Get unread count with dialog
-    local unread_count, error_msg = repositories.entry:getUnreadCount({
-        dialogs = {
-            loading = { text = _("Loading unread count...") }
-        }
+    local Notification = require("utils/notification")
+    local loading_notification = Notification:info({
+        text = _("Loading..."),
+        timeout = nil,
     })
-    if not unread_count then
-        return nil, error_msg
-    end
+
+    -- Get unread count with dialog
+    local unread_count = repositories.entry:getUnreadCount()
 
     -- Get feeds count with dialog
-    local feeds_count = repositories.feed:getCount({
-        dialogs = {
-            loading = { text = _("Loading feeds count...") }
-        }
-    })
+    local feeds_count = repositories.feed:getCount()
 
     -- Get categories count with dialog
-    local categories_count = repositories.category:getCount({
-        dialogs = {
-            loading = { text = _("Loading categories count...") }
-        }
-    })
+    local categories_count = repositories.category:getCount()
+
+    loading_notification:close()
 
     return {
-        unread_count = unread_count,
-        feeds_count = feeds_count,
-        categories_count = categories_count,
+        unread_count = unread_count or 0,
+        feeds_count = feeds_count or 0,
+        categories_count = categories_count or 0,
     }
 end
 
