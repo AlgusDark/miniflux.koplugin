@@ -44,7 +44,7 @@ tasks:
     cmds:
       - |
         echo "CI: Checking Lua syntax..."
-        find . {{.EXCLUDE_PATHS_FIND}} -name "*.lua" -print0 | xargs -0 -I {} luac5.3 -p {}
+        find . {{.EXCLUDE_PATHS_FIND}} -name "*.lua" -print0 | xargs -0 -I {} luac -p {}
       - |
         echo "Minifying plugin..."
         mkdir -p {{.DIST_PLUGIN_DIR}}
