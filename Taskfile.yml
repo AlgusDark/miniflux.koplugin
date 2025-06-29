@@ -52,7 +52,8 @@ tasks:
           output_file="{{.DIST_PLUGIN_DIR}}/$relative_path"
           mkdir -p "$(dirname "$output_file")"
           echo "Minifying $file to $output_file"
-          LUA_PATH="luasrcdiet_tool/lib/?.lua;luasrcdiet_tool/lib/?/init.lua;;" {{.LUASRCDIET_BIN}} {{.LUASRCDIET_OPTS}} "$file" -o "$output_file"
+          LUA_PATH="luasrcdiet_tool/lib/?.lua;luasrcdiet_tool/lib/?/init.lua;;" \
+            lua luasrcdiet_tool/luasrcdiet --noopt-base --opt-comments --opt-whitespace "$file" -o "$output_file"
         done
 
   release_zip:
