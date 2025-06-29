@@ -8,6 +8,7 @@ viewing of RSS entries in KOReader.
 --]]
 
 local _ = require("gettext")
+local util = require("util") -- Use KOReader's built-in utilities
 
 local HtmlUtils = {}
 
@@ -29,15 +30,6 @@ local HTML_TEMPLATE_TAIL = [[    </div>
     </div>
 </body>
 </html>]]
-
--- Pre-compiled escape patterns for better performance
-local ESCAPE_PATTERNS = {
-    ["&"] = "&amp;",
-    ["<"] = "&lt;",
-    [">"] = "&gt;",
-    ['"'] = "&quot;",
-    ["'"] = "&#39;",
-}
 
 -- Simple cleanup patterns for better performance
 local CLEANUP_PATTERNS = {
@@ -68,8 +60,8 @@ local CLEANUP_PATTERNS = {
 function HtmlUtils.createHtmlDocument(entry, content)
     local entry_title = entry.title or _("Untitled Entry")
 
-    -- Escape title once and reuse
-    local escaped_title = HtmlUtils.escapeHtml(entry_title)
+    -- Use KOReader's built-in HTML escape (more robust than custom implementation)
+    local escaped_title = util.htmlEscape(entry_title)
 
     -- Build metadata sections using table for efficient concatenation
     local metadata_sections = {}
@@ -79,10 +71,10 @@ function HtmlUtils.createHtmlDocument(entry, content)
     if entry.feed and entry.feed.title then
         section_count = section_count + 1
         metadata_sections[section_count] = "<p><strong>" ..
-            _("Feed") .. ":</strong> " .. HtmlUtils.escapeHtml(entry.feed.title) .. "</p>"
+            _("Feed") .. ":</strong> " .. util.htmlEscape(entry.feed.title) .. "</p>"
     end
 
-    -- Publication date
+    -- Publication date (no escaping needed for timestamp)
     if entry.published_at then
         section_count = section_count + 1
         metadata_sections[section_count] = "<p><strong>" ..
@@ -94,10 +86,10 @@ function HtmlUtils.createHtmlDocument(entry, content)
         local base_url = entry.url:match("^(https?://[^/]+)") or entry.url
         section_count = section_count + 1
         metadata_sections[section_count] = '<p><strong>' ..
-            _("URL") .. ':</strong> <a href="' .. entry.url .. '">' .. HtmlUtils.escapeHtml(base_url) .. '</a></p>'
+            _("URL") .. ':</strong> <a href="' .. entry.url .. '">' .. util.htmlEscape(base_url) .. '</a></p>'
     end
 
-    -- Build final HTML using pre-compiled templates
+    -- Build final HTML using pre-compiled templates and efficient concatenation
     local metadata_html = table.concat(metadata_sections, "\n        ")
 
     return string.format(HTML_TEMPLATE_HEAD, escaped_title, escaped_title) ..
@@ -105,25 +97,29 @@ function HtmlUtils.createHtmlDocument(entry, content)
         string.format(HTML_TEMPLATE_TAIL, content)
 end
 
----Escape HTML special characters
+---Escape HTML special characters using KOReader's built-in utility
 ---@param text string Text to escape
 ---@return string Escaped text
 function HtmlUtils.escapeHtml(text)
     if not text then
         return ""
     end
-
-    return (text:gsub("[&<>\"']", ESCAPE_PATTERNS))
+    -- Use KOReader's built-in HTML escape function (handles more entities than custom version)
+    return util.htmlEscape(text)
 end
 
 ---Clean and normalize HTML content with optimized pattern matching
 ---@param content string Raw HTML content
 ---@return string Cleaned HTML content
 function HtmlUtils.cleanHtmlContent(content)
+    if not content or content == "" then
+        return ""
+    end
+
     local cleaned_content = content
 
     -- Use single pcall for all operations to reduce overhead
-    pcall(function()
+    local success = pcall(function()
         -- Pre-cache patterns table to avoid repeated table access
         local patterns = CLEANUP_PATTERNS
         local pattern_count = #patterns
@@ -133,6 +129,11 @@ function HtmlUtils.cleanHtmlContent(content)
             cleaned_content = cleaned_content:gsub(patterns[i], "")
         end
     end)
+
+    if not success then
+        -- If cleaning fails, return original content (safer than empty string)
+        return content
+    end
 
     return cleaned_content
 end

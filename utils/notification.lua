@@ -29,6 +29,8 @@ function NotificationInstance:new(widget)
     }
     setmetatable(instance, self)
     self.__index = self
+
+    UIManager:forceRePaint()
     return instance
 end
 

@@ -161,7 +161,6 @@ function MinifluxAPI:makeRequest(method, endpoint, config)
             text = dialogs.loading.text,
             timeout = dialogs.loading.timeout
         })
-        UIManager:forceRePaint()
     end
 
     local base_url = Files.rtrimSlashes(server_address) .. "/v1"
