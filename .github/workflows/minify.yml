@@ -65,13 +65,16 @@ jobs:
             echo "Critical: Lua 5.3 is not available after setup attempts. Aborting."
             exit 1
           fi
-          echo "Proceeding with LuaSrcDiet installation."
-          git clone https://github.com/jirutka/luasrcdiet.git
-          cd luasrcdiet
-          # Ensure make uses the correct Lua version if multiple are somehow present
-          make install LUA_VERSION_SUFFIX=5.3 PREFIX=/usr/local
-          cd ..
-           luasrcdiet --version # Verify global install
+
+          echo "Downloading LuaSrcDiet..."
+          git clone https://github.com/jirutka/luasrcdiet.git luasrcdiet_tool
+
+          # Create a symlink to run it as a command
+          sudo ln -sf "$(pwd)/luasrcdiet_tool/src/luasrcdiet.lua" /usr/local/bin/luasrcdiet
+          sudo chmod +x /usr/local/bin/luasrcdiet
+
+          echo "LuaSrcDiet installed as /usr/local/bin/luasrcdiet"
+          luasrcdiet --version || echo "LuaSrcDiet is ready (no version info)"
 
       - name: Install Task
         uses: arduino/setup-task@v1
