@@ -1,4 +1,5 @@
 name: Minify Lua Plugin
+
 on:
   push:
     branches:
@@ -11,23 +12,27 @@ on:
   release:
     types:
       - published
+
 jobs:
   minify_and_package:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      - name: Cache Lua 5.3 build
-        uses: actions/cache@v3
-        with:
-          path: ~/.lua-build
-          key: lua-5.3-cache
+
+      - name: Set date var for caching
+        id: date
+        run: echo "day=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+
+      # Lua setup
       - name: Set up Lua with leafo/gh-actions-lua
         id: setup_lua_action
         uses: leafo/gh-actions-lua@v11
         with:
           luaVersion: "5.3"
         continue-on-error: true
+
       - name: Verify Lua installation
         id: verify_lua
         run: |
@@ -36,6 +41,7 @@ jobs:
           else
             echo "fallback_needed=true" >> $GITHUB_OUTPUT
           fi
+
       - name: "Fallback: Install Lua manually"
         if: steps.verify_lua.outputs.fallback_needed == 'true'
         run: |
@@ -43,30 +49,39 @@ jobs:
           sudo apt-get install -y lua5.3 liblua5.3-dev
           sudo ln -sf /usr/bin/lua5.3 /usr/local/bin/lua
           sudo ln -sf /usr/bin/luac5.3 /usr/local/bin/luac
+
+      # Cache LuaSrcDiet clone
       - name: Cache LuaSrcDiet
         id: cache_luasrcdiet
         uses: actions/cache@v3
         with:
           path: luasrcdiet_tool
-          key: luasrcdiet-2024-06-29
+          key: luasrcdiet-${{ steps.date.outputs.day }}
+
       - name: Install LuaSrcDiet (if not cached)
         if: steps.cache_luasrcdiet.outputs.cache-hit != 'true'
-        run: >
-          git clone --depth=1 https://github.com/jirutka/luasrcdiet.git
-          luasrcdiet_tool
-
+        run: |
+          git clone --depth=1 https://github.com/jirutka/luasrcdiet.git luasrcdiet_tool
           chmod +x luasrcdiet_tool/bin/luasrcdiet
+
+      # Task setup
       - name: Install Task
         uses: arduino/setup-task@v1
         with:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Verify Task installation
         run: task --version
+
+      # Minify
       - name: Build minified version
         run: task ci_minify
+
       - name: Create zip
         run: task release_zip
+
+      # Auto-tag dev branch builds
       - name: Auto-tag dev build
         if: github.ref == 'refs/heads/dev'
         run: |
@@ -75,12 +90,16 @@ jobs:
           git config --global user.email "actions@github.com"
           git tag "dev-$TIMESTAMP"
           git push origin "dev-$TIMESTAMP"
-      - name: Upload dev artifact
-        if: github.ref == 'refs/heads/dev'
+
+      # Upload zip as artifact (for dev & PRs)
+      - name: Upload build artifact
+        if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: miniflux.koplugin-dev.zip
+          name: miniflux.koplugin.zip
           path: miniflux.koplugin.zip
+
+      # Release asset (only on actual published releases)
       - name: Upload Release Asset
         if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
