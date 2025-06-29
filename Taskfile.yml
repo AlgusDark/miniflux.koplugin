@@ -16,17 +16,18 @@ tasks:
     deps: [ci_minify]
 
   setup_luasrcdiet:
-    desc: "Clones LuaSrcDiet fully with all required modules."
+    desc: "Clones LuaSrcDiet fully and symlinks executable."
     cmds:
       - echo "Cloning LuaSrcDiet..."
-      - git clone --depth=1 https://github.com/jirutka/luasrcdiet.git {{.LUASRCDIET_TOOL_DIR}}
-      - chmod +x {{.LUASRCDIET_TOOL_DIR}}/bin/luasrcdiet
-      - ln -sf "$(pwd)/{{.LUASRCDIET_TOOL_DIR}}/bin/luasrcdiet" "{{.LUASRCDIET_BIN}}"
-      - echo "LuaSrcDiet CLI linked to {{.LUASRCDIET_BIN}}"
+      - rm -rf luasrcdiet_tool  # Ensure clean state
+      - git clone --depth=1 https://github.com/jirutka/luasrcdiet.git luasrcdiet_tool
+      - chmod +x luasrcdiet_tool/bin/luasrcdiet
+      - ln -sf "$(pwd)/luasrcdiet_tool/bin/luasrcdiet" luasrcdiet
+      - echo "LuaSrcDiet linked at ./luasrcdiet"
     status:
-      - test -f {{.LUASRCDIET_BIN}}
+      - test -f luasrcdiet_tool/bin/luasrcdiet
     generates:
-      - "{{.LUASRCDIET_BIN}}"
+      - luasrcdiet
 
   clean:
     desc: "Removes build artifacts (dist/ and *.zip)."
