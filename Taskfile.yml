@@ -90,6 +90,56 @@ tasks:
 
   # A helper to explicitly show the path to the luasrcdiet binary being used
   show_luasrcdiet_path:
-    desc: "Shows the path to the LuaSrcDiet binary used by tasks."
+    desc: "Shows the path to the LuaSrcDiet binary used by local tasks."
     cmds:
       - echo {{.LUASRCDIET_BIN}}
+
+  # --- CI Specific Tasks ---
+  # These tasks assume certain tools (luac5.3, luasrcdiet) are already in PATH,
+  # as they will be set up by the GitHub Actions workflow.
+
+  ci_check_lua_syntax:
+    desc: "(CI) Checks Lua syntax using luac5.3 (assumed to be in PATH)."
+    cmds:
+      - echo "CI: Checking Lua syntax..."
+      - |
+        find . {{.EXCLUDE_PATHS_FIND}} -name "*.lua" -print0 | xargs -0 -I {} luac5.3 -p {}
+        if [ $? -ne 0 ]; then
+          echo "CI: Lua syntax check failed."
+          exit 1
+        fi
+        echo "CI: Lua syntax check passed."
+
+  ci_minify:
+    desc: "(CI) Minifies Lua files using global luasrcdiet."
+    deps: [ci_check_lua_syntax]
+    cmds:
+      - echo "CI: Minifying Lua files..."
+      - mkdir -p {{.DIST_PLUGIN_DIR}}
+      - echo "CI: Removing typedefs directories if they exist..."
+      # For CI, LUASRCDIET_TOOL_DIR might not exist, so exclude_paths might be slightly different if we wanted to be super precise,
+      # but current EXCLUDE_PATHS_FIND is safe as it just prunes non-existent paths.
+      - find . -type d {{.EXCLUDE_PATHS_FIND}} -name "typedefs" -exec rm -rf {} +
+      - echo "CI: Minifying files to {{.DIST_PLUGIN_DIR}}/"
+      - |
+        find . {{.EXCLUDE_PATHS_FIND}} -name "*.lua" -print | while read file; do
+          relative_path=$(echo "$file" | sed 's|^\./||')
+          output_file="{{.DIST_PLUGIN_DIR}}/$relative_path"
+          mkdir -p "$(dirname "$output_file")"
+          echo "CI: Minifying $file to $output_file"
+          # Uses global luasrcdiet, assumed to be in PATH
+          luasrcdiet {{.LUASRCDIET_OPTS}} "$file" -o "$output_file"
+          if [ $? -ne 0 ]; then
+            echo "CI: Failed to minify $file"
+            exit 1
+          fi
+        done
+      - echo "CI: Minification complete. Output in {{.DIST_PLUGIN_DIR}}/"
+    sources: # Using similar source tracking as the local minify
+      - "**/*.lua"
+      - "!{{.DIST_DIR}}/**/*"
+      - "!{{.LUASRCDIET_TOOL_DIR}}/**/*" # Still good to exclude this, even if not used by ci_minify directly
+      - "!.git/**/*"
+      - "!.github/**/*"
+    generates:
+      - "{{.DIST_PLUGIN_DIR}}/**/*"

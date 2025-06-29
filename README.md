@@ -261,3 +261,6 @@ task minify
 task clean
 ```
 The output plugin will be located in the `dist/miniflux.koplugin` directory.
+
+### CI Consistency
+The Continuous Integration (CI) process executed via GitHub Actions also uses Taskfile (`task ci_minify`) to perform the minification. This ensures that the build process is consistent between local development and the automated CI environment. Developers primarily use the local tasks like `task minify`.

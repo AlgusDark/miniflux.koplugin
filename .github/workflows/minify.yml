@@ -36,7 +36,7 @@ jobs:
             echo "fallback_needed=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Fallback: Install Lua 5.3 manually
+      - name: 'Fallback: Install Lua 5.3 manually'
         if: steps.verify_lua.outputs.fallback_needed == 'true'
         run: |
           echo "Attempting manual installation of Lua 5.3..."
@@ -69,48 +69,27 @@ jobs:
           # Ensure make uses the correct Lua version if multiple are somehow present
           make install LUA_VERSION_SUFFIX=5.3 PREFIX=/usr/local
           cd ..
-          luasrcdiet --version
+           luasrcdiet --version # Verify global install
+
+      - name: Install Task
+        uses: arduino/setup-task@v1
+        with:
+          version: 3.x # Or specify a particular version e.g., 3.17.0
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify Task installation
+        run: task --version
 
       - name: Install zip for packaging
         if: github.event_name == 'release'
         run: sudo apt-get update && sudo apt-get install -y zip
 
-      - name: Create dist directory
-        run: mkdir -p dist/miniflux.koplugin
+      # Create dist directory is now handled by the task 'ci_minify'
+      # Find and remove typedefs is now handled by the task 'ci_minify'
+      # Minify Lua files (including syntax check) is now handled by 'task ci_minify'
 
-      - name: Find and remove typedefs directories
-        run: |
-          find . -type d -name "typedefs" -print0 | xargs -0 -I {} rm -rf {}
-          echo "Removed typedefs directories"
-
-      - name: Minify Lua files
-        run: |
-          # Optional: Syntax check Lua files before minifying
-          echo "Checking Lua syntax..."
-          find . -path ./dist -prune -o -name "*.lua" -print0 | xargs -0 -I {} luac5.3 -p {}
-          if [ $? -ne 0 ]; then
-            echo "Lua syntax check failed."
-            exit 1
-          fi
-          echo "Lua syntax check passed."
-
-          echo "Minifying Lua files..."
-          # Find all .lua files, excluding those in dist/ and .github/
-          find . -path ./dist -prune -o -path ./.git -prune -o -path ./luasrcdiet -prune -o -path ./.github -prune -o -name "*.lua" -print | while read file; do
-            # Calculate the relative path for the output file
-            relative_path=$(echo "$file" | sed 's|^\./||')
-            output_file="dist/miniflux.koplugin/$relative_path"
-            # Create the directory structure in dist
-            mkdir -p "$(dirname "$output_file")"
-            # Minify the file
-            echo "Minifying $file to $output_file"
-            luasrcdiet --noopt-base --opt-comments --opt-whitespace "$file" -o "$output_file"
-            if [ $? -ne 0 ]; then
-              echo "Failed to minify $file"
-              exit 1
-            fi
-          done
-          echo "Minification complete."
+      - name: Run Task to Check Syntax and Minify for CI
+        run: task ci_minify
 
       - name: Package for Release
         if: github.event_name == 'release'
