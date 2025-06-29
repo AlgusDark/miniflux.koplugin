@@ -96,8 +96,8 @@ jobs:
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: miniflux.koplugin.zip
-          path: miniflux.koplugin.zip
+          name: miniflux.koplugin
+          path: dist/miniflux.koplugin
 
       # Release asset (only on actual published releases)
       - name: Upload Release Asset
