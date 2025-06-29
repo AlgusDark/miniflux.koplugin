@@ -16,18 +16,17 @@ tasks:
     deps: [ci_minify]
 
   setup_luasrcdiet:
-    desc: "Clones LuaSrcDiet fully and symlinks executable."
+    desc: "Clones LuaSrcDiet fully (no symlinks needed)."
     cmds:
       - echo "Cloning LuaSrcDiet..."
-      - rm -rf luasrcdiet_tool  # Ensure clean state
+      - rm -rf luasrcdiet_tool
       - git clone --depth=1 https://github.com/jirutka/luasrcdiet.git luasrcdiet_tool
       - chmod +x luasrcdiet_tool/bin/luasrcdiet
-      - ln -sf "$(pwd)/luasrcdiet_tool/bin/luasrcdiet" luasrcdiet
-      - echo "LuaSrcDiet linked at ./luasrcdiet"
+      - echo "LuaSrcDiet ready at luasrcdiet_tool/bin/luasrcdiet"
     status:
       - test -f luasrcdiet_tool/bin/luasrcdiet
     generates:
-      - luasrcdiet
+      - luasrcdiet_tool/bin/luasrcdiet
 
   clean:
     desc: "Removes build artifacts (dist/ and *.zip)."
