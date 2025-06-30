@@ -214,7 +214,6 @@ end
 local function analyzeDownloadResults(images)
     local success_count = 0
     local failed_count = 0
-    local error_types = {}
 
     for _, img in ipairs(images) do
         if img.downloaded then
@@ -222,7 +221,6 @@ local function analyzeDownloadResults(images)
         else
             failed_count = failed_count + 1
             local error_type = img.error_reason or "unknown_error"
-            error_types[error_type] = (error_types[error_type] or 0) + 1
         end
     end
 
@@ -230,7 +228,6 @@ local function analyzeDownloadResults(images)
         success_count = success_count,
         failed_count = failed_count,
         total_count = #images,
-        error_types = error_types,
         has_errors = failed_count > 0
     }
 end

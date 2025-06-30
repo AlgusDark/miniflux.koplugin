@@ -280,7 +280,6 @@ function EntryUtils.openEntry(file_path, config)
 
     local function doOpen()
         -- Open the file directly - context management is handled by plugin-level events
-        local ReaderUI = require("apps/reader/readerui")
         ReaderUI:showReader(file_path)
     end
 
@@ -288,7 +287,6 @@ function EntryUtils.openEntry(file_path, config)
     if config.before_open then
         config.before_open()
         -- Use nextTick to ensure proper sequencing after UI operations
-        local UIManager = require("ui/uimanager")
         UIManager:nextTick(doOpen)
     else
         doOpen()
