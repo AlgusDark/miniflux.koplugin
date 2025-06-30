@@ -8,7 +8,6 @@ better organization.
 @module miniflux.utils.navigation
 --]]
 
-local UIManager = require("ui/uimanager")
 local lfs = require("libs/libkoreader-lfs")
 local Notification = require("utils/notification")
 local _ = require("gettext")
@@ -179,12 +178,8 @@ function Navigation.loadEntryMetadata(entry_info)
         return nil, nil, _("Cannot navigate: missing timestamp information")
     end
 
-    local published_unix
-    local ok = pcall(function()
-        published_unix = TimeUtils.iso8601_to_unix(metadata.published_at)
-    end)
-
-    if not ok or not published_unix then
+    local published_unix = TimeUtils.iso8601_to_unix(metadata.published_at)
+    if not published_unix then
         return nil, nil, _("Cannot navigate: invalid timestamp format")
     end
 

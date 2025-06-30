@@ -21,7 +21,7 @@ local Notification = require("utils/notification")
 local EntryUtils = require("utils/entry_utils")
 local Navigation = require("utils/navigation")
 local Files = require("utils/files")
-local DownloadEntryJob = require("jobs/download_entry_job")
+local EntryDownloader = require("services/entry_downloader")
 
 ---@class EntryService
 ---@field settings MinifluxSettings Settings instance
@@ -79,7 +79,7 @@ end
 ---@param browser? MinifluxBrowser Browser instance to close
 ---@return boolean success
 function EntryService:downloadEntryContent(entry_data, browser)
-    return DownloadEntryJob.startCancellableDownload({
+    return EntryDownloader.startCancellableDownload({
         entry_data = entry_data,
         settings = self.settings,
         browser = browser

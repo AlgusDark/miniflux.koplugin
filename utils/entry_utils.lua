@@ -207,7 +207,7 @@ function EntryUtils.showCancellationDialog(context)
     else -- "after_images"
         dialog_config = {
             title = _(
-                "Entry creation was cancelled.\nImages have been downloaded successfully.\n\nWhat would you like to do?"),
+                "Entry creation was interrupted.\nImages have been downloaded successfully.\n\nWhat would you like to do?"),
             buttons = {
                 {
                     text = _("Cancel entry creation"),

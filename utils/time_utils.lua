@@ -11,14 +11,13 @@ local TimeUtils = {}
 
 ---Convert ISO-8601 timestamp to Unix timestamp
 ---@param iso_string string ISO-8601 formatted timestamp string
----@return number Unix timestamp in seconds
----@throws error if the input string is not valid ISO-8601 format
+---@return number? Unix timestamp in seconds
 function TimeUtils.iso8601_to_unix(iso_string)
     local Y, M, D, h, m, sec, sign, tzh, tzm =
         iso_string:match("(%d+)%-(%d+)%-(%d+)T" .. "(%d+):(%d+):(%d+)" .. "([%+%-])(%d%d):(%d%d)$")
 
     if not Y then
-        error("Bad ISO-8601 string: " .. tostring(iso_string))
+        return nil
     end
 
     Y, M, D = tonumber(Y), tonumber(M), tonumber(D)
