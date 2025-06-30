@@ -16,7 +16,31 @@ local lfs = require("libs/libkoreader-lfs")
 local util = require("util")
 local _ = require("gettext")
 
+-- [Third party](https://github.com/koreader/koreader-base/tree/master/thirdparty) tool
+-- https://github.com/msva/lua-htmlparser
+local htmlparser = require("htmlparser")
+
 local Images = {}
+
+-- =============================================================================
+-- IMAGE UTILITIES
+-- =============================================================================
+
+-- Valid image file extensions for validation
+local valid_extensions = {
+    jpg = true, jpeg = true, png = true, gif = true, webp = true, svg = true
+}
+
+-- Generate consistent image filename with safe formatting
+local function generateImageFilename(image_count, ext)
+    local base_filename = "image_" .. string.format("%03d", image_count) .. "." .. ext
+    return util.getSafeFilename(base_filename)
+end
+
+-- Format CSS pixel values consistently
+local function formatPixelValue(dimension, value)
+    return string.format("%s: %spx", dimension, value)
+end
 
 -- =============================================================================
 -- IMAGE DISCOVERY
@@ -43,7 +67,7 @@ local function collectImgTag(img_tag, base_url, images, seen_images, image_count
         image_count_ref[1] = image_count_ref[1] + 1
         local image_count = image_count_ref[1]
         local ext = Images.getImageExtension(normalized_src)
-        local filename = util.getSafeFilename("image_" .. string.format("%03d", image_count) .. "." .. ext)
+        local filename = generateImageFilename(image_count, ext)
 
         -- Simple attribute extraction for fallback
         local width = tonumber(img_tag:match([[width="([^"]*)"]]))
@@ -76,7 +100,6 @@ function Images.discoverImages(content, base_url)
 
     -- Try DOM parser approach first (much more reliable than regex)
     local success = pcall(function()
-        local htmlparser = require("htmlparser")
         local root = htmlparser.parse(content, 5000)
         local img_elements = root:select("img")
 
@@ -97,8 +120,7 @@ function Images.discoverImages(content, base_url)
                         local ext = Images.getImageExtension(normalized_src)
 
                         -- Use KOReader's safe filename utility
-                        local base_filename = "image_" .. string.format("%03d", image_count) .. "." .. ext
-                        local filename = util.getSafeFilename(base_filename)
+                        local filename = generateImageFilename(image_count, ext)
 
                         -- Extract dimensions and srcset directly from DOM attributes
                         local width = tonumber(attrs.width)
@@ -164,10 +186,10 @@ function Images.normalizeImageUrl(src, base_url)
         return "https:" .. src
     end
 
-    -- Handle absolute and relative URLs using KOReader's URL utilities
+    -- Handle root-relative and other relative URLs using KOReader's URL utilities
     if src:sub(1, 1) == "/" and base_url then
         return socket_url.absolute(base_url, src)
-    elseif not src:match("^https?://") and base_url then
+    elseif base_url and not (src:sub(1, 7) == "http://" or src:sub(1, 8) == "https://") then
         return socket_url.absolute(base_url, src)
     else
         return src
@@ -189,9 +211,6 @@ function Images.getImageExtension(url)
     ext = ext:lower()
 
     -- Check if extension is valid
-    local valid_extensions = {
-        jpg = true, jpeg = true, png = true, gif = true, webp = true, svg = true
-    }
     return valid_extensions[ext] and ext or "jpg"
 end
 
@@ -298,9 +317,13 @@ end
 ---@param base_url? table Parsed base URL for normalizing URLs
 ---@return string Processed HTML content
 function Images.processHtmlImages(content, seen_images, include_images, base_url)
+    -- If include_images is false, return content unchanged (no processing needed)
+    if not include_images then
+        return content
+    end
+
     -- Try DOM parser approach first (much more reliable)
     local success, processed_content = pcall(function()
-        local htmlparser = require("htmlparser")
         local root = htmlparser.parse(content, 5000)
         local img_elements = root:select("img")
 
@@ -309,81 +332,40 @@ function Images.processHtmlImages(content, seen_images, include_images, base_url
                 local attrs = img_element.attributes or {}
                 local src = attrs.src
 
-                if src and src ~= "" then
-                    -- Skip data URLs
-                    if src:sub(1, 5) == "data:" then
-                        if not include_images then
-                            -- Remove data URL images if include_images is false
-                            if img_element.parent then
-                                for i, child in ipairs(img_element.parent) do
-                                    if child == img_element then
-                                        table.remove(img_element.parent, i)
-                                        break
-                                    end
-                                end
-                            end
-                        end
-                    else
-                        -- Normalize the URL to match what we stored
-                        local normalized_src = Images.normalizeImageUrl(src, base_url)
-                        local img_info = seen_images[normalized_src]
+                -- Only process images with src attributes (skip data URLs and empty src)
+                if src and src ~= "" and src:sub(1, 5) ~= "data:" then
+                    -- Normalize the URL to match what we stored
+                    local normalized_src = Images.normalizeImageUrl(src, base_url)
+                    local img_info = seen_images[normalized_src]
 
-                        if img_info then
-                            if include_images and img_info.downloaded then
-                                -- Image was successfully downloaded, replace with local path
-                                attrs.src = img_info.filename
-                                -- Preserve or set dimensions
-                                if img_info.width then
-                                    attrs.style = (attrs.style or "") ..
-                                        string.format("width: %spx; ", img_info.width)
-                                end
-                                if img_info.height then
-                                    attrs.style = (attrs.style or "") ..
-                                        string.format("height: %spx; ", img_info.height)
-                                end
-                                -- Clean up style if it was empty before
-                                if attrs.style and attrs.style:match("^%s*$") then
-                                    attrs.style = nil
-                                end
-                            elseif not include_images then
-                                -- Remove image from DOM
-                                if img_element.parent then
-                                    for i, child in ipairs(img_element.parent) do
-                                        if child == img_element then
-                                            table.remove(img_element.parent, i)
-                                            break
-                                        end
-                                    end
-                                end
-                            end
-                            -- If include_images is true but image wasn't downloaded,
-                            -- leave the original img element unchanged
-                        else
-                            -- Image not in our list - handle gracefully
-                            if not include_images then
-                                -- Remove image from DOM
-                                if img_element.parent then
-                                    for i, child in ipairs(img_element.parent) do
-                                        if child == img_element then
-                                            table.remove(img_element.parent, i)
-                                            break
-                                        end
-                                    end
-                                end
-                            end
+                    -- Only replace if image was successfully downloaded
+                    if img_info and img_info.downloaded then
+                        -- Replace with local path
+                        attrs.src = img_info.filename
+
+                        -- Preserve or set dimensions for proper display
+                        local style_parts = {}
+                        local existing_style = attrs.style
+
+                        if existing_style and existing_style ~= "" then
+                            table.insert(style_parts, existing_style)
+                        end
+
+                        if img_info.width then
+                            table.insert(style_parts, formatPixelValue("width", img_info.width))
+                        end
+                        if img_info.height then
+                            table.insert(style_parts, formatPixelValue("height", img_info.height))
+                        end
+
+                        -- Build final style attribute
+                        if #style_parts > 0 then
+                            attrs.style = table.concat(style_parts, "; ")
                         end
                     end
-                else
-                    -- No src attribute - remove if include_images is false
-                    if not include_images and img_element.parent then
-                        for i, child in ipairs(img_element.parent) do
-                            if child == img_element then
-                                table.remove(img_element.parent, i)
-                                break
-                            end
-                        end
-                    end
+                    -- If image wasn't downloaded or not in our list, leave unchanged
                 end
+                -- All other images (data URLs, no src, etc.) left unchanged
             end
         end
 
@@ -397,27 +379,20 @@ function Images.processHtmlImages(content, seen_images, include_images, base_url
     -- Fallback to regex approach if DOM parser fails
     local replaceImg = function(img_tag)
         local src = img_tag:match([[src="([^"]*)"]])
-        if src == nil or src == "" then
-            return include_images and img_tag or ""
+
+        -- Skip data URLs, empty src, or if include_images is false
+        if not src or src == "" or src:sub(1, 5) == "data:" then
+            return img_tag
         end
 
-        if src:sub(1, 5) == "data:" then
-            return include_images and img_tag or ""
-        end
-
-        local normalized_src = Images.normalizeImageUrl(src or "", base_url)
+        local normalized_src = Images.normalizeImageUrl(src, base_url)
         local img_info = seen_images[normalized_src]
 
-        if img_info then
-            if include_images and img_info.downloaded then
-                return Images.createLocalImageTag(img_info)
-            elseif include_images then
-                return img_tag -- Keep original URL
-            else
-                return ""      -- Remove image
-            end
+        -- Only replace if image was successfully downloaded
+        if img_info and img_info.downloaded then
+            return Images.createLocalImageTag(img_info)
         else
-            return include_images and img_tag or ""
+            return img_tag -- Leave original unchanged
         end
     end
 
@@ -435,10 +410,10 @@ function Images.createLocalImageTag(img_info)
     local style_props = {}
 
     if img_info.width then
-        table.insert(style_props, string.format("width: %spx", img_info.width))
+        table.insert(style_props, formatPixelValue("width", img_info.width))
     end
     if img_info.height then
-        table.insert(style_props, string.format("height: %spx", img_info.height))
+        table.insert(style_props, formatPixelValue("height", img_info.height))
     end
 
     local style = table.concat(style_props, "; ")

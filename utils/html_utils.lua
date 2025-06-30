@@ -10,7 +10,17 @@ viewing of RSS entries in KOReader.
 local _ = require("gettext")
 local util = require("util") -- Use KOReader's built-in utilities
 
+-- [Third party](https://github.com/koreader/koreader-base/tree/master/thirdparty) tool
+-- https://github.com/msva/lua-htmlparser
+local htmlparser = require("htmlparser")
+
 local HtmlUtils = {}
+
+-- Escape string for use in Lua pattern matching
+local function escapePattern(str)
+    -- Escape special pattern characters: ( ) . % + - * ? [ ] ^ $
+    return str:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1")
+end
 
 ---Create a complete HTML document for an entry
 ---@param entry MinifluxEntry Entry data
@@ -83,42 +93,51 @@ function HtmlUtils.cleanHtmlContent(content)
         return ""
     end
 
+    -- Elements that won't work offline - remove using CSS selectors
+    local unwanted_selectors = {
+        "script", -- Scripts (security and functionality)
+        "iframe", -- Iframes (won't work offline)
+        "video",  -- Videos (won't work offline)
+        "object", -- Objects and embeds (multimedia)
+        "embed",  -- Flash/multimedia embeds
+        "form",   -- Forms (won't work offline)
+        "style",  -- Style blocks (can cause display issues)
+    }
+
     -- Try HTML parser approach first (much more reliable)
     local success, cleaned_content = pcall(function()
-        local htmlparser = require("htmlparser")
         local root = htmlparser.parse(content, 5000)
 
-        -- Elements that won't work offline - remove using CSS selectors
-        local unwanted_selectors = {
-            "script", -- Scripts (security and functionality)
-            "iframe", -- Iframes (won't work offline)
-            "video",  -- Videos (won't work offline)
-            "object", -- Objects and embeds (multimedia)
-            "embed",  -- Flash/multimedia embeds
-            "form",   -- Forms (won't work offline)
-            "style",  -- Style blocks (can cause display issues)
-        }
+        -- Track elements that get removed for efficient string replacement
+        local removed_element_texts = {}
+        local total_removed = 0
 
         -- Remove each type of unwanted element
         for _, selector in ipairs(unwanted_selectors) do
             local elements = root:select(selector)
             if elements then
                 for _, element in ipairs(elements) do
-                    -- Remove the element from DOM
-                    if element.parent then
-                        for i, child in ipairs(element.parent) do
-                            if child == element then
-                                table.remove(element.parent, i)
-                                break
-                            end
-                        end
+                    -- Get the original element text BEFORE removal
+                    local element_text = element:gettext()
+                    if element_text and element_text ~= "" then
+                        removed_element_texts[element_text] = true
+                        total_removed = total_removed + 1
                     end
                 end
             end
         end
 
-        -- Return the cleaned HTML
-        return root:getcontent() or content
+        -- Use efficient string replacement instead of DOM reconstruction
+        if total_removed > 0 then
+            local cleaned_content = content
+            for element_text, _ in pairs(removed_element_texts) do
+                local escaped_pattern = escapePattern(element_text)
+                cleaned_content = cleaned_content:gsub(escaped_pattern, "")
+            end
+            return cleaned_content
+        else
+            return content
+        end
     end)
 
     if success and cleaned_content and cleaned_content ~= "" then
@@ -143,88 +162,6 @@ function HtmlUtils.cleanHtmlContent(content)
 
     -- If everything fails, return original content (safer than empty string)
     return content
-end
-
----Clean tracking parameters from URLs in HTML using DOM parser
----@param content string HTML content with URLs
----@return string HTML with cleaned URLs
-function HtmlUtils.cleanTrackingUrls(content)
-    if not content or content == "" then
-        return ""
-    end
-
-    -- Try DOM parser approach
-    local success, cleaned_content = pcall(function()
-        local htmlparser = require("htmlparser")
-        local root = htmlparser.parse(content, 5000)
-
-        -- Clean tracking parameters from links
-        local link_elements = root:select("a[href]")
-        if link_elements then
-            for _, link in ipairs(link_elements) do
-                local href = link.attributes.href
-                if href then
-                    -- Remove common tracking parameters
-                    local cleaned_href = href:gsub("[?&]utm_[^&]*", "")
-                        :gsub("[?&]fbclid=[^&]*", "")
-                        :gsub("[?&]gclid=[^&]*", "")
-                        :gsub("[?&]ref=[^&]*", "")
-                        :gsub("[?&]source=[^&]*", "")
-                        :gsub("^([^?]*)[?]&", "%1?") -- Fix malformed query strings
-                        :gsub("^([^?]*)[?]$", "%1")  -- Remove trailing ?
-                    link.attributes.href = cleaned_href
-                end
-            end
-        end
-
-        return root:getcontent() or content
-    end)
-
-    return (success and cleaned_content) or content
-end
-
----Extract main content from article HTML using common content selectors
----@param content string Full HTML content
----@return string Extracted main content
-function HtmlUtils.extractMainContent(content)
-    if not content or content == "" then
-        return ""
-    end
-
-    -- Try DOM parser approach with content extraction (similar to newsdownloader)
-    local success, extracted_content = pcall(function()
-        local htmlparser = require("htmlparser")
-        local root = htmlparser.parse(content, 5000)
-
-        -- Try common content selectors (ordered by specificity)
-        local content_selectors = {
-            "article",
-            "main",
-            ".article-content",
-            ".entry-content",
-            ".post-content",
-            ".content",
-            "#content",
-            ".main-content",
-            "#main",
-        }
-
-        for _, selector in ipairs(content_selectors) do
-            local elements = root:select(selector)
-            if elements and #elements > 0 then
-                local content_element = elements[1]         -- Take first match
-                local extracted = content_element:getcontent()
-                if extracted and extracted:len() > 100 then -- Ensure substantial content
-                    return "<!DOCTYPE html><html><head></head><body>" .. extracted .. "</body></html>"
-                end
-            end
-        end
-
-        -- If no specific content found, return cleaned full content
-        return content
-    end)
-
-    return (success and extracted_content) or content
 end
 
 return HtmlUtils
