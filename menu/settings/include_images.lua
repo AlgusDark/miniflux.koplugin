@@ -16,8 +16,6 @@ local IncludeImages = {}
 ---@param settings MinifluxSettings Settings instance
 ---@return table Menu item configuration
 function IncludeImages.getMenuItem(settings)
-    local current_include_images = settings.include_images
-
     return {
         text_func = function()
             return settings.include_images and _("Include images - ON")
@@ -27,7 +25,7 @@ function IncludeImages.getMenuItem(settings)
         sub_item_table_func = function()
             return {
                 {
-                    text = _("ON") .. (current_include_images and " ✓" or ""),
+                    text = _("ON") .. (settings.include_images and " ✓" or ""),
                     keep_menu_open = true,
                     callback = function(touchmenu_instance)
                         IncludeImages.updateSetting({
@@ -39,7 +37,7 @@ function IncludeImages.getMenuItem(settings)
                     end,
                 },
                 {
-                    text = _("OFF") .. (not current_include_images and " ✓" or ""),
+                    text = _("OFF") .. (not settings.include_images and " ✓" or ""),
                     keep_menu_open = true,
                     callback = function(touchmenu_instance)
                         IncludeImages.updateSetting({
