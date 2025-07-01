@@ -58,8 +58,7 @@ end
 ---Discover images in HTML content using DOM parser (more reliable than regex)
 ---@param content string HTML content to scan
 ---@param base_url? table Parsed base URL for resolving relative URLs
----@return ImageInfo[] Array of discovered images
----@return table<string, ImageInfo> Map of URLs to image info for deduplication
+---@return ImageInfo[] images, table<string, ImageInfo> seen_images
 function Images.discoverImages(content, base_url)
     local images = {}
     local seen_images = {}

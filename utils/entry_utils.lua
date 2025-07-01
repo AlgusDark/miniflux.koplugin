@@ -13,6 +13,7 @@ local UIManager = require("ui/uimanager")
 local ButtonDialog = require("ui/widget/buttondialog")
 local ReaderUI = require("apps/reader/readerui")
 local FileManager = require("apps/filemanager/filemanager")
+local Error = require("utils/error")
 local _ = require("gettext")
 
 local EntryUtils = {}
@@ -62,21 +63,21 @@ end
 
 ---Validate entry data for download (enhanced with better error handling)
 ---@param entry_data table Entry data from API
----@return boolean success, string? error_message
+---@return boolean|nil result, Error|nil error
 function EntryUtils.validateForDownload(entry_data)
     if not entry_data or type(entry_data) ~= "table" then
-        return false, _("Invalid entry data")
+        return nil, Error.new(_("Invalid entry data"))
     end
 
     if not EntryUtils.isValidId(entry_data.id) then
-        return false, _("Invalid entry ID")
+        return nil, Error.new(_("Invalid entry ID"))
     end
 
     if not EntryUtils.hasContent(entry_data) then
-        return false, _("No content available for this entry")
+        return nil, Error.new(_("No content available for this entry"))
     end
 
-    return true
+    return true, nil
 end
 
 -- =============================================================================

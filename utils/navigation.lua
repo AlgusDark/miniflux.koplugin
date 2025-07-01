@@ -15,6 +15,7 @@ local _ = require("gettext")
 -- Import dependencies
 local Files = require("utils/files")
 local TimeUtils = require("utils/time_utils")
+local Error = require("utils/error")
 
 -- Constants
 local DIRECTION_PREVIOUS = "previous"
@@ -78,20 +79,22 @@ function Navigation.navigateToEntry(entry_info, config)
     local direction = navigation_options.direction
 
     -- Validate input
-    local valid, error_msg = Navigation.validateNavigationInput(entry_info, miniflux_api)
-    if not valid then
-        ---@cast error_msg string
-        Notification:warning(error_msg)
+    local valid, err = Navigation.validateNavigationInput(entry_info, miniflux_api)
+    if err then
+        Notification:warning(err.message)
         return
     end
 
     -- Load metadata
-    local metadata, published_unix, metadata_error = Navigation.loadEntryMetadata(entry_info)
-    if not metadata then
-        ---@cast metadata_error string
-        Notification:warning(metadata_error)
+    local metadata_result, metadata_err = Navigation.loadEntryMetadata(entry_info)
+    if metadata_err then
+        Notification:warning(metadata_err.message)
         return
     end
+    ---@cast metadata_result -nil
+
+    local metadata = metadata_result.metadata
+    local published_unix = metadata_result.published_unix
 
     -- Get browser context from plugin
     local context
@@ -102,19 +105,18 @@ function Navigation.navigateToEntry(entry_info, config)
     end
 
     -- Build navigation options
-    local nav_options, options_error = Navigation.buildNavigationOptions({
-        ---@cast published_unix number
+    local nav_options, options_err = Navigation.buildNavigationOptions({
         published_unix = published_unix,
         direction = direction,
         settings = settings,
         context = context,
         metadata = metadata
     })
-    if not nav_options then
-        ---@cast options_error string
-        Notification:warning(options_error)
+    if options_err then
+        Notification:warning(options_err.message)
         return
     end
+    ---@cast nav_options -nil
 
     -- Perform search
     local success, result = Navigation.performNavigationSearch({
@@ -158,40 +160,41 @@ end
 ---Validate navigation input parameters
 ---@param entry_info table Entry information with file_path and entry_id
 ---@param miniflux_api table Miniflux API instance
----@return boolean success, string? error_message
+---@return boolean|nil result, Error|nil error
 function Navigation.validateNavigationInput(entry_info, miniflux_api)
     if not entry_info.entry_id then
-        return false, _("Cannot navigate: missing entry ID")
+        return nil, Error.new(_("Cannot navigate: missing entry ID"))
     end
 
     if not miniflux_api then
-        return false, _("Cannot navigate: Miniflux API not available")
+        return nil, Error.new(_("Cannot navigate: Miniflux API not available"))
     end
 
     -- Note: Plugin can be nil (for direct file opening), context will default to global
-    return true
+    return true, nil
 end
 
 ---Load and validate entry metadata
 ---@param entry_info table Entry information
----@return table? metadata, number? published_unix, string? error_message
+---@return {metadata: EntryMetadata, published_unix: number}|nil result, Error|nil error
 function Navigation.loadEntryMetadata(entry_info)
     local metadata = Files.loadCurrentEntryMetadata(entry_info)
     if not metadata or not metadata.published_at then
-        return nil, nil, _("Cannot navigate: missing timestamp information")
+        return nil, Error.new(_("Cannot navigate: missing timestamp information"))
     end
 
-    local published_unix = TimeUtils.iso8601_to_unix(metadata.published_at)
-    if not published_unix then
-        return nil, nil, _("Cannot navigate: invalid timestamp format")
+    local published_unix, time_err = TimeUtils.iso8601_to_unix(metadata.published_at)
+    if time_err then
+        return nil, Error.new(_("Cannot navigate: invalid timestamp format"))
     end
+    ---@cast published_unix -nil
 
-    return metadata, published_unix
+    return { metadata = metadata, published_unix = published_unix }, nil
 end
 
 ---Build navigation options based on direction
 ---@param config {published_unix: number, direction: string, settings: table, context: table, metadata: table}
----@return table? options, string? error_message
+---@return table|nil result, Error|nil error
 function Navigation.buildNavigationOptions(config)
     local published_unix = config.published_unix
     local direction = config.direction
@@ -212,7 +215,7 @@ function Navigation.buildNavigationOptions(config)
         entry_metadata = metadata
     })
     if not options then
-        return nil, _("Cannot navigate: failed to get context options")
+        return nil, Error.new(_("Cannot navigate: failed to get context options"))
     end
 
     if direction == DIRECTION_PREVIOUS then
@@ -222,13 +225,13 @@ function Navigation.buildNavigationOptions(config)
         options.direction = DIRECTION_DESC
         options[PUBLISHED_BEFORE] = published_unix
     else
-        return nil, _("Invalid navigation direction")
+        return nil, Error.new(_("Invalid navigation direction"))
     end
 
     options.limit = 1
     options.order = settings.order
 
-    return options
+    return options, nil
 end
 
 ---Try to open local file if it exists
@@ -265,15 +268,16 @@ function Navigation.performNavigationSearch(config)
     local loading_message = direction == DIRECTION_PREVIOUS and MSG_FINDING_PREVIOUS or MSG_FINDING_NEXT
 
     -- Try API call first
-    local success, result = miniflux_api:getEntries(options, {
+    local result, err = miniflux_api:getEntries(options, {
         dialogs = {
             loading = { text = loading_message }
         }
     })
 
     -- If API call succeeds, return result
-    if success then
-        return success, result
+    if not err then
+        ---@cast result -nil
+        return true, result
     end
 
     -- API call failed - try simple offline navigation

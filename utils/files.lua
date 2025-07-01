@@ -44,9 +44,17 @@ end
 -- METADATA LOADING
 -- =============================================================================
 
+---@class EntryMetadata
+---@field id number
+---@field title string
+---@field url string
+---@field status string
+---@field published_at string
+---@field feed table
+
 ---Load current entry metadata from DocSettings
 ---@param entry_info table Entry information with file_path and entry_id
----@return table|nil Metadata table or nil if failed
+---@return EntryMetadata|nil Metadata table or nil if failed
 function Files.loadCurrentEntryMetadata(entry_info)
     if not entry_info.file_path or not entry_info.entry_id then
         return nil

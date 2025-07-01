@@ -12,21 +12,24 @@ local _ = require("gettext")
 
 local FeedsView = {}
 
+---@alias FeedsViewConfig {repositories: MinifluxRepositories, settings: MinifluxSettings, page_state?: number, onSelectItem: function}
+
 ---Complete feeds view component (React-style) - returns view data for rendering
----@param config {repositories: table, settings: table, page_state?: number, onSelectItem: function}
+---@param config FeedsViewConfig
 ---@return table|nil View data for browser rendering, or nil on error
 function FeedsView.show(config)
     -- Fetch data with API-level dialog management
-    local result, error_msg = config.repositories.feed:getAllWithCounters({
+    local result, err = config.repositories.feed:getAllWithCounters({
         dialogs = {
             loading = { text = _("Fetching feeds...") },
             error = { text = _("Failed to fetch feeds"), timeout = 5 }
         }
     })
 
-    if not result then
+    if err then
         return nil -- Error dialog already shown by API system
     end
+    ---@cast result -nil
 
     -- Generate menu items using internal builder
     local menu_items = FeedsView.buildItems({

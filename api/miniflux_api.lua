@@ -12,6 +12,15 @@ Miniflux-specific endpoint knowledge and request building.
 ---@field entries MinifluxEntry[] Array of entries
 ---@field total? number Total number of entries available
 
+---@class MinifluxFeedCategory
+---@field id number Category ID
+---@field title string Category title
+
+---@class MinifluxEntryFeed
+---@field id number Feed ID
+---@field title string Feed title
+---@field category MinifluxFeedCategory Category information
+
 ---@class MinifluxEntry
 ---@field id number Entry ID
 ---@field title string Entry title
@@ -20,12 +29,18 @@ Miniflux-specific endpoint knowledge and request building.
 ---@field url? string Entry URL
 ---@field published_at? string Publication timestamp
 ---@field status string Entry status: "read", "unread", "removed"
----@field feed? MinifluxFeed Feed information
+---@field feed MinifluxEntryFeed Feed information
 
 ---@class MinifluxFeed
 ---@field id number Feed ID
+---@field user_id number User ID
 ---@field title string Feed title
----@field category_id? number Category ID this feed belongs to
+---@field site_url string Site URL
+---@field feed_url string Feed URL
+---@field checked_at string Last check timestamp
+---@field category MinifluxFeedCategory Category information
+---@field disabled boolean Whether feed is disabled
+---@field parsing_error_message string Parsing error message if any
 
 ---@class MinifluxFeedCounters
 ---@field reads table<string, number> Read counts per feed ID
@@ -59,7 +74,7 @@ end
 ---Get entries from the server
 ---@param options? ApiOptions Query options for filtering and sorting
 ---@param config? table Configuration including optional dialogs
----@return boolean success, MinifluxEntriesResponse|string result_or_error
+---@return MinifluxEntriesResponse|nil result, Error|nil error
 function MinifluxAPI:getEntries(options, config)
     config = config or {}
     return self.api_client:get("/entries", {
@@ -71,7 +86,7 @@ end
 ---Update entry status for one or multiple entries
 ---@param entry_ids number|number[] Entry ID or array of entry IDs to update
 ---@param config? table Configuration with body containing status and dialogs
----@return boolean success, any result_or_error
+---@return table|nil result, Error|nil error
 function MinifluxAPI:updateEntries(entry_ids, config)
     config = config or {}
 
@@ -100,14 +115,14 @@ end
 
 ---Get all feeds
 ---@param config? table Configuration including optional dialogs
----@return boolean success, MinifluxFeed[]|string result_or_error
+---@return MinifluxFeed[]|nil result, Error|nil error
 function MinifluxAPI:getFeeds(config)
     config = config or {}
     return self.api_client:get("/feeds", config)
 end
 
 ---Get feed counters (read/unread counts)
----@return boolean success, MinifluxFeedCounters|string result_or_error
+---@return MinifluxFeedCounters|nil result, Error|nil error
 function MinifluxAPI:getFeedCounters()
     return self.api_client:get("/feeds/counters")
 end
@@ -116,7 +131,7 @@ end
 ---@param feed_id number The feed ID
 ---@param options? ApiOptions Query options for filtering and sorting
 ---@param config? table Configuration including optional dialogs
----@return boolean success, MinifluxEntriesResponse|string result_or_error
+---@return MinifluxEntriesResponse|nil result, Error|nil error
 function MinifluxAPI:getFeedEntries(feed_id, options, config)
     config = config or {}
     local endpoint = "/feeds/" .. tostring(feed_id) .. "/entries"
@@ -134,7 +149,7 @@ end
 ---Get all categories
 ---@param include_counts? boolean Whether to include entry counts
 ---@param config? table Configuration with optional query, dialogs
----@return boolean success, MinifluxCategory[]|string result_or_error
+---@return MinifluxCategory[]|nil result, Error|nil error
 function MinifluxAPI:getCategories(include_counts, config)
     config = config or {}
     local query_params = {}
@@ -152,7 +167,7 @@ end
 ---@param category_id number The category ID
 ---@param options? ApiOptions Query options for filtering and sorting
 ---@param config? table Configuration including optional dialogs
----@return boolean success, MinifluxEntriesResponse|string result_or_error
+---@return MinifluxEntriesResponse|nil result, Error|nil error
 function MinifluxAPI:getCategoryEntries(category_id, options, config)
     config = config or {}
     local endpoint = "/categories/" .. tostring(category_id) .. "/entries"
@@ -169,7 +184,7 @@ end
 
 ---Get current user information (useful for connection testing)
 ---@param config? table Configuration including optional dialogs
----@return boolean success, table|string result_or_error
+---@return table|nil result, Error|nil error
 function MinifluxAPI:getMe(config)
     config = config or {}
     return self.api_client:get("/me", config)

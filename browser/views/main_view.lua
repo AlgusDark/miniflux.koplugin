@@ -11,8 +11,10 @@ local _ = require("gettext")
 
 local MainView = {}
 
+---@alias MainViewConfig {repositories: MinifluxRepositories, settings: MinifluxSettings, onSelectUnread: function, onSelectFeeds: function, onSelectCategories: function}
+
 ---Complete main view component (React-style) - returns view data for rendering
----@param config {repositories: table, settings: table, onSelectUnread: function, onSelectFeeds: function, onSelectCategories: function}
+---@param config MainViewConfig
 ---@return table|nil View data for browser rendering, or nil on error
 function MainView.show(config)
     -- Load initial data
@@ -48,9 +50,8 @@ function MainView.show(config)
 end
 
 ---Load initial data needed for main screen (internal helper)
----@param config {repositories: {entry: EntryRepository, feed: FeedRepository, category: CategoryRepository}}
----@return table|nil result Data with counts or nil on error
----@return string|nil error Error message if failed
+---@param config {repositories: MinifluxRepositories}
+---@return table|nil result, string|nil error
 function MainView.loadData(config)
     local repositories = config.repositories
 
@@ -61,7 +62,12 @@ function MainView.loadData(config)
     })
 
     -- Get unread count with dialog
-    local unread_count = repositories.entry:getUnreadCount()
+    local unread_count, unread_err = repositories.entry:getUnreadCount()
+    if unread_err then
+        loading_notification:close()
+        return nil, unread_err.message
+    end
+    ---@cast unread_count -nil
 
     -- Get feeds count with dialog
     local feeds_count = repositories.feed:getCount()

@@ -7,6 +7,8 @@ Provides a clean interface for feed data without UI concerns.
 @module miniflux.browser.repositories.feed_repository
 --]]
 
+local Error = require("utils/error")
+
 ---@class MinifluxFeedsWithCountersResult
 ---@field feeds MinifluxFeed[] Array of feeds
 ---@field counters MinifluxFeedCounters Feed counters with reads/unreads maps
@@ -35,31 +37,30 @@ end
 
 ---Get all feeds
 ---@param config? table Configuration with optional dialogs
----@return table[]|nil feeds Array of feeds or nil on error
----@return string|nil error Error message if failed
+---@return MinifluxFeed[]|nil result, Error|nil error
 function FeedRepository:getAll(config)
-    local success, feeds = self.miniflux_api:getFeeds(config)
-    if not success then
-        return nil, feeds
+    local feeds, err = self.miniflux_api:getFeeds(config)
+    if err then
+        return nil, err
     end
+    ---@cast feeds -nil
 
     return feeds, nil
 end
 
 ---Get feeds with their read/unread counters
 ---@param config? table Configuration with optional dialogs
----@return MinifluxFeedsWithCountersResult|nil result Result containing feeds and counters, or nil on error
----@return string|nil error Error message if failed
+---@return MinifluxFeedsWithCountersResult|nil result, Error|nil error
 function FeedRepository:getAllWithCounters(config)
     -- Get feeds first
-    local feeds, error_msg = self:getAll(config)
-    if not feeds then
-        return nil, error_msg
+    local feeds, err = self:getAll(config)
+    if err then
+        return nil, err
     end
 
     -- Get counters (optional - continue without if it fails)
-    local counters_success, counters = self.miniflux_api:getFeedCounters()
-    if not counters_success then
+    local counters, counters_err = self.miniflux_api:getFeedCounters()
+    if counters_err then
         counters = { reads = {}, unreads = {} } -- Empty counters on failure
     end
 
@@ -73,8 +74,8 @@ end
 ---@param config? table Configuration with optional dialogs
 ---@return number count Count of feeds (0 if failed)
 function FeedRepository:getCount(config)
-    local feeds, error_msg = self:getAll(config)
-    if not feeds then
+    local feeds, err = self:getAll(config)
+    if err then
         return 0 -- Continue with 0 feeds instead of failing
     end
 

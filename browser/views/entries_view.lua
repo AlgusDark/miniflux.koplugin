@@ -12,8 +12,10 @@ local _ = require("gettext")
 
 local EntriesView = {}
 
+---@alias EntriesViewConfig {repositories: MinifluxRepositories, settings: MinifluxSettings, entry_type: "unread"|"feed"|"category", id?: number, page_state?: number, onSelectItem: function}
+
 ---Complete entries view component (React-style) - returns view data for rendering
----@param config {repositories: table, settings: table, entry_type: "unread"|"feed"|"category", id?: number, page_state?: number, onSelectItem: function}
+---@param config EntriesViewConfig
 ---@return table|nil View data for browser rendering, or nil on error
 function EntriesView.show(config)
     local entry_type = config.entry_type
@@ -23,6 +25,7 @@ function EntriesView.show(config)
     if (entry_type == "feed" or entry_type == "category") and not id then
         error("ID is required for " .. entry_type .. " entry type")
     end
+    ---@cast id -nil
 
     -- Prepare loading messages
     local loading_messages = {
@@ -40,18 +43,19 @@ function EntriesView.show(config)
     }
 
     -- Fetch data based on type
-    local entries, error_msg
+    local entries, err
     if entry_type == "unread" then
-        entries, error_msg = config.repositories.entry:getUnread(dialog_config)
+        entries, err = config.repositories.entry:getUnread(dialog_config)
     elseif entry_type == "feed" then
-        entries, error_msg = config.repositories.entry:getByFeed(id, dialog_config)
+        entries, err = config.repositories.entry:getByFeed(id, dialog_config)
     elseif entry_type == "category" then
-        entries, error_msg = config.repositories.entry:getByCategory(id, dialog_config)
+        entries, err = config.repositories.entry:getByCategory(id, dialog_config)
     end
 
-    if not entries then
+    if err then
         return nil -- Error dialog already shown by API system
     end
+    ---@cast entries -nil
 
     -- Generate menu items using internal builder
     local show_feed_names = (entry_type == "unread" or entry_type == "category")

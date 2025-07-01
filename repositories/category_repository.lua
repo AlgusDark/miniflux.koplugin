@@ -7,6 +7,8 @@ Provides a clean interface for category data without UI concerns.
 @module miniflux.browser.repositories.category_repository
 --]]
 
+local Error = require("utils/error")
+
 ---@class CategoryRepository
 ---@field miniflux_api MinifluxAPI Miniflux API instance
 ---@field settings MinifluxSettings Settings instance
@@ -31,13 +33,13 @@ end
 
 ---Get all categories with counts
 ---@param config? table Configuration with optional dialogs
----@return table[]|nil categories Array of categories or nil on error
----@return string|nil error Error message if failed
+---@return MinifluxCategory[]|nil result, Error|nil error
 function CategoryRepository:getAll(config)
-    local success, categories = self.miniflux_api:getCategories(true, config) -- include counts
-    if not success then
-        return nil, categories
+    local categories, err = self.miniflux_api:getCategories(true, config) -- include counts
+    if err then
+        return nil, err
     end
+    ---@cast categories -nil
 
     return categories, nil
 end
@@ -46,8 +48,8 @@ end
 ---@param config? table Configuration with optional dialogs
 ---@return number count Count of categories (0 if failed)
 function CategoryRepository:getCount(config)
-    local categories, error_msg = self:getAll(config)
-    if not categories then
+    local categories, err = self:getAll(config)
+    if err then
         return 0 -- Continue with 0 categories instead of failing
     end
 

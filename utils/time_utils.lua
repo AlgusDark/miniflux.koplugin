@@ -7,17 +7,20 @@ and date parsing for RSS entries and navigation.
 @module miniflux.utils.time_utils
 --]]
 
+local Error = require("utils/error")
+local _ = require("gettext")
+
 local TimeUtils = {}
 
 ---Convert ISO-8601 timestamp to Unix timestamp
 ---@param iso_string string ISO-8601 formatted timestamp string
----@return number? Unix timestamp in seconds
+---@return number|nil result, Error|nil error
 function TimeUtils.iso8601_to_unix(iso_string)
     local Y, M, D, h, m, sec, sign, tzh, tzm =
         iso_string:match("(%d+)%-(%d+)%-(%d+)T" .. "(%d+):(%d+):(%d+)" .. "([%+%-])(%d%d):(%d%d)$")
 
     if not Y then
-        return nil
+        return nil, Error.new(_("Invalid ISO-8601 timestamp format"))
     end
 
     Y, M, D = tonumber(Y), tonumber(M), tonumber(D)
@@ -46,7 +49,7 @@ function TimeUtils.iso8601_to_unix(iso_string)
         utc_secs = utc_secs + offs
     end
 
-    return utc_secs
+    return utc_secs, nil
 end
 
 return TimeUtils

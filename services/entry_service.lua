@@ -56,32 +56,25 @@ end
 ---@return boolean success
 function EntryService:readEntry(entry_data, browser)
     -- Validate entry data with enhanced validation
-    local valid, error_msg = EntryUtils.validateForDownload(entry_data)
-    if not valid then
-        Notification:error(error_msg)
+    local valid, err = EntryUtils.validateForDownload(entry_data)
+    if err then
+        Notification:error(err.message)
         return false
     end
 
     -- Download entry if needed
-    local success = self:downloadEntryContent(entry_data, browser)
+    local success = EntryDownloader.startCancellableDownload({
+        entry_data = entry_data,
+        settings = self.settings,
+        browser = browser
+    })
+
     if not success then
         Notification:error(_("Failed to download and show entry"))
         return false
     end
 
     return true
-end
-
----Download entry content using EntryDownloader with progress tracking
----@param entry_data table Entry data from API
----@param browser? MinifluxBrowser Browser instance to close
----@return boolean success
-function EntryService:downloadEntryContent(entry_data, browser)
-    return EntryDownloader.startCancellableDownload({
-        entry_data = entry_data,
-        settings = self.settings,
-        browser = browser
-    })
 end
 
 -- =============================================================================
@@ -104,7 +97,7 @@ function EntryService:changeEntryStatus(entry_id, new_status)
     local error_text = T(_("Failed to mark entry as %1"), new_status)
 
     -- Call API with automatic dialog management
-    local success, result = self.miniflux_api:updateEntries(entry_id, {
+    local result, err = self.miniflux_api:updateEntries(entry_id, {
         body = { status = new_status },
         dialogs = {
             loading = { text = loading_text },
@@ -113,13 +106,13 @@ function EntryService:changeEntryStatus(entry_id, new_status)
         }
     })
 
-    if success then
+    if err then
+        -- Error dialog already shown by API system
+        return false
+    else
         -- Update local metadata
         EntryUtils.updateEntryStatus(entry_id, new_status)
         return true
-    else
-        -- Error dialog already shown by API system
-        return false
     end
 end
 

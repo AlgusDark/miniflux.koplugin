@@ -47,7 +47,7 @@ local Notification = {}
 
 ---Parse parameters (string shorthand or options table)
 ---@param params string|table Message text or options table
----@param default_timeout number Default timeout for this notification type
+---@param default_timeout number|nil Default timeout for this notification type
 ---@return string text, number|nil timeout
 local function parseParams(params, default_timeout)
     if type(params) == "string" then
@@ -59,7 +59,8 @@ local function parseParams(params, default_timeout)
         local timeout = params.timeout ~= nil and params.timeout or default_timeout
         return text, timeout
     else
-        error("Invalid parameters: expected string or table")
+        -- Safe fallback instead of error() for KOReader compatibility
+        return tostring(params), default_timeout
     end
 end
 

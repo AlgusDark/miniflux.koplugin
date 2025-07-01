@@ -19,6 +19,7 @@ local logger = require("logger")
 local Files = require("utils/files")
 local util = require("util")
 local Notification = require("utils/notification")
+local Error = require("utils/error")
 
 -- No timeout constants needed - handled by Notification utility
 
@@ -115,8 +116,7 @@ end
 ---@param method "GET"|"POST"|"PUT"|"DELETE" HTTP method to use
 ---@param endpoint string API endpoint path
 ---@param config? table Configuration including body, query, and dialogs
----@return boolean success True if request succeeded
----@return table|string result_or_error Decoded JSON table on success, error string on failure
+---@return table|nil result, Error|nil error
 function APIClient:makeRequest(method, endpoint, config)
     config = config or {}
     local dialogs = config.dialogs
@@ -135,7 +135,7 @@ function APIClient:makeRequest(method, endpoint, config)
                 timeout = dialogs.error.timeout
             })
         end
-        return false, _("Server address and API token must be configured")
+        return nil, Error.new(_("Server address and API token must be configured"))
     end
 
     -- Handle loading dialog (AFTER validation passes)
@@ -208,7 +208,7 @@ function APIClient:makeRequest(method, endpoint, config)
                 timeout = dialogs.error.timeout
             })
         end
-        return false, error_message
+        return nil, Error.new(error_message)
     end
 
     local response_text = table.concat(response_body)
@@ -226,7 +226,7 @@ function APIClient:makeRequest(method, endpoint, config)
         if response_text and response_text ~= "" then
             local success, data = pcall(JSON.decode, response_text)
             if success then
-                return true, data
+                return data, nil
             else
                 logger.err("MinifluxAPI: invalid JSON response", response_text)
                 local error_message = _("Invalid JSON response from server")
@@ -237,10 +237,10 @@ function APIClient:makeRequest(method, endpoint, config)
                         timeout = dialogs.error.timeout
                     })
                 end
-                return false, error_message
+                return nil, Error.new(error_message)
             end
         else
-            return true, {}
+            return {}, nil
         end
     end
 
@@ -256,7 +256,7 @@ function APIClient:makeRequest(method, endpoint, config)
         })
     end
 
-    return false, error_message
+    return nil, Error.new(error_message)
 end
 
 -- =============================================================================
@@ -266,8 +266,7 @@ end
 ---Make a GET request
 ---@param endpoint string API endpoint path
 ---@param config? table Configuration with optional query, dialogs
----@return boolean success True if request succeeded
----@return table|string result_or_error Decoded JSON table on success, error string on failure
+---@return table|nil result, Error|nil error
 function APIClient:get(endpoint, config)
     config = config or {}
     return self:makeRequest("GET", endpoint, config)
@@ -276,8 +275,7 @@ end
 ---Make a POST request
 ---@param endpoint string API endpoint path
 ---@param config? table Configuration with optional body, query, dialogs
----@return boolean success True if request succeeded
----@return table|string result_or_error Decoded JSON table on success, error string on failure
+---@return table|nil result, Error|nil error
 function APIClient:post(endpoint, config)
     config = config or {}
     return self:makeRequest("POST", endpoint, config)
@@ -286,8 +284,7 @@ end
 ---Make a PUT request
 ---@param endpoint string API endpoint path
 ---@param config? table Configuration with optional body, query, dialogs
----@return boolean success True if request succeeded
----@return table|string result_or_error Decoded JSON table on success, error string on failure
+---@return table|nil result, Error|nil error
 function APIClient:put(endpoint, config)
     config = config or {}
     return self:makeRequest("PUT", endpoint, config)
@@ -296,8 +293,7 @@ end
 ---Make a DELETE request
 ---@param endpoint string API endpoint path
 ---@param config? table Configuration with optional query, dialogs
----@return boolean success True if request succeeded
----@return table|string result_or_error Decoded JSON table on success, error string on failure
+---@return table|nil result, Error|nil error
 function APIClient:delete(endpoint, config)
     config = config or {}
     return self:makeRequest("DELETE", endpoint, config)

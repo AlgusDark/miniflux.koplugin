@@ -7,6 +7,8 @@ Provides a clean interface for entry data without UI concerns.
 @module miniflux.browser.repositories.entry_repository
 --]]
 
+local Error = require("utils/error")
+
 ---@class EntryRepository
 ---@field miniflux_api MinifluxAPI Miniflux API instance
 ---@field settings MinifluxSettings Settings instance
@@ -55,8 +57,7 @@ end
 
 ---Get unread entries
 ---@param config? table Configuration with optional dialogs
----@return table[]|nil entries Array of unread entries or nil on error
----@return string|nil error Error message if failed
+---@return MinifluxEntry[]|nil result, Error|nil error
 function EntryRepository:getUnread(config)
     local options = {
         status = { "unread" }, -- Always unread only for this view
@@ -65,10 +66,11 @@ function EntryRepository:getUnread(config)
         limit = self.settings.limit,
     }
 
-    local success, result = self.miniflux_api:getEntries(options, config)
-    if not success then
-        return nil, result
+    local result, err = self.miniflux_api:getEntries(options, config)
+    if err then
+        return nil, err
     end
+    ---@cast result -nil
 
     return result.entries or {}, nil
 end
@@ -76,16 +78,16 @@ end
 ---Get entries for a specific feed
 ---@param feed_id number The feed ID
 ---@param config? table Configuration with optional dialogs
----@return table[]|nil entries Array of feed entries or nil on error
----@return string|nil error Error message if failed
+---@return MinifluxEntry[]|nil result, Error|nil error
 function EntryRepository:getByFeed(feed_id, config)
     local options = self:getApiOptions()
     options.feed_id = feed_id
 
-    local success, result = self.miniflux_api:getFeedEntries(feed_id, options, config)
-    if not success then
-        return nil, result
+    local result, err = self.miniflux_api:getFeedEntries(feed_id, options, config)
+    if err then
+        return nil, err
     end
+    ---@cast result -nil
 
     return result.entries or {}, nil
 end
@@ -93,24 +95,23 @@ end
 ---Get entries for a specific category
 ---@param category_id number The category ID
 ---@param config? table Configuration with optional dialogs
----@return table[]|nil entries Array of category entries or nil on error
----@return string|nil error Error message if failed
+---@return MinifluxEntry[]|nil result, Error|nil error
 function EntryRepository:getByCategory(category_id, config)
     local options = self:getApiOptions()
     options.category_id = category_id
 
-    local success, result = self.miniflux_api:getCategoryEntries(category_id, options, config)
-    if not success then
-        return nil, result
+    local result, err = self.miniflux_api:getCategoryEntries(category_id, options, config)
+    if err then
+        return nil, err
     end
+    ---@cast result -nil
 
     return result.entries or {}, nil
 end
 
 ---Get unread count for initialization
 ---@param config? table Configuration with optional dialogs
----@return number|nil count Unread count or nil on error
----@return string|nil error Error message if failed
+---@return number|nil result, Error|nil error
 function EntryRepository:getUnreadCount(config)
     local options = {
         order = self.settings.order,
@@ -119,10 +120,11 @@ function EntryRepository:getUnreadCount(config)
         status = { "unread" }, -- Only unread for count
     }
 
-    local success, result = self.miniflux_api:getEntries(options, config)
-    if not success then
-        return nil, result
+    local result, err = self.miniflux_api:getEntries(options, config)
+    if err then
+        return nil, err
     end
+    ---@cast result -nil
 
     return (result and result.total) and result.total or 0, nil
 end

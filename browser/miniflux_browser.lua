@@ -20,8 +20,11 @@ local FeedsView = require("browser/views/feeds_view")
 local CategoriesView = require("browser/views/categories_view")
 local EntriesView = require("browser/views/entries_view")
 
+-- Type aliases for cleaner annotations
+---@alias MinifluxRepositories {entry: EntryRepository, feed: FeedRepository, category: CategoryRepository}
+
 ---@class MinifluxBrowser : Browser
----@field repositories table Repository instances for data access
+---@field repositories MinifluxRepositories Repository instances for data access
 ---@field settings MinifluxSettings Plugin settings
 ---@field miniflux_api MinifluxAPI Miniflux API
 ---@field download_dir string Download directory path
