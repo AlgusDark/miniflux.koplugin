@@ -56,10 +56,7 @@ function MainView.loadData(config)
     local repositories = config.repositories
 
     local Notification = require("utils/notification")
-    local loading_notification = Notification:info({
-        text = _("Loading..."),
-        timeout = nil,
-    })
+    local loading_notification = Notification:info(_("Loading..."))
 
     -- Get unread count with dialog
     local unread_count, unread_err = repositories.entry:getUnreadCount()

@@ -120,10 +120,7 @@ function SortOrder.updateSetting(opts)
     settings.order = new_order
     settings:save()
 
-    local notification = Notification:success({
-        text = _("Sort order updated"),
-        timeout = 2,
-    })
+    local notification = Notification:success(_("Sort order updated"), { timeout = 2 })
 
     -- Close notification and navigate back after a brief delay
     UIManager:scheduleIn(0.5, function()

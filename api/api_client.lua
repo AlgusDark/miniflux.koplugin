@@ -130,10 +130,7 @@ function APIClient:makeRequest(method, endpoint, config)
         -- Show error dialog if requested (no loading was shown yet)
         if dialogs and dialogs.error then
             local error_text = dialogs.error.text or _("Server address and API token must be configured")
-            Notification:error({
-                text = error_text,
-                timeout = dialogs.error.timeout
-            })
+            Notification:error(error_text, { timeout = dialogs.error.timeout })
         end
         return nil, Error.new(_("Server address and API token must be configured"))
     end
@@ -141,10 +138,7 @@ function APIClient:makeRequest(method, endpoint, config)
     -- Handle loading dialog (AFTER validation passes)
     local loading_notification
     if dialogs and dialogs.loading and dialogs.loading.text then
-        loading_notification = Notification:info({
-            text = dialogs.loading.text,
-            timeout = dialogs.loading.timeout
-        })
+        loading_notification = Notification:info(dialogs.loading.text, { timeout = dialogs.loading.timeout })
     end
 
     local base_url = Files.rtrimSlashes(server_address) .. "/v1"
@@ -203,10 +197,7 @@ function APIClient:makeRequest(method, endpoint, config)
         local error_message = _("Network error occurred")
         if dialogs and dialogs.error then
             local error_text = dialogs.error.text or error_message
-            Notification:error({
-                text = error_text,
-                timeout = dialogs.error.timeout
-            })
+            Notification:error(error_text, { timeout = dialogs.error.timeout })
         end
         return nil, Error.new(error_message)
     end
@@ -217,10 +208,7 @@ function APIClient:makeRequest(method, endpoint, config)
     if code == 200 or code == 201 or code == 204 then
         -- Show success message if provided
         if dialogs and dialogs.success and dialogs.success.text then
-            Notification:success({
-                text = dialogs.success.text,
-                timeout = dialogs.success.timeout
-            })
+            Notification:success(dialogs.success.text, { timeout = dialogs.success.timeout })
         end
 
         if response_text and response_text ~= "" then
@@ -232,10 +220,7 @@ function APIClient:makeRequest(method, endpoint, config)
                 local error_message = _("Invalid JSON response from server")
                 if dialogs and dialogs.error then
                     local error_text = dialogs.error.text or error_message
-                    Notification:error({
-                        text = error_text,
-                        timeout = dialogs.error.timeout
-                    })
+                    Notification:error(error_text, { timeout = dialogs.error.timeout })
                 end
                 return nil, Error.new(error_message)
             end
@@ -250,10 +235,7 @@ function APIClient:makeRequest(method, endpoint, config)
 
     if dialogs and dialogs.error then
         local error_text = dialogs.error.text or error_message
-        Notification:error({
-            text = error_text,
-            timeout = dialogs.error.timeout
-        })
+        Notification:error(error_text, { timeout = dialogs.error.timeout })
     end
 
     return nil, Error.new(error_message)

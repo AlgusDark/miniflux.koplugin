@@ -45,30 +45,13 @@ end
 
 local Notification = {}
 
----Parse parameters (string shorthand or options table)
----@param params string|table Message text or options table
----@param default_timeout number|nil Default timeout for this notification type
----@return string text, number|nil timeout
-local function parseParams(params, default_timeout)
-    if type(params) == "string" then
-        -- Shorthand: Notification:success("Hello!")
-        return params, default_timeout
-    elseif type(params) == "table" then
-        -- Advanced: Notification:success({ text = "Hello!", timeout = 10 }) or { text = "Hello!", timeout = nil }
-        local text = params.text or ""
-        local timeout = params.timeout ~= nil and params.timeout or default_timeout
-        return text, timeout
-    else
-        -- Safe fallback instead of error() for KOReader compatibility
-        return tostring(params), default_timeout
-    end
-end
-
 ---Show success notification
----@param params string|table Message text or options {text, timeout?}
+---@param text string Message text
+---@param opts? {timeout?: number} Optional configuration (defaults: timeout=2s)
 ---@return NotificationInstance Instance for manual closing
-function Notification:success(params)
-    local text, timeout = parseParams(params, DEFAULT_TIMEOUTS.SUCCESS)
+function Notification:success(text, opts)
+    opts = opts or {}
+    local timeout = opts.timeout or DEFAULT_TIMEOUTS.SUCCESS
 
     local widget = InfoMessage:new({
         text = text,
@@ -79,10 +62,12 @@ function Notification:success(params)
 end
 
 ---Show error notification
----@param params string|table Message text or options {text, timeout?}
+---@param text string Message text
+---@param opts? {timeout?: number} Optional configuration (defaults: timeout=5s)
 ---@return NotificationInstance Instance for manual closing
-function Notification:error(params)
-    local text, timeout = parseParams(params, DEFAULT_TIMEOUTS.ERROR)
+function Notification:error(text, opts)
+    opts = opts or {}
+    local timeout = opts.timeout or DEFAULT_TIMEOUTS.ERROR
 
     local widget = InfoMessage:new({
         text = text,
@@ -93,10 +78,12 @@ function Notification:error(params)
 end
 
 ---Show warning notification
----@param params string|table Message text or options {text, timeout?}
+---@param text string Message text
+---@param opts? {timeout?: number} Optional configuration (defaults: timeout=3s)
 ---@return NotificationInstance Instance for manual closing
-function Notification:warning(params)
-    local text, timeout = parseParams(params, DEFAULT_TIMEOUTS.WARNING)
+function Notification:warning(text, opts)
+    opts = opts or {}
+    local timeout = opts.timeout or DEFAULT_TIMEOUTS.WARNING
 
     local widget = InfoMessage:new({
         text = text,
@@ -106,11 +93,13 @@ function Notification:warning(params)
     return NotificationInstance:new(widget)
 end
 
----Show info notification (manual close by default)
----@param params string|table Message text or options {text, timeout?}
+---Show info notification
+---@param text string Message text
+---@param opts? {timeout?: number} Optional configuration (defaults: timeout=nil for manual close)
 ---@return NotificationInstance Instance for manual closing
-function Notification:info(params)
-    local text, timeout = parseParams(params, nil) -- nil = manual close by default
+function Notification:info(text, opts)
+    opts = opts or {}
+    local timeout = opts.timeout -- Defaults to nil (manual close) for info notifications
 
     local widget = InfoMessage:new({
         text = text,
