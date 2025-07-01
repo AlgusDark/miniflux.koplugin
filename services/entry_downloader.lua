@@ -34,9 +34,9 @@ local Notification = require("utils/notification")
 -- =============================================================================
 
 -- Generate progress message for image downloads (avoids template creation in hot loop)
-local function createImageProgressMessage(title, current, total)
+local function createImageProgressMessage(opts)
     return T(_("Downloading:\n%1\n\nDownloading %2/%3 images"),
-        title, current, total)
+        opts.title, opts.current, opts.total)
 end
 
 -- =============================================================================
@@ -149,11 +149,14 @@ local function discoverImages(entry_data)
 end
 
 ---Download images with progress tracking and cancellation support
----@param images table Array of image info
----@param context table Download context
----@param settings table Settings instance
+---@param opts table Options containing images, context, settings
 ---@return string PHASE_RESULTS value indicating completion status
-local function downloadImagesWithProgress(images, context, settings)
+local function downloadImagesWithProgress(opts)
+    -- Extract parameters from opts
+    local images = opts.images
+    local context = opts.context
+    local settings = opts.settings
+
     if not settings.include_images or #images == 0 then
         return PHASE_RESULTS.SUCCESS
     end
@@ -170,7 +173,11 @@ local function downloadImagesWithProgress(images, context, settings)
         local go_on
         if time.to_ms(time.since(time_prev)) > 1000 then
             time_prev = time.now()
-            go_on = Trapper:info(createImageProgressMessage(context.title, i, total_images))
+            go_on = Trapper:info(createImageProgressMessage({
+                title = context.title,
+                current = i,
+                total = total_images
+            }))
 
             -- Handle cancellation using unified handler
             local cancellation_result = handleCancellation(go_on, context)
@@ -183,7 +190,11 @@ local function downloadImagesWithProgress(images, context, settings)
             -- SUCCESS: continue downloading
         else
             -- Fast refresh without cancellation check - updates UI without full repaint (eink optimization)
-            Trapper:info(createImageProgressMessage(context.title, i, total_images), true, true)
+            Trapper:info(createImageProgressMessage({
+                title = context.title,
+                current = i,
+                total = total_images
+            }), true, true)
         end
 
         -- Download with error tracking
@@ -233,14 +244,17 @@ local function analyzeDownloadResults(images)
 end
 
 ---Process and generate HTML content
----@param entry_data table Entry data from API
----@param context table Download context
----@param content string Entry content
----@param seen_images table Seen images map
----@param base_url table|nil Parsed base URL
----@param settings table Settings instance
+---@param config table Configuration containing entry_data, context, content, seen_images, base_url, settings
 ---@return string PHASE_RESULTS value indicating completion status
-local function generateHtmlContent(entry_data, context, content, seen_images, base_url, settings)
+local function generateHtmlContent(config)
+    -- Extract parameters from config
+    local entry_data = config.entry_data
+    local context = config.context
+    local content = config.content
+    local seen_images = config.seen_images
+    local base_url = config.base_url
+    local settings = config.settings
+
     -- Phase 4: Processing content (silent HTML generation and file operations)
     local go_on = Trapper:info(T(_("Downloading:\n%1\n\nProcessing content..."), context.title))
 
@@ -250,7 +264,11 @@ local function generateHtmlContent(entry_data, context, content, seen_images, ba
     end
 
     -- Process and clean content
-    local processed_content = Images.processHtmlImages(content, seen_images, settings.include_images, base_url)
+    local processed_content = Images.processHtmlImages(content, {
+        seen_images = seen_images,
+        include_images = settings.include_images,
+        base_url = base_url
+    })
     processed_content = HtmlUtils.cleanHtmlContent(processed_content)
 
     -- Create and save HTML document
@@ -265,11 +283,14 @@ local function generateHtmlContent(entry_data, context, content, seen_images, ba
 end
 
 ---Save entry metadata
----@param entry_data table Entry data from API
----@param images_count number Count of successfully downloaded images
----@param settings table Settings instance
+---@param config table Configuration containing entry_data, images_count, settings
 ---@return string PHASE_RESULTS value indicating completion status
-local function saveMetadata(entry_data, images_count, settings)
+local function saveMetadata(config)
+    -- Extract parameters from config
+    local entry_data = config.entry_data
+    local images_count = config.images_count
+    local settings = config.settings
+
     -- Phase 6: Creating metadata (silent operation)
     -- Save metadata using DocSettings
     local metadata_saved = EntryUtils.saveMetadata({
@@ -287,13 +308,16 @@ local function saveMetadata(entry_data, images_count, settings)
 end
 
 ---Open the completed entry
----@param context table Download context
----@param images table Images array
----@param settings table Settings instance
----@param browser MinifluxBrowser|nil Browser instance to close
----@param download_summary table Pre-computed download analysis results
+---@param config table Configuration containing context, images, settings, browser, download_summary
 ---@return string PHASE_RESULTS value indicating completion status
-local function openCompletedEntry(context, images, settings, browser, download_summary)
+local function openCompletedEntry(config)
+    -- Extract parameters from config
+    local context = config.context
+    local images = config.images
+    local settings = config.settings
+    local browser = config.browser
+    local download_summary = config.download_summary
+
     -- Show completion message with image summary
     local summary_lines = {}
 
@@ -370,7 +394,11 @@ function EntryDownloader.startCancellableDownload(deps)
 
         -- Phase 2: Download images if enabled
         current_phase = PHASES.DOWNLOADING
-        local download_result = downloadImagesWithProgress(images, context, settings)
+        local download_result = downloadImagesWithProgress({
+            images = images,
+            context = context,
+            settings = settings
+        })
         if download_result == PHASE_RESULTS.CANCELLED then
             return false -- Entry was deleted, exit completely
         end
@@ -388,20 +416,37 @@ function EntryDownloader.startCancellableDownload(deps)
 
         -- Phase 3: Generate HTML content and save metadata
         current_phase = PHASES.PROCESSING
-        local content_result = generateHtmlContent(entry_data, context, content, seen_images, base_url, settings)
+        local content_result = generateHtmlContent({
+            entry_data = entry_data,
+            context = context,
+            content = content,
+            seen_images = seen_images,
+            base_url = base_url,
+            settings = settings
+        })
         if content_result == PHASE_RESULTS.CANCELLED or content_result == PHASE_RESULTS.ERROR then
             return false
         end
 
         -- Save metadata with actual download counts (reusing analysis)
-        local metadata_result = saveMetadata(entry_data, download_summary.success_count, settings)
+        local metadata_result = saveMetadata({
+            entry_data = entry_data,
+            images_count = download_summary.success_count,
+            settings = settings
+        })
         if metadata_result == PHASE_RESULTS.CANCELLED or metadata_result == PHASE_RESULTS.ERROR then
             return false
         end
 
         -- Phase 4: Show completion and open entry
         current_phase = PHASES.COMPLETING
-        local completion_result = openCompletedEntry(context, images, settings, browser, download_summary)
+        local completion_result = openCompletedEntry({
+            context = context,
+            images = images,
+            settings = settings,
+            browser = browser,
+            download_summary = download_summary
+        })
 
         -- Reset phase to idle on completion
         current_phase = PHASES.IDLE

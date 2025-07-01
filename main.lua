@@ -63,7 +63,11 @@ function Miniflux:init()
     self.miniflux_api = MinifluxAPI:new({ api_client = self.api_client })
 
     -- Initialize EntryService instance with settings, miniflux API, and plugin dependencies
-    self.entry_service = EntryService:new(self.settings, self.miniflux_api, self)
+    self.entry_service = EntryService:new({
+        settings = self.settings,
+        miniflux_api = self.miniflux_api,
+        miniflux_plugin = self
+    })
 
     -- Override ReaderStatus EndOfBook behavior for miniflux entries
     self:overrideEndOfBookBehavior()

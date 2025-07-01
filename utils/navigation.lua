@@ -33,11 +33,14 @@ local Navigation = {}
 -- =============================================================================
 
 ---Get API options based on navigation context and entry metadata
----@param base_options ApiOptions Base API options from settings
----@param context {type: string}|nil Browser context from plugin
----@param entry_metadata table Entry metadata for deriving IDs
+---@param opts table Options containing base_options, context, entry_metadata
 ---@return ApiOptions Context-aware options with feed_id/category_id filters
-function Navigation.getContextAwareOptions(base_options, context, entry_metadata)
+function Navigation.getContextAwareOptions(opts)
+    -- Extract parameters from opts
+    local base_options = opts.base_options
+    local context = opts.context
+    local entry_metadata = opts.entry_metadata
+
     local options = {}
 
     -- Copy base options
@@ -203,7 +206,11 @@ function Navigation.buildNavigationOptions(config)
         status = settings.hide_read_entries and { "unread" } or { "unread", "read" },
     }
 
-    local options = Navigation.getContextAwareOptions(base_options, context, metadata)
+    local options = Navigation.getContextAwareOptions({
+        base_options = base_options,
+        context = context,
+        entry_metadata = metadata
+    })
     if not options then
         return nil, _("Cannot navigate: failed to get context options")
     end

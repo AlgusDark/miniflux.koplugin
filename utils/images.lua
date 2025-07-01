@@ -55,39 +55,6 @@ end
 ---@field height? number Image height
 ---@field downloaded boolean Whether image was successfully downloaded
 
--- Legacy regex-based image collection function (used as fallback)
-local function collectImgTag(img_tag, base_url, images, seen_images, image_count_ref)
-    local src = img_tag:match([[src="([^"]*)"]])
-    if not src or src == "" or src:sub(1, 5) == "data:" then
-        return img_tag
-    end
-
-    local normalized_src = Images.normalizeImageUrl(src, base_url)
-    if not seen_images[normalized_src] then
-        image_count_ref[1] = image_count_ref[1] + 1
-        local image_count = image_count_ref[1]
-        local ext = Images.getImageExtension(normalized_src)
-        local filename = generateImageFilename(image_count, ext)
-
-        -- Simple attribute extraction for fallback
-        local width = tonumber(img_tag:match([[width="([^"]*)"]]))
-        local height = tonumber(img_tag:match([[height="([^"]*)"]]))
-
-        local image_info = {
-            src = normalized_src,
-            original_tag = img_tag,
-            filename = filename,
-            width = width,
-            height = height,
-            downloaded = false,
-        }
-
-        images[image_count] = image_info
-        seen_images[normalized_src] = image_info
-    end
-    return img_tag
-end
-
 ---Discover images in HTML content using DOM parser (more reliable than regex)
 ---@param content string HTML content to scan
 ---@param base_url? table Parsed base URL for resolving relative URLs
@@ -161,19 +128,9 @@ function Images.discoverImages(content, base_url)
         return images, seen_images
     end
 
-    -- Fallback to regex approach if DOM parser fails
-    local fallback_success = pcall(function()
-        local image_count_ref = { 0 }
-        content:gsub("(<%s*img [^>]*>)", function(img_tag)
-            return collectImgTag(img_tag, base_url, images, seen_images, image_count_ref)
-        end)
-    end)
-
-    if not fallback_success then
-        return {}, {}
-    end
-
-    return images, seen_images
+    -- If DOM parser fails, return empty arrays rather than attempting
+    -- unreliable regex fallback. This is safer and simpler.
+    return {}, {}
 end
 
 ---Normalize image URL for downloading using KOReader's socket_url utilities
@@ -312,11 +269,14 @@ end
 
 ---Process HTML content to replace image tags based on download results using DOM parser
 ---@param content string Original HTML content
----@param seen_images table<string, ImageInfo> Map of URLs to image info
----@param include_images boolean Whether to include images in output
----@param base_url? table Parsed base URL for normalizing URLs
+---@param opts table Options containing seen_images, include_images, base_url
 ---@return string Processed HTML content
-function Images.processHtmlImages(content, seen_images, include_images, base_url)
+function Images.processHtmlImages(content, opts)
+    -- Extract parameters from opts
+    local seen_images = opts.seen_images
+    local include_images = opts.include_images
+    local base_url = opts.base_url
+
     -- If include_images is false, return content unchanged (no processing needed)
     if not include_images then
         return content

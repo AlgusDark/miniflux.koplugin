@@ -30,15 +30,13 @@ local EntryDownloader = require("services/entry_downloader")
 local EntryService = {}
 
 ---Create a new EntryService instance
----@param settings MinifluxSettings Settings instance
----@param miniflux_api MinifluxAPI Miniflux API instance
----@param miniflux_plugin Miniflux Plugin instance for context management
+---@param deps table Dependencies containing settings, miniflux_api, miniflux_plugin
 ---@return EntryService
-function EntryService:new(settings, miniflux_api, miniflux_plugin)
+function EntryService:new(deps)
     local instance = {
-        settings = settings,
-        miniflux_api = miniflux_api,
-        miniflux_plugin = miniflux_plugin,
+        settings = deps.settings,
+        miniflux_api = deps.miniflux_api,
+        miniflux_plugin = deps.miniflux_plugin,
     }
     setmetatable(instance, self)
     self.__index = self

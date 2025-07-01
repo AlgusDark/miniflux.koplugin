@@ -54,46 +54,69 @@ function SortOrder.getSubMenu(settings)
             text = _("ID") .. (current_order == "id" and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                SortOrder.updateSetting(settings, "id", touchmenu_instance)
+                SortOrder.updateSetting({
+                    settings = settings,
+                    new_order = "id",
+                    touchmenu_instance = touchmenu_instance
+                })
             end,
         },
         {
             text = _("Status") .. (current_order == "status" and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                SortOrder.updateSetting(settings, "status", touchmenu_instance)
+                SortOrder.updateSetting({
+                    settings = settings,
+                    new_order = "status",
+                    touchmenu_instance = touchmenu_instance
+                })
             end,
         },
         {
             text = _("Published date") .. (current_order == "published_at" and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                SortOrder.updateSetting(settings, "published_at", touchmenu_instance)
+                SortOrder.updateSetting({
+                    settings = settings,
+                    new_order = "published_at",
+                    touchmenu_instance = touchmenu_instance
+                })
             end,
         },
         {
             text = _("Category title") .. (current_order == "category_title" and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                SortOrder.updateSetting(settings, "category_title", touchmenu_instance)
+                SortOrder.updateSetting({
+                    settings = settings,
+                    new_order = "category_title",
+                    touchmenu_instance = touchmenu_instance
+                })
             end,
         },
         {
             text = _("Category ID") .. (current_order == "category_id" and " ✓" or ""),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                SortOrder.updateSetting(settings, "category_id", touchmenu_instance)
+                SortOrder.updateSetting({
+                    settings = settings,
+                    new_order = "category_id",
+                    touchmenu_instance = touchmenu_instance
+                })
             end,
         },
     }
 end
 
 ---Update sort order setting
----@param settings MinifluxSettings Settings instance
----@param new_order string New sort order value
----@param touchmenu_instance table TouchMenu instance for navigation
+---@param opts table Options containing settings, new_order, touchmenu_instance
 ---@return nil
-function SortOrder.updateSetting(settings, new_order, touchmenu_instance)
+function SortOrder.updateSetting(opts)
+    -- Extract parameters from opts
+    local settings = opts.settings
+    local new_order = opts.new_order
+    local touchmenu_instance = opts.touchmenu_instance
+
     settings.order = new_order
     settings:save()
 
