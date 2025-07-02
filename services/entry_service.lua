@@ -18,10 +18,9 @@ local T = require("ffi/util").template
 local Notification = require("utils/notification")
 
 -- Import dependencies
-local EntryUtils = require("utils/entry_utils")
-local Navigation = require("utils/navigation")
-local Files = require("utils/files")
-local EntryDownloader = require("services/entry_downloader")
+local EntryEntity = require("entities/entry_entity")
+local Navigation = require("services/navigation_service")
+local EntryWorkflow = require("services/entry_workflow")
 
 ---@class EntryService
 ---@field settings MinifluxSettings Settings instance
@@ -53,28 +52,20 @@ end
 ---Read an entry (download if needed and open)
 ---@param entry_data table Raw entry data from API
 ---@param browser? MinifluxBrowser Browser instance to close
----@return boolean success
 function EntryService:readEntry(entry_data, browser)
     -- Validate entry data with enhanced validation
-    local valid, err = EntryUtils.validateForDownload(entry_data)
+    local valid, err = EntryEntity.validateForDownload(entry_data)
     if err then
         Notification:error(err.message)
         return false
     end
 
-    -- Download entry if needed
-    local success = EntryDownloader.startCancellableDownload({
+    -- Execute complete workflow (fire-and-forget)
+    EntryWorkflow.execute({
         entry_data = entry_data,
         settings = self.settings,
         browser = browser
     })
-
-    if not success then
-        Notification:error(_("Failed to download and show entry"))
-        return false
-    end
-
-    return true
 end
 
 -- =============================================================================
@@ -86,7 +77,7 @@ end
 ---@param new_status string New status
 ---@return boolean success
 function EntryService:changeEntryStatus(entry_id, new_status)
-    if not EntryUtils.isValidId(entry_id) then
+    if not EntryEntity.isValidId(entry_id) then
         Notification:error(_("Cannot change status: invalid entry ID"))
         return false
     end
@@ -111,7 +102,7 @@ function EntryService:changeEntryStatus(entry_id, new_status)
         return false
     else
         -- Update local metadata
-        EntryUtils.updateEntryStatus(entry_id, new_status)
+        EntryEntity.updateEntryStatus(entry_id, new_status)
         return true
     end
 end
@@ -131,7 +122,7 @@ function EntryService:showEndOfEntryDialog(entry_info)
     -- Load entry metadata to check current status with error handling
     local metadata = nil
     local metadata_success = pcall(function()
-        metadata = Files.loadCurrentEntryMetadata(entry_info)
+        metadata = EntryEntity.loadMetadata(entry_info.entry_id)
     end)
 
     if not metadata_success then
@@ -143,9 +134,9 @@ function EntryService:showEndOfEntryDialog(entry_info)
     local entry_status = metadata and metadata.status or "unread"
 
     -- Use utility functions for button text and callback
-    local mark_button_text = EntryUtils.getStatusButtonText(entry_status)
+    local mark_button_text = EntryEntity.getStatusButtonText(entry_status)
     local mark_callback
-    if EntryUtils.isEntryRead(entry_status) then
+    if EntryEntity.isEntryRead(entry_status) then
         mark_callback = function()
             self:changeEntryStatus(entry_info.entry_id, "unread")
         end
@@ -196,7 +187,7 @@ function EntryService:showEndOfEntryDialog(entry_info)
                         callback = function()
                             UIManager:close(dialog)
                             -- Inline deletion with validation
-                            if not EntryUtils.isValidId(entry_info.entry_id) then
+                            if not EntryEntity.isValidId(entry_info.entry_id) then
                                 Notification:warning(_("Cannot delete: invalid entry ID"))
                                 return
                             end
@@ -208,6 +199,12 @@ function EntryService:showEndOfEntryDialog(entry_info)
                         callback = function()
                             UIManager:close(dialog)
                             mark_callback()
+                            -- TODO: Dialog Refresh After Status Change (Feature C - MVP excluded)
+                            -- CURRENT: Dialog closes, user needs to manually reopen to see updated status
+                            -- DESIRED: After API success notification (2.5s), automatically recreate dialog
+                            --          with opposite button text (read->unread or unread->read)
+                            -- IMPLEMENTATION: Add refreshDialog() callback to mark_callback, use
+                            --                UIManager:scheduleIn(2.5, refreshDialog) after successful API call
                         end,
                     },
                 },
@@ -216,7 +213,7 @@ function EntryService:showEndOfEntryDialog(entry_info)
                         text = _("⌂ Miniflux folder"),
                         callback = function()
                             UIManager:close(dialog)
-                            EntryUtils.openMinifluxFolder()
+                            EntryEntity.openMinifluxFolder()
                         end,
                     },
                     {
@@ -245,11 +242,88 @@ end
 -- PRIVATE HELPER METHODS
 -- =============================================================================
 
+---Update entry status in background subprocess
+---@param entry_id number Entry ID to update
+---@param new_status string New status ("read" or "unread")
+---@return number|nil pid Process ID if spawned, nil if disabled
+function EntryService:spawnUpdateStatus(entry_id, new_status)
+    -- Check if auto-mark feature is enabled
+    if not self.settings.mark_as_read_on_open then
+        return nil
+    end
+
+    -- Validate entry ID first
+    if not EntryEntity.isValidId(entry_id) then
+        return nil
+    end
+
+    -- Load current metadata to get original status for auto-healing
+    local local_metadata = EntryEntity.loadMetadata(entry_id)
+    local original_status = local_metadata and local_metadata.status or "unread"
+
+    -- Smart check: First check local metadata to avoid unnecessary work
+    local is_already_target_status = local_metadata and
+        EntryEntity.isEntryRead(local_metadata.status) == EntryEntity.isEntryRead(new_status)
+
+    if is_already_target_status then
+        return nil
+    end
+
+    -- Check connectivity before making API call
+    local NetworkMgr = require("ui/network/manager")
+    if not NetworkMgr:isConnected() then
+        -- TODO: Implement offline batching - queue status changes when no network
+        return nil
+    end
+
+    -- Step 1: Optimistic update - immediately update local metadata
+    local update_success = EntryEntity.updateEntryStatus(entry_id, new_status)
+
+    -- Step 2: Background API call with auto-healing
+    local FFIUtil = require("ffi/util")
+
+    -- Extract settings data for subprocess (separate memory space)
+    local server_address = self.settings.server_address
+    local api_token = self.settings.api_token
+
+    local pid = FFIUtil.runInSubProcess(function()
+        -- Create a minimal settings object for the subprocess
+        local subprocess_settings = {
+            server_address = server_address,
+            api_token = api_token
+        }
+
+        -- Import and recreate our API clients (they have separate memory space)
+        local APIClient = require("api/api_client")
+        local MinifluxAPI = require("api/miniflux_api")
+
+        -- Create API client instances inside subprocess
+        local api_client = APIClient:new({ settings = subprocess_settings })
+        local miniflux_api = MinifluxAPI:new({ api_client = api_client })
+
+        -- Use our proper API layer with built-in timeout handling
+        local result, err = miniflux_api:updateEntries(entry_id, {
+            body = { status = new_status }
+            -- No dialogs config - silent background operation
+        })
+
+        if err then
+            -- Auto-healing: If API call failed, revert local metadata
+            local EntryEntity = require("entities/entry_entity")
+            local revert_success = EntryEntity.updateEntryStatus(entry_id, original_status)
+        end
+
+        -- Process exits automatically - no return value needed for fire-and-forget
+    end)
+
+    return pid
+end
+
 ---Delete a local entry
 ---@param entry_id number Entry ID
 ---@return boolean success
 function EntryService:deleteLocalEntry(entry_id)
-    local entry_dir = EntryUtils.getEntryDirectory(entry_id)
+    local entry_dir = EntryEntity.getEntryDirectory(entry_id)
 
     local success = pcall(function()
         if ReaderUI.instance then
@@ -263,7 +337,7 @@ function EntryService:deleteLocalEntry(entry_id)
         Notification:success(_("Local entry deleted successfully"))
 
         -- Open Miniflux folder
-        EntryUtils.openMinifluxFolder()
+        EntryEntity.openMinifluxFolder()
 
         return true
     else

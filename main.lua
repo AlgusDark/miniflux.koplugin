@@ -19,7 +19,7 @@ local MinifluxAPI = require("api/miniflux_api")
 local MinifluxSettings = require("settings/settings")
 local Menu = require("menu/menu")
 local EntryService = require("services/entry_service")
-local EntryUtils = require("utils/entry_utils")
+local EntryEntity = require("entities/entry_entity")
 
 -- Static browser context shared across all plugin instances
 local _static_browser_context = nil
@@ -81,7 +81,7 @@ end
 ---Initialize the download directory for entries
 ---@return string|nil Download directory path or nil if failed
 function Miniflux:initializeDownloadDirectory()
-    local download_dir = EntryUtils.getDownloadDir()
+    local download_dir = EntryEntity.getDownloadDir()
 
     -- Create the directory if it doesn't exist
     if not lfs.attributes(download_dir, "mode") then
@@ -178,6 +178,54 @@ function Miniflux:overrideEndOfBookBehavior()
     end
 
     logger.info("Successfully overrode ReaderStatus EndOfBook behavior for miniflux entries")
+end
+
+---Handle ReaderReady event - called when a document is fully loaded and ready
+---This is the proper place to perform auto-mark-as-read for miniflux entries
+---@param doc_settings table Document settings instance
+---@return nil
+function Miniflux:onReaderReady(doc_settings)
+    logger.info("Miniflux:onReaderReady called")
+
+    -- Check if auto-mark-as-read is enabled
+    if not self.settings.mark_as_read_on_open then
+        logger.info("Auto-mark-as-read is disabled, skipping")
+        return
+    end
+
+    -- Check if current document is a miniflux HTML file
+    if not self.ui or not self.ui.document or not self.ui.document.file then
+        logger.info("No document available, skipping")
+        return
+    end
+
+    local file_path = self.ui.document.file
+    logger.info("ReaderReady for file: " .. tostring(file_path))
+
+    -- Check if this is a miniflux HTML entry
+    if not (file_path:match("/miniflux/") and file_path:match("%.html$")) then
+        logger.info("Not a miniflux entry, skipping auto-mark")
+        return
+    end
+
+    -- Extract entry ID from path
+    local entry_id_str = file_path:match("/miniflux/(%d+)/")
+    local entry_id = entry_id_str and tonumber(entry_id_str)
+
+    if not entry_id then
+        logger.warn("Could not extract entry ID from path: " .. file_path)
+        return
+    end
+
+    logger.info("Auto-marking miniflux entry " .. entry_id .. " as read (onReaderReady)")
+
+    -- Spawn update status to "read" (metadata now exists, so this will work)
+    local pid = self.entry_service:spawnUpdateStatus(entry_id, "read")
+    if pid then
+        logger.info("Auto-mark spawned with PID: " .. tostring(pid))
+    else
+        logger.info("Auto-mark skipped (feature disabled)")
+    end
 end
 
 -- =============================================================================

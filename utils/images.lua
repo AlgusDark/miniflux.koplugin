@@ -5,6 +5,9 @@ Consolidated image utilities for RSS entries including discovery, downloading,
 and HTML processing. Combines functionality from image_discovery, image_download,
 and image_utils for better organization.
 
+TODO: Extract Miniflux/RSS domain logic (RSS-specific image handling, entry-specific logic)
+to make this module truly generic for any content type.
+
 @module miniflux.utils.images
 --]]
 

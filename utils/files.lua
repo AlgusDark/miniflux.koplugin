@@ -8,6 +8,7 @@ Combines functionality from file_utils and metadata_loader for better organizati
 --]]
 
 local lfs = require("libs/libkoreader-lfs")
+local Error = require("utils/error")
 
 local Files = {}
 
@@ -40,60 +41,43 @@ function Files.writeFile(file_path, content)
     return false
 end
 
+---Create directory if it doesn't exist
+---@param dir_path string Directory path to create
+---@return boolean|nil success, Error|nil error
+function Files.createDirectory(dir_path)
+    if not lfs.attributes(dir_path, "mode") then
+        local success = lfs.mkdir(dir_path)
+        if not success then
+            return nil, Error.new("Failed to create directory")
+        end
+    end
+    return true, nil
+end
+
 -- =============================================================================
--- METADATA LOADING
+-- READER INTEGRATION
 -- =============================================================================
 
----@class EntryMetadata
----@field id number
----@field title string
----@field url string
----@field status string
----@field published_at string
----@field feed table
+---Open a file with ReaderUI and optional callbacks
+---@param file_path string Path to the file to open
+---@param callbacks? {before_open?: function, on_ready?: function} table Optional callbacks
+---@return nil
+function Files.openWithReader(file_path, callbacks)
+    callbacks = callbacks or {}
 
----Load current entry metadata from DocSettings
----@param entry_info table Entry information with file_path and entry_id
----@return EntryMetadata|nil Metadata table or nil if failed
-function Files.loadCurrentEntryMetadata(entry_info)
-    if not entry_info.file_path or not entry_info.entry_id then
-        return nil
+    -- Execute pre-open callback if provided
+    if callbacks.before_open then
+        callbacks.before_open()
     end
 
-    local html_file = entry_info.file_path
-    local DocSettings = require("docsettings")
+    -- Open the file
+    local ReaderUI = require("apps/reader/readerui")
+    ReaderUI:showReader(file_path)
 
-    -- Check if HTML file exists
-    if lfs.attributes(html_file, "mode") ~= "file" then
-        return nil
+    -- Register post-ready callback if provided and ReaderUI instance exists
+    if callbacks.on_ready and ReaderUI.instance then
+        ReaderUI.instance:registerPostReaderReadyCallback(callbacks.on_ready)
     end
-
-    local doc_settings = DocSettings:open(html_file)
-
-    -- Check if this is actually a miniflux entry by checking for our metadata
-    local entry_id = doc_settings:readSetting("miniflux_entry_id")
-    if not entry_id then
-        return nil
-    end
-
-    -- Return metadata in the same structure as before for compatibility
-    return {
-        id = entry_id,
-        title = doc_settings:readSetting("miniflux_title"),
-        url = doc_settings:readSetting("miniflux_url"),
-        status = doc_settings:readSetting("miniflux_status"),
-        published_at = doc_settings:readSetting("miniflux_published_at"),
-        feed = {
-            id = doc_settings:readSetting("miniflux_feed_id"),
-            title = doc_settings:readSetting("miniflux_feed_title"),
-        },
-        category = {
-            id = doc_settings:readSetting("miniflux_category_id"),
-            title = doc_settings:readSetting("miniflux_category_title"),
-        },
-        images_included = doc_settings:readSetting("miniflux_images_included"),
-        images_count = doc_settings:readSetting("miniflux_images_count"),
-    }
 end
 
 return Files

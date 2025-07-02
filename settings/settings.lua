@@ -19,6 +19,7 @@ local DEFAULTS = {
     direction = "desc",
     hide_read_entries = true,
     include_images = true,
+    mark_as_read_on_open = true,
 }
 
 -- =============================================================================
@@ -34,6 +35,7 @@ local DEFAULTS = {
 ---@field direction "asc"|"desc" Sort direction
 ---@field hide_read_entries boolean Whether to hide read entries
 ---@field include_images boolean Whether to include images
+---@field mark_as_read_on_open boolean Whether to automatically mark entries as read when opened
 local MinifluxSettings = {}
 
 ---Create a new MinifluxSettings instance

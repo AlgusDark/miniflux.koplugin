@@ -4,6 +4,9 @@ HTML Utilities for Miniflux Browser
 This utility module handles HTML document creation and processing for offline
 viewing of RSS entries in KOReader.
 
+TODO: Extract Miniflux domain logic (entry-specific metadata, RSS-specific HTML structure)
+to make this module truly generic for any content type.
+
 @module miniflux.browser.utils.html_utils
 --]]
 
@@ -14,6 +17,10 @@ local util = require("util") -- Use KOReader's built-in utilities
 -- https://github.com/msva/lua-htmlparser
 local htmlparser = require("htmlparser")
 
+-- Import dependencies for entry content processing
+local Images = require("utils/images")
+local Error = require("utils/error")
+
 local HtmlUtils = {}
 
 -- Escape string for use in Lua pattern matching
@@ -21,6 +28,48 @@ local function escapePattern(str)
     -- Escape special pattern characters: ( ) . % + - * ? [ ] ^ $
     return str:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1")
 end
+
+-- =============================================================================
+-- ENTRY CONTENT PROCESSING
+-- =============================================================================
+
+-- TODO: Think of a better name for this function
+-- Current candidates: processEntryContent, transformEntryHtml, processHtmlContent
+---Process and transform entry content HTML
+---@param raw_content string Raw HTML content
+---@param options table {entry_data, seen_images, base_url, include_images}
+---@return string|nil processed_html, Error|nil error
+function HtmlUtils.processEntryContent(raw_content, options)
+    local entry_data = options.entry_data
+    local seen_images = options.seen_images
+    local base_url = options.base_url
+    local include_images = options.include_images
+
+    if not entry_data or not raw_content then
+        return nil, Error.new("Invalid parameters for HTML processing")
+    end
+
+    -- Process and clean content
+    local processed_content = Images.processHtmlImages(raw_content, {
+        seen_images = seen_images,
+        include_images = include_images,
+        base_url = base_url
+    })
+    processed_content = HtmlUtils.cleanHtmlContent(processed_content)
+
+    -- Create HTML document
+    local html_content = HtmlUtils.createHtmlDocument(entry_data, processed_content)
+
+    if not html_content then
+        return nil, Error.new("Failed to process HTML content")
+    end
+
+    return html_content, nil
+end
+
+-- =============================================================================
+-- HTML DOCUMENT CREATION
+-- =============================================================================
 
 ---Create a complete HTML document for an entry
 ---@param entry MinifluxEntry Entry data

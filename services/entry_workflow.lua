@@ -1,16 +1,11 @@
 --[[--
-Entry Downloader Service
+Entry Workflow Service
 
-Handles the downloading and local creation of RSS entries with cancellation support.
-Uses Trapper for progress tracking and user cancellation.
+Handles the complete workflow for downloading and opening RSS entries.
+Uses Trapper for progress tracking and user interaction in a fire-and-forget pattern.
+Orchestrates the entire process: download, file creation, and opening.
 
-Option B Improvements:
-- Unified cancellation handling with consistent cleanup logic
-- Simple phase tracking for better debugging and context-aware dialogs
-- Standardized return types across all phase functions
-- Preserves all existing Trapper functionality and coroutine flow
-
-@module koplugin.miniflux.services.entry_downloader
+@module koplugin.miniflux.services.entry_workflow
 --]]
 
 local lfs = require("libs/libkoreader-lfs")
@@ -22,7 +17,7 @@ local _ = require("gettext")
 local T = require("ffi/util").template
 
 -- Import consolidated dependencies
-local EntryUtils = require("utils/entry_utils")
+local EntryEntity = require("entities/entry_entity")
 local Images = require("utils/images")
 local Trapper = require("ui/trapper")
 local HtmlUtils = require("utils/html_utils")
@@ -74,7 +69,7 @@ local function handleCancellation(go_on, context)
 
     -- Phase-specific cancellation dialog
     local dialog_phase = current_phase == PHASES.DOWNLOADING and "during_images" or "after_images"
-    local user_choice = EntryUtils.showCancellationDialog(dialog_phase)
+    local user_choice = EntryEntity.showCancellationDialog(dialog_phase)
 
     if user_choice == "cancel_entry" then
         -- Unified cleanup logic - no more duplication
@@ -93,60 +88,8 @@ local function handleCancellation(go_on, context)
 end
 
 -- =============================================================================
--- LOCAL HELPER FUNCTIONS (defined first for Lua function ordering)
+-- UI-DEPENDENT WORKFLOW FUNCTIONS
 -- =============================================================================
-
----Check if entry is already downloaded and open it if so
----@param entry_data table Entry data from API
----@param browser MinifluxBrowser|nil Browser instance to close
----@return boolean success True if already downloaded and opened
-local function handleExistingEntry(entry_data, browser)
-    if EntryUtils.isEntryDownloaded(entry_data.id) then
-        local html_file = EntryUtils.getEntryHtmlPath(entry_data.id)
-        EntryUtils.openEntry(html_file, {
-            before_open = function()
-                if browser then
-                    browser:close()
-                end
-            end
-        })
-        return true
-    end
-    return false
-end
-
----Prepare download context and create entry directory
----@param entry_data table Entry data from API
----@return table context Download context with paths and title
-local function prepareDownload(entry_data)
-    local title = entry_data.title or _("Untitled Entry")
-    local entry_dir = EntryUtils.getEntryDirectory(entry_data.id)
-    local html_file = EntryUtils.getEntryHtmlPath(entry_data.id)
-
-    -- Create entry directory
-    if not lfs.attributes(entry_dir, "mode") then
-        lfs.mkdir(entry_dir)
-    end
-
-    return {
-        title = title,
-        entry_dir = entry_dir,
-        html_file = html_file,
-    }
-end
-
----Discover images in entry content
----@param entry_data table Entry data from API
----@return table images, table seen_images, string content, table|nil base_url
-local function discoverImages(entry_data)
-    local content = entry_data.content or entry_data.summary or ""
-    local base_url = entry_data.url and socket_url.parse(entry_data.url) or nil
-    local images, seen_images = Images.discoverImages(content, base_url)
-
-    -- No separate image discovery message - combined with preparation phase
-
-    return images, seen_images, content, base_url
-end
 
 ---Download images with progress tracking and cancellation support
 ---@param opts table Options containing images, context, settings
@@ -197,7 +140,7 @@ local function downloadImagesWithProgress(opts)
             }), true, true)
         end
 
-        -- Download with error tracking
+        -- Download with error tracking - delegate to generic function for single image
         local success = Images.downloadImage({
             url = img.src,
             entry_dir = context.entry_dir,
@@ -217,33 +160,7 @@ local function downloadImagesWithProgress(opts)
     return PHASE_RESULTS.SUCCESS
 end
 
-
-
----Analyze download results and return summary
----@param images table Array of image info with downloaded flags
----@return table Summary with success_count and failed_count
-local function analyzeDownloadResults(images)
-    local success_count = 0
-    local failed_count = 0
-
-    for _, img in ipairs(images) do
-        if img.downloaded then
-            success_count = success_count + 1
-        else
-            failed_count = failed_count + 1
-            local error_type = img.error_reason or "unknown_error"
-        end
-    end
-
-    return {
-        success_count = success_count,
-        failed_count = failed_count,
-        total_count = #images,
-        has_errors = failed_count > 0
-    }
-end
-
----Process and generate HTML content
+---Process and generate HTML content with progress UI
 ---@param config table Configuration containing entry_data, context, content, seen_images, base_url, settings
 ---@return string PHASE_RESULTS value indicating completion status
 local function generateHtmlContent(config)
@@ -255,7 +172,7 @@ local function generateHtmlContent(config)
     local base_url = config.base_url
     local settings = config.settings
 
-    -- Phase 4: Processing content (silent HTML generation and file operations)
+    -- Phase 4: Processing content (with progress UI)
     local go_on = Trapper:info(T(_("Downloading:\n%1\n\nProcessing content..."), context.title))
 
     local cancellation_result = handleCancellation(go_on, context)
@@ -263,16 +180,20 @@ local function generateHtmlContent(config)
         return PHASE_RESULTS.CANCELLED
     end
 
-    -- Process and clean content
-    local processed_content = Images.processHtmlImages(content, {
+    -- Generate HTML using HtmlUtils
+    local html_content, err = HtmlUtils.processEntryContent(content, {
+        entry_data = entry_data,
         seen_images = seen_images,
-        include_images = settings.include_images,
-        base_url = base_url
+        base_url = base_url,
+        include_images = settings.include_images
     })
-    processed_content = HtmlUtils.cleanHtmlContent(processed_content)
 
-    -- Create and save HTML document
-    local html_content = HtmlUtils.createHtmlDocument(entry_data, processed_content)
+    if err or not html_content then
+        Notification:error(_("Failed to process content: ") .. (err and err.message or "No content generated"))
+        return PHASE_RESULTS.ERROR
+    end
+
+    -- Save HTML file directly
     local file_success = Files.writeFile(context.html_file, html_content)
     if not file_success then
         Notification:error(_("Failed to save HTML file"))
@@ -282,40 +203,13 @@ local function generateHtmlContent(config)
     return PHASE_RESULTS.SUCCESS
 end
 
----Save entry metadata
----@param config table Configuration containing entry_data, images_count, settings
+---Show completion summary with progress UI
+---@param config table Configuration containing images, settings, download_summary
 ---@return string PHASE_RESULTS value indicating completion status
-local function saveMetadata(config)
+local function showCompletionSummary(config)
     -- Extract parameters from config
-    local entry_data = config.entry_data
-    local images_count = config.images_count
-    local settings = config.settings
-
-    -- Phase 6: Creating metadata (silent operation)
-    -- Save metadata using DocSettings
-    local metadata_saved = EntryUtils.saveMetadata({
-        entry_data = entry_data,
-        include_images = settings.include_images,
-        images_count = images_count,
-    })
-
-    if not metadata_saved then
-        Notification:error(_("Failed to save entry metadata"))
-        return PHASE_RESULTS.ERROR
-    end
-
-    return PHASE_RESULTS.SUCCESS
-end
-
----Open the completed entry
----@param config table Configuration containing context, images, settings, browser, download_summary
----@return string PHASE_RESULTS value indicating completion status
-local function openCompletedEntry(config)
-    -- Extract parameters from config
-    local context = config.context
     local images = config.images
     local settings = config.settings
-    local browser = config.browser
     local download_summary = config.download_summary
 
     -- Show completion message with image summary
@@ -341,15 +235,6 @@ local function openCompletedEntry(config)
     local message = summary ~= "" and T(_("Download completed!\n\n%1"), summary) or _("Download completed!")
 
     Trapper:info(message)
-
-    -- Open entry with browser cleanup
-    EntryUtils.openEntry(context.html_file, {
-        before_open = function()
-            if browser then
-                browser:close()
-            end
-        end
-    })
     return PHASE_RESULTS.SUCCESS
 end
 
@@ -357,39 +242,71 @@ end
 -- PUBLIC API
 -- =============================================================================
 
-local EntryDownloader = {}
+local EntryWorkflow = {}
 
----Start a cancellable entry download with progress tracking (uses Trapper for UI progress)
+---Execute complete entry workflow with progress tracking (fire-and-forget)
+---Downloads entry, creates files, and opens in reader with full user interaction support
 ---@param deps {entry_data: table, settings: table, browser?: table}
----@return boolean success
-function EntryDownloader.startCancellableDownload(deps)
+function EntryWorkflow.execute(deps)
     local entry_data = deps.entry_data
     local settings = deps.settings
     local browser = deps.browser
 
-    -- Wrap entire download operation in Trapper for cancellation support
-    return Trapper:wrap(function()
+    -- Execute complete workflow in Trapper for user interaction support
+    Trapper:wrap(function()
         -- Initialize phase tracking
         current_phase = PHASES.IDLE
 
         -- Check if already downloaded
-        if handleExistingEntry(entry_data, browser) then
-            return true
+        if EntryEntity.isEntryDownloaded(entry_data.id) then
+            local html_file = EntryEntity.getEntryHtmlPath(entry_data.id)
+            -- Use Files.openWithReader for clean file opening
+            Files.openWithReader(html_file, {
+                before_open = function()
+                    if browser then
+                        browser:close()
+                    end
+                end
+            })
+            return -- Completed - fire and forget
         end
 
         -- Phase 1: Preparation (combines setup + image discovery)
         current_phase = PHASES.PREPARING
-        local context = prepareDownload(entry_data)
-        local go_on = Trapper:info(T(_("Downloading:\n%1\n\nPreparing..."), context.title))
+
+        -- Prepare download context inline
+        local title = entry_data.title or _("Untitled Entry")
+        local entry_dir = EntryEntity.getEntryDirectory(entry_data.id)
+        local html_file = EntryEntity.getEntryHtmlPath(entry_data.id)
+
+        -- Create entry directory
+        local success, dir_err = Files.createDirectory(entry_dir)
+        if dir_err then
+            Notification:error(_("Failed to prepare download: ") .. dir_err.message)
+            return -- Failed - fire and forget
+        end
+
+        local context = {
+            title = title,
+            entry_dir = entry_dir,
+            html_file = html_file,
+        }
+
+        local go_on = Trapper:info(T(_("Downloading:\n%1\n\nPreparing..."), context.title or _("Unknown Entry")))
 
         local cancellation_result = handleCancellation(go_on, context)
         if cancellation_result == PHASE_RESULTS.CANCELLED then
-            return false
+            return -- User cancelled - fire and forget
         end
 
-        local images, seen_images, content, base_url = discoverImages(entry_data)
+        -- Discover images inline
+        local content = entry_data.content or entry_data.summary or ""
+        local base_url = entry_data.url and socket_url.parse(entry_data.url) or nil
+        local images, seen_images = Images.discoverImages(content, base_url)
+
         if not images then
-            return false -- Discovery failed
+            Notification:error(_("Failed to discover images"))
+            return -- Discovery failed - fire and forget
         end
 
         -- Phase 2: Download images if enabled
@@ -400,11 +317,27 @@ function EntryDownloader.startCancellableDownload(deps)
             settings = settings
         })
         if download_result == PHASE_RESULTS.CANCELLED then
-            return false -- Entry was deleted, exit completely
+            return -- User cancelled - fire and forget
         end
 
-        -- Analyze download results once for all subsequent operations
-        local download_summary = analyzeDownloadResults(images)
+        -- Analyze download results inline
+        local success_count = 0
+        local failed_count = 0
+
+        for _, img in ipairs(images) do
+            if img.downloaded then
+                success_count = success_count + 1
+            else
+                failed_count = failed_count + 1
+            end
+        end
+
+        local download_summary = {
+            success_count = success_count,
+            failed_count = failed_count,
+            total_count = #images,
+            has_errors = failed_count > 0
+        }
 
         -- Check for network errors and show simple summary if needed
         if download_summary.has_errors then
@@ -425,33 +358,43 @@ function EntryDownloader.startCancellableDownload(deps)
             settings = settings
         })
         if content_result == PHASE_RESULTS.CANCELLED or content_result == PHASE_RESULTS.ERROR then
-            return false
+            return -- Failed or cancelled - fire and forget
         end
 
-        -- Save metadata with actual download counts (reusing analysis)
-        local metadata_result = saveMetadata({
+        -- Save metadata directly using EntryEntity
+        local metadata_result, metadata_err = EntryEntity.saveMetadata({
             entry_data = entry_data,
             images_count = download_summary.success_count,
-            settings = settings
+            include_images = settings.include_images
         })
-        if metadata_result == PHASE_RESULTS.CANCELLED or metadata_result == PHASE_RESULTS.ERROR then
-            return false
+        if metadata_err then
+            Notification:error(_("Failed to save metadata: ") .. metadata_err.message)
+            return -- Failed - fire and forget
         end
 
         -- Phase 4: Show completion and open entry
         current_phase = PHASES.COMPLETING
-        local completion_result = openCompletedEntry({
-            context = context,
+        local completion_result = showCompletionSummary({
             images = images,
             settings = settings,
-            browser = browser,
             download_summary = download_summary
+        })
+
+        -- Use Files.openWithReader for clean file opening
+        Files.openWithReader(context.html_file, {
+            before_open = function()
+                if browser then
+                    browser:close()
+                end
+            end
         })
 
         -- Reset phase to idle on completion
         current_phase = PHASES.IDLE
-        return completion_result == PHASE_RESULTS.SUCCESS
-    end) or false
+        -- Workflow completed - fire and forget, no return values
+    end)
+
+    -- Fire-and-forget: no return values, no coordination needed
 end
 
-return EntryDownloader
+return EntryWorkflow

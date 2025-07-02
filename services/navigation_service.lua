@@ -13,7 +13,6 @@ local Notification = require("utils/notification")
 local _ = require("gettext")
 
 -- Import dependencies
-local Files = require("utils/files")
 local TimeUtils = require("utils/time_utils")
 local Error = require("utils/error")
 
@@ -178,7 +177,8 @@ end
 ---@param entry_info table Entry information
 ---@return {metadata: EntryMetadata, published_unix: number}|nil result, Error|nil error
 function Navigation.loadEntryMetadata(entry_info)
-    local metadata = Files.loadCurrentEntryMetadata(entry_info)
+    local EntryEntity = require("entities/entry_entity")
+    local metadata = EntryEntity.loadMetadata(entry_info.entry_id)
     if not metadata or not metadata.published_at then
         return nil, Error.new(_("Cannot navigate: missing timestamp information"))
     end
@@ -247,8 +247,8 @@ function Navigation.tryLocalFileFirst(entry_info, entry_data)
         local html_file = entry_dir .. "entry.html"
 
         if lfs.attributes(html_file, "mode") == "file" then
-            local EntryUtils = require("utils/entry_utils")
-            EntryUtils.openEntry(html_file)
+            local EntryEntity = require("entities/entry_entity")
+            EntryEntity.openEntry(html_file)
             return true
         end
     end
@@ -299,8 +299,8 @@ end
 ---@param direction string Navigation direction ("previous" or "next")
 ---@return number|nil target_entry_id Adjacent entry ID, or nil if not found
 function Navigation.findAdjacentEntryId(current_entry_id, direction)
-    local EntryUtils = require("utils/entry_utils")
-    local miniflux_dir = EntryUtils.getDownloadDir()
+    local EntryEntity = require("entities/entry_entity")
+    local miniflux_dir = EntryEntity.getDownloadDir()
 
     if lfs.attributes(miniflux_dir, "mode") ~= "directory" then
         return nil
