@@ -4,154 +4,111 @@ A comprehensive RSS reader plugin that integrates Miniflux with KOReader, allowi
 
 ## Features
 
-- Browse feeds, categories, and entries from your Miniflux server
-- Download entries for offline reading with images
-- Navigate between entries with context-aware next/previous
-- Mark entries as read/unread
-- Optimized for e-ink displays with efficient image downloading
+Browse your Miniflux server content directly from KOReader:
+- **Offline Reading**: Download entries with images for offline access
+- **Context-Aware Navigation**: Navigate between entries with intelligent next/previous
+- **Feed Management**: Browse feeds, categories, and entries
+- **Status Synchronization**: Mark entries as read/unread with server sync
+- **E-ink Optimized**: Efficient image downloading and display for e-readers
 
-## UX Improvements Roadmap
+## Installation
 
-### Phase 1: Core Status Management
-#### 1. Mark as Read/Unread Without Deletion
-**Problem:** Currently, marking an entry requires keeping the local file or it disappears from navigation.  
-**Solution:** Implement status-only updates that preserve downloaded entries locally.
+1. Download the plugin files to your KOReader plugins directory
+2. Enable the plugin in KOReader's Plugin Manager
+3. Configure your Miniflux server settings
 
-**Features:**
-- Update entry status via Miniflux API without deleting local HTML file
-- Sync status changes with local DocSettings metadata
-- Maintain entry navigation even after marking as read
-- Visual indicators for read/unread status in local files
+## Usage
 
-**User Benefit:** Keep valuable entries locally while managing read status properly.
+1. **Setup**: Configure your Miniflux server URL and credentials in plugin settings
+2. **Browse**: Access feeds, categories, and entries from the plugin menu
+3. **Download**: Select entries to download for offline reading
+4. **Read**: Open downloaded entries with full offline access
+5. **Sync**: Status changes sync automatically with your Miniflux server
 
----
+## Development Status
 
-### Phase 2: Storage Management
-#### 2. Bulk Entry Deletion
-**Problem:** Users need better control over storage space occupied by downloaded entries.  
-**Solution:** Provide bulk deletion options for managing local storage.
+### ✅ Core Features (Completed)
+- [x] **Feed and Category Browsing**
+  - [x] List all feeds and categories from Miniflux server
+  - [x] Navigate feed hierarchies and category organization
+- [x] **Entry Management**
+  - [x] Browse entries by feed, category, or global unread
+  - [x] Download entries with text and images for offline reading
+  - [x] Context-aware navigation (next/previous within current view)
+- [x] **Status Management**
+  - [x] Mark entries as read/unread without deleting local files
+  - [x] Auto-mark as read when opening entry
+  - [ ] Batch mark as read when offline (TODO: queue status updates)
+- [x] **Offline Support**
+  - [x] Full offline reading of downloaded entries
+  - [x] Fallback navigation when server is unavailable
+  - [x] Local file management and organization
 
-**Features:**
-- **Delete All Entries:** Remove all downloaded Miniflux entries and metadata
-  - Confirmation dialog with storage space information
-  - Progress indicator for deletion process
-  - Option to exclude favorited/bookmarked entries
-- **Delete by Date:** Remove entries older than specified timeframe
-  - Configurable date ranges (1 week, 1 month, 3 months, 6 months)
-  - Preview of entries to be deleted before confirmation
+### 🚧 Storage Management (Planned)
+- [ ] **Bulk Entry Deletion**
+  - [ ] Delete all entries with confirmation dialog
+  - [ ] Delete by date range (1 week, 1 month, 3 months, 6 months)
+  - [ ] Storage space reporting and cleanup
+- [ ] **Selective Image Management**
+  - [ ] Delete all images while preserving entry text
+  - [ ] Smart cleanup of failed/broken image downloads
+  - [ ] Image storage statistics and usage breakdown
+- [ ] **Advanced Cleanup**
+  - [ ] Remove orphaned images with no corresponding entries
+  - [ ] Detect and remove corrupted image files
+  - [ ] Option to exclude favorited/bookmarked entries from deletion
 
-**User Benefit:** Easy storage management without manual file system navigation.
+### 🔄 Background Operations (Planned)
+- [ ] **Intelligent Prefetching**
+  - [ ] Configurable prefetch count (download N entries ahead)
+  - [ ] Context-aware prefetching based on current browsing context
+  - [ ] Bandwidth management (WiFi-only, pause during active downloads)
+  - [ ] Smart cancellation when navigating away from context
+- [ ] **Image Recovery**
+  - [ ] Scan entries for missing/failed images
+  - [ ] Selective re-download of missing images only
+  - [ ] Batch image recovery with progress tracking
+  - [ ] Enhanced HTML regeneration with complete images
 
-#### 3. Selective Image Management  
-**Problem:** Images consume significant storage space; users want granular control.  
-**Solution:** Advanced image management with storage optimization.
+### 📊 Enhanced Reading Experience (Future)
+- [ ] **Reading Analytics**
+  - [ ] Track reading time per entry and session
+  - [ ] Progress indicators for long entries
+  - [ ] Reading history with completion status
+  - [ ] Daily/weekly reading statistics
+- [ ] **Search and Organization**
+  - [ ] Full-text search within downloaded entries
+  - [ ] Filter by feed, category, date range, read status
+  - [ ] Bookmark/favorite system for important entries
+  - [ ] Personal tag system for organization
+- [ ] **Sync and Backup**
+  - [ ] Export reading data and annotations
+  - [ ] Backup entry metadata and reading progress
+  - [ ] Cross-device reading status synchronization
+  - [ ] OPML import/export for feed management
 
-**Features:**
-- **Delete All Images:** Remove images while preserving entry text
-  - Scan all entry directories for image files
-  - Show storage space to be freed before deletion
-  - Update HTML to remove image references gracefully
-- **Smart Image Cleanup:** Remove failed/broken image downloads
-  - Detect corrupted or invalid image files
-  - Remove orphaned images with no corresponding entries
-- **Image Storage Statistics:** Display current image storage usage
-  - Total images count and disk usage
-  - Breakdown by entry/feed for detailed analysis
+## Technical Details
 
-**User Benefit:** Optimize storage for text-focused reading while keeping images when needed.
+### Architecture
+- **Modular Design**: Separate services for API, entries, navigation, and storage
+- **Error Handling**: Comprehensive error management with user-friendly messages
+- **Offline-First**: Graceful degradation when server is unavailable
+- **E-ink Optimized**: Efficient image processing and display for e-readers
 
----
+### Key Components
+- **MinifluxAPI**: Server communication and data fetching
+- **EntryService**: Entry downloading and management
+- **NavigationService**: Context-aware entry navigation
+- **Files Utilities**: File operations and storage management
 
-### Phase 3: Advanced Download Features
-#### 4. Intelligent Background Prefetching
-**Problem:** Loading entries one-by-one creates waiting time during navigation.  
-**Solution:** Smart background downloading based on reading patterns.
+## Contributing
 
-**Features:**
-- **Configurable Prefetch Count:** Download N entries ahead (default: 1, range: 0-5)
-  - Setting: "Download ahead count" in main settings
-  - Disable with 0 for bandwidth-conscious users
-- **Context-Aware Prefetching:** Intelligent selection based on current context
-  - In feed view: prefetch next entries from same feed
-  - In category view: prefetch next entries from same category  
-  - In global unread: prefetch next unread entries chronologically
-- **Bandwidth Management:** Respect connection and data limits
-  - Only prefetch on WiFi (configurable)
-  - Pause prefetching during active downloads
-  - Background priority (doesn't block current entry loading)
-- **Smart Cancellation:** Cancel irrelevant prefetch operations
-  - Cancel when user navigates away from current context
-  - Stop prefetching when storage space is low
+Contributions are welcome! Please feel free to:
+- Report bugs and suggest features
+- Submit pull requests for improvements
+- Help with testing on different devices
+- Contribute to documentation
 
-**Technical Implementation:**
-- Queue-based background downloader with priority management
-- Integration with existing Trapper cancellation system
-- Storage monitoring to prevent disk space issues
+## License
 
-**User Benefit:** Seamless reading experience with near-instantaneous entry loading.
-
-#### 5. Image Recovery and Re-processing
-**Problem:** Network issues cause incomplete downloads; users want to retry without re-downloading text.  
-**Solution:** Smart image recovery with selective re-downloading.
-
-**Features:**
-- **Missing Image Detection:** Scan entries for failed/missing images
-  - Analyze HTML for image references without local files
-  - Detect corrupted image files (invalid format, wrong size)
-  - Report statistics: X entries with missing images
-- **Selective Image Re-download:** Targeted image recovery
-  - Re-download only missing/failed images
-  - Preserve existing successful downloads
-  - Update HTML with newly downloaded images
-- **Batch Image Recovery:** Process multiple entries efficiently
-  - Queue-based processing with progress tracking
-  - Cancel/resume support for large recovery operations
-  - Settings integration: "Include images" preference respected
-- **Enhanced HTML Regeneration:** Recreate entry HTML with complete images
-  - Preserve all metadata and formatting
-  - Update DocSettings with new image count
-  - Maintain original entry structure and styling
-
-**Technical Details:**
-- Extend existing `Images.discoverImages()` for gap analysis
-- Reuse `EntryDownloader` infrastructure for consistency
-- Atomic operations: only update HTML after successful image downloads
-
-**User Benefit:** Recover from network failures without losing work; complete entry downloads retroactively.
-
----
-
-### Phase 4: Enhanced Reading Experience
-#### 6. Reading Statistics and Progress
-**Features:**
-- Track reading time per entry and total session time
-- Progress indicators for long entries
-- Reading history with completion status
-- Daily/weekly reading statistics
-
-#### 7. Offline Search and Filtering
-**Features:**  
-- Full-text search within downloaded entries
-- Filter by feed, category, date range, read status
-- Bookmark/favorite system for important entries
-- Tag system for personal organization
-
-#### 8. Sync and Backup
-**Features:**
-- Export reading data and annotations
-- Backup entry metadata and reading progress
-- Sync reading status across multiple devices
-- OPML import/export for feed management
-
----
-
-## Implementation Priority
-
-**Priority 1:** Mark as read/unread without deletion (high impact, medium effort)  
-**Priority 2:** Bulk deletion operations (high impact, low effort)  
-**Priority 3:** Selective image management (medium impact, medium effort)  
-**Priority 4:** Background prefetching (high impact, high effort)  
-**Priority 5:** Image recovery system (medium impact, medium effort)
-
-Each phase is designed to be independently valuable while building toward a comprehensive offline RSS reading experience optimized for e-ink devices.
+This plugin is part of the KOReader project and follows the same licensing terms.

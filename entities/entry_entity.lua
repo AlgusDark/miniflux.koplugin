@@ -404,20 +404,4 @@ function EntryEntity.openMinifluxFolder()
     end
 end
 
----Open an entry file with optional pre-opening configuration
----@param file_path string Path to the entry HTML file
----@param config? {before_open?: function} table Callback to execute before opening
----@return nil
-function EntryEntity.openEntry(file_path, config)
-    config = config or {}
-
-    -- Execute pre-open callback if provided
-    if config.before_open then
-        config.before_open()
-    end
-
-    -- Open the file directly
-    ReaderUI:showReader(file_path)
-end
-
 return EntryEntity

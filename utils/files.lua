@@ -30,15 +30,21 @@ end
 ---Write content to a file
 ---@param file_path string Path to write to
 ---@param content string Content to write
----@return boolean True if successful
+---@return boolean|nil success, Error|nil error
 function Files.writeFile(file_path, content)
-    local file = io.open(file_path, "w")
-    if file then
-        file:write(content)
-        file:close()
-        return true
+    local file, errmsg = io.open(file_path, "w")
+    if not file then
+        return nil, Error.new("Failed to open file for writing: " .. (errmsg or "unknown error"))
     end
-    return false
+
+    local success, write_errmsg = file:write(content)
+    if not success then
+        file:close()
+        return nil, Error.new("Failed to write content: " .. (write_errmsg or "unknown error"))
+    end
+
+    file:close()
+    return true, nil
 end
 
 ---Create directory if it doesn't exist
