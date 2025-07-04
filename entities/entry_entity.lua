@@ -103,6 +103,32 @@ function EntryEntity.getStatusButtonText(status)
 end
 
 -- =============================================================================
+-- FILE PATH UTILITIES
+-- =============================================================================
+
+---Check if file path is a miniflux entry
+---@param file_path string File path to check
+---@return boolean true if miniflux entry, false otherwise
+function EntryEntity.isMinifluxEntry(file_path)
+    if not file_path then
+        return false
+    end
+    return file_path:match("/miniflux/") and file_path:match("%.html$")
+end
+
+---Extract entry ID from miniflux file path
+---@param file_path string File path to check
+---@return number|nil entry_id Entry ID or nil if not a miniflux entry
+function EntryEntity.extractEntryIdFromPath(file_path)
+    if not EntryEntity.isMinifluxEntry(file_path) then
+        return nil
+    end
+
+    local entry_id_str = file_path:match("/miniflux/(%d+)/")
+    return entry_id_str and tonumber(entry_id_str)
+end
+
+-- =============================================================================
 -- FILE OPERATIONS
 -- =============================================================================
 

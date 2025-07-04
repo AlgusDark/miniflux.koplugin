@@ -16,6 +16,7 @@ local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
 local _ = require("gettext")
 local T = require("ffi/util").template
 local Notification = require("utils/notification")
+local logger = require("logger")
 
 -- Import dependencies
 local EntryEntity = require("entities/entry_entity")
@@ -104,6 +105,50 @@ function EntryService:changeEntryStatus(entry_id, new_status)
         -- Update local metadata
         EntryEntity.updateEntryStatus(entry_id, new_status)
         return true
+    end
+end
+
+-- =============================================================================
+-- READER EVENT HANDLING
+-- =============================================================================
+
+---Handle ReaderReady event for miniflux entries
+---@param opts {file_path: string} Options containing file path
+function EntryService:onReaderReady(opts)
+    local file_path = opts.file_path
+    self:autoMarkAsRead(file_path)
+end
+
+---Auto-mark miniflux entry as read if enabled
+---@param file_path string File path to process
+function EntryService:autoMarkAsRead(file_path)
+    -- Check if auto-mark-as-read is enabled
+    if not self.settings.mark_as_read_on_open then
+        logger.info("Auto-mark-as-read is disabled, skipping")
+        return
+    end
+
+    -- Check if current document is a miniflux HTML file
+    if not EntryEntity.isMinifluxEntry(file_path) then
+        logger.info("Not a miniflux entry, skipping auto-mark")
+        return
+    end
+
+    -- Extract entry ID from path
+    local entry_id = EntryEntity.extractEntryIdFromPath(file_path)
+    if not entry_id then
+        logger.warn("Could not extract entry ID from path: " .. tostring(file_path))
+        return
+    end
+
+    logger.info("Auto-marking miniflux entry " .. entry_id .. " as read (onReaderReady)")
+
+    -- Spawn update status to "read"
+    local pid = self:spawnUpdateStatus(entry_id, "read")
+    if pid then
+        logger.info("Auto-mark spawned with PID: " .. tostring(pid))
+    else
+        logger.info("Auto-mark skipped (feature disabled)")
     end
 end
 
