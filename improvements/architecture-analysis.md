@@ -1,96 +1,250 @@
-# Architecture Analysis & Domain-Driven Design Discussion
+# Architecture Analysis & Feed Reader Plugin Design
 
 ## Overview
 
-This document captures the comprehensive architectural analysis and Domain-Driven Design (DDD) discussions for the KOReader Miniflux plugin. It serves as a reference for future development and architectural decisions.
+This document captures the comprehensive architectural analysis and design decisions for the KOReader Feed Reader plugin (formerly Miniflux plugin). It serves as a reference for future development and architectural decisions.
 
-## Initial Problem: Over-Engineering vs User Value
+## Evolution: From Single Provider to Multi-Provider Architecture
 
-### The Provider Architecture Idea
+### Initial Assessment: Over-Engineering vs User Value
 
-Initially, we considered implementing a **provider-based architecture** to support multiple RSS/content services:
+**Original Problem:** We initially considered creating separate plugins for different content providers, which led to plugin loading order issues and dependency hell.
 
+**Key Insight:** After thorough analysis, we determined that a **single plugin with internal providers** is the optimal architecture.
+
+### Final Architecture Decision: Single Plugin + Container DI + Internal Providers
+
+**Chosen Architecture:**
 ```
-providers/
-├── miniflux/
-├── readeck/    # Future
-├── instapaper/ # Future
+feedreader.koplugin/  # Renamed from miniflux.koplugin
+├── main.lua                      # Plugin orchestrator & lifecycle manager
+├── container.lua                 # Dependency injection container
+├── core/                         # Shared infrastructure
+│   ├── browser/
+│   │   ├── base_browser.lua      # Core browser functionality
+│   │   └── browser_factory.lua   # Browser creation patterns
+│   ├── settings/
+│   │   └── base_settings.lua     # Core settings infrastructure
+│   └── ui/
+│       ├── provider_menu.lua     # Provider selection UI
+│       └── provider_settings.lua # Provider enable/disable
+└── providers/                    # Internal provider modules
+    ├── miniflux/
+    │   ├── miniflux_provider.lua  # Provider implementation
+    │   ├── miniflux_api.lua      # API client
+    │   ├── miniflux_browser.lua  # Provider-specific browser
+    │   └── miniflux_settings.lua # Provider-specific settings
+    ├── readeck/                  # Future provider
+    └── hackernews/               # Future provider
 ```
 
-**Theoretical Benefits:**
-- Code reusability across different content providers
-- Clean separation of domain logic
-- Future extensibility for other services
+**Why This Architecture:**
+✅ **No plugin loading order issues** - Single plugin controls everything  
+✅ **Clean separation** - Providers are internal modules, not separate plugins  
+✅ **Container DI benefits** - Lazy loading, memory management, clean dependencies  
+✅ **User control** - Enable/disable providers within single plugin  
+✅ **Scalable** - Easy to add new providers as internal modules
 
-### Reality Check: The Honest Assessment
+### Rejected Alternatives
 
-**Critical Finding:** The codebase is **heavily miniflux-specific** at all levels:
+#### 1. Multiple Separate Plugins ❌
+**Problem:** Plugin loading order is not guaranteed in KOReader
+- Provider plugins might load before core plugin
+- User could disable core but keep providers  
+- Cross-plugin dependencies create fragility
 
-1. **Entry Point (`main.lua`):**
-   - Hardcoded miniflux imports and initialization
-   - Fixed directory structure (`/miniflux/`)
-   - Miniflux-specific plugin naming and behavior
+#### 2. Manual DI for Multi-Provider ❌  
+**Problem:** Doesn't scale beyond 2-3 providers
+- `main.lua` becomes 300+ line god object
+- Tight coupling between all providers
+- Complex browser creation for each provider
 
-2. **API Layer:**
-   - All endpoints are miniflux-specific (`/entries`, `/feeds`, `/categories`)
-   - Miniflux data structures (`MinifluxEntry`, `MinifluxFeed`)
+#### 3. Provider Abstraction Over Current Code ❌
+**Problem:** 80%+ refactoring required for theoretical benefits
+- Codebase is heavily RSS/Miniflux-specific
+- No concrete plans for other provider types
+- Over-engineering for imaginary requirements
 
-3. **Business Logic:**
-   - RSS-specific navigation (feed/category context)
-   - Miniflux metadata structures
-   - DocSettings with `miniflux_` prefixes
+## KOReader Plugin Lifecycle Management
 
-4. **UI Layer:**
-   - RSS-specific terminology ("Feeds", "Categories", "Unread Entries")
-   - Miniflux-specific workflows
+### Plugin Loading & Initialization
 
-**Conclusion:** Creating provider abstraction would require **80%+ code refactoring** for theoretical benefits with no concrete plans for other providers.
+**KOReader Plugin Lifecycle:**
+```
+Application Start → FileManager/ReaderUI Init → PluginLoader:loadPlugins() → Plugin:init()
+├── FileManager context: loads non-doc-only plugins
+└── ReaderUI context: loads all plugins
 
-### Decision: Focus on User Value
+Application Context Switch:
+FileManager → ReaderUI: PluginLoader:finalize() → new Plugin instances created
+ReaderUI → FileManager: PluginLoader:finalize() → new Plugin instances created
 
-Instead of architectural over-engineering, focus on **actual user needs**:
+Application Shutdown: PluginLoader:finalize() → Plugin instances destroyed
+```
 
-✅ **Immediate Value:** UX improvements users actually want  
-❌ **Theoretical Value:** Architecture for problems we don't have
+**Critical Insights:**
+1. **Multiple Plugin Instances:** Plugin gets instantiated once per UI context (FileManager vs ReaderUI)
+2. **No Guaranteed Persistence:** Plugin instances are destroyed and recreated on context switches
+3. **Finalization Happens:** `PluginLoader:finalize()` clears all plugin instances
 
-## Current Architecture Issues
+### Cleanup Considerations & Testing Needed
 
-### Misplaced Domain Logic
+**Memory Management Concerns:**
+```lua
+-- Example cleanup scenarios to test:
+1. User opens Feed Reader in FileManager → switches to ReaderUI → back to FileManager
+   → Are all browser instances properly cleaned up?
+   
+2. User opens browser, downloads entries → switches UI context → returns
+   → Are download processes still running? Are temp files cleaned up?
+   
+3. User has API requests in progress → switches context  
+   → Are network requests cancelled or do they complete and leak memory?
+```
 
-Two major files are incorrectly located in `utils/`:
+**Required Cleanup Implementation:**
+```lua
+-- main.lua
+function FeedReader:onCloseWidget()
+    logger.info("FeedReader: Cleaning up plugin instance")
+    
+    -- Clean container cache
+    if self.container then
+        self.container:cleanup()
+    end
+    
+    -- Close any open browsers
+    self:closeAllBrowsers()
+    
+    -- Cancel any background operations
+    self:cancelBackgroundOperations()
+    
+    -- Save settings
+    if self.settings then
+        self.settings:save()
+    end
+end
 
-#### 1. `utils/entry_utils.lua` - NOT a Utility!
-**What it actually is:** Entry domain entity with business logic
-- Entry validation rules
-- File operations specific to entries  
-- Metadata management with DocSettings
-- UI coordination dialogs
-- Status management
+-- container.lua  
+function Container:cleanup()
+    logger.info("Container: Cleaning up cached services")
+    
+    -- Cleanup cached services
+    for name, service in pairs(self._cache) do
+        if service.cleanup then
+            service:cleanup()
+        end
+    end
+    
+    -- Clear cache with weak references for GC
+    self._cache = setmetatable({}, { __mode = "v" })
+    self._initializing = {}
+end
+```
 
-**Should be:** `entities/entry_entity.lua`
+## Container DI Implementation Details
 
-#### 2. `utils/navigation.lua` - NOT a Utility!
-**What it actually is:** Navigation domain service
-- Complex RSS navigation algorithms
-- API orchestration with fallback logic
-- Business rules (feed/category/global context)
-- Time-based navigation with miniflux timestamps
-- Offline mode handling
+### Service Lifecycle Management
 
-**Should be:** `services/navigation_service.lua`
+**Container Responsibilities:**
+1. **Lazy Creation:** Services created only when first accessed
+2. **Caching:** Same instance returned for subsequent requests  
+3. **Cleanup:** Proper teardown when plugin is destroyed
+4. **Provider Management:** Register/unregister internal providers
+
+```lua
+-- container.lua - Core implementation
+local Container = {}
+
+function Container:new(plugin)
+    local instance = {
+        plugin = plugin,
+        settings = plugin.settings,
+        -- Weak references allow automatic GC
+        _cache = setmetatable({}, { __mode = "v" }),
+        -- Prevent circular dependency loops
+        _initializing = {},
+        -- Provider registry
+        _providers = {},
+    }
+    setmetatable(instance, self)
+    return instance
+end
+
+-- Provider management
+function Container:registerProvider(name, provider)
+    self._providers[name] = provider
+    logger.info("Container: Registered provider", name)
+end
+
+function Container:getProviders()
+    return self._providers
+end
+
+-- Lazy service creation with circular dependency detection
+function Container:getMinifluxApi()
+    if self._cache.miniflux_api then
+        return self._cache.miniflux_api
+    end
+    
+    if self._initializing.miniflux_api then
+        error("Circular dependency detected: miniflux_api")
+    end
+    
+    self._initializing.miniflux_api = true
+    
+    local MinifluxAPI = require("providers/miniflux/miniflux_api")
+    local miniflux_api = MinifluxAPI:new({
+        settings = self:getMinifluxSettings()
+    })
+    
+    self._cache.miniflux_api = miniflux_api
+    self._initializing.miniflux_api = nil
+    
+    return miniflux_api
+end
+```
+
+## Current Architecture Issues (Post-Refactoring Analysis)
+
+### Misplaced Domain Logic (Still Needs Fixing)
+
+**Files incorrectly located in `utils/`:**
+
+#### 1. `utils/entry_utils.lua` → `providers/miniflux/entry_entity.lua`
+**Why:** Entry-specific business logic, not generic utilities
+- Entry validation rules  
+- Miniflux-specific file operations
+- DocSettings integration with miniflux metadata
+
+#### 2. `utils/navigation.lua` → `core/services/navigation_service.lua`
+**Why:** Core navigation service that could be shared across providers
+- RSS navigation algorithms (could be reused by other RSS providers)
+- API orchestration patterns
+- Time-based navigation logic
+
+### Core vs Provider-Specific Code
+
+**Core Infrastructure (Reusable):**
+- ✅ Browser base classes → `core/browser/`
+- ✅ Settings infrastructure → `core/settings/`  
+- ✅ Navigation service → `core/services/navigation_service.lua`
+- ✅ Generic utilities → `utils/` (error, notification, time_utils, etc.)
+
+**Provider-Specific (Miniflux Only):**
+- ✅ Miniflux API client → `providers/miniflux/miniflux_api.lua`
+- ✅ Entry entity with miniflux logic → `providers/miniflux/entry_entity.lua`
+- ✅ Miniflux-specific browser → `providers/miniflux/miniflux_browser.lua`
 
 ### Utils That Need Cleanup
 
-#### Generic (Keep in utils/)
-- ✅ `error.lua` - Pure error objects
-- ✅ `notification.lua` - Generic KOReader notifications  
-- ✅ `time_utils.lua` - Pure ISO-8601 conversion
-- ✅ `debugger.lua` - Generic logging (exception: hardcoded path OK for temporary tool)
+#### Pure Generic (Keep in utils/)
+- ✅ `error.lua`, `notification.lua`, `time_utils.lua`, `debugger.lua`
 
 #### Mixed (Need refactoring)
-- 🟡 `files.lua` - Generic file ops + miniflux metadata loading (split needed)
-- 🟡 `html_utils.lua` - Generic HTML processing + entry-specific assumptions
-- 🟡 `images.lua` - Generic image processing + minor RSS assumptions
+- 🟡 `files.lua` - Split generic file ops from miniflux metadata loading
+- 🟡 `html_utils.lua` - Remove miniflux-specific assumptions  
+- 🟡 `images.lua` - Make purely generic image processing
 
 ## Application vs Domain Services (DDD Concepts)
 
@@ -149,65 +303,220 @@ end
 - Should be infrastructure-agnostic (current code violates this)
 - Complex algorithms
 
-## Recommended Refactoring Plan
+## Implementation Plan: Container DI + Multi-Provider Architecture
 
-### Phase 1: Move Domain Logic to Proper Locations
-
-```bash
-# Create proper structure
-mkdir -p entities services
-
-# Move domain logic
-mv utils/entry_utils.lua entities/entry_entity.lua
-mv utils/navigation.lua services/navigation_service.lua
-```
-
-### Phase 2: Extract and Clean Mixed Utilities
+### Phase 1: Core Infrastructure Setup
 
 ```bash
-# Extract metadata loading from files.lua to entry entity
-# Make html_utils.lua and images.lua purely generic
-# Keep only generic file operations in files.lua
+# Create new directory structure
+mkdir -p core/browser core/settings core/ui core/services
+mkdir -p providers/miniflux
+
+# Create container infrastructure
+touch container.lua
+touch core/browser/base_browser.lua
+touch core/settings/base_settings.lua
+touch core/ui/provider_menu.lua
 ```
 
-### Phase 3: Update All Import References
+### Phase 2: Move Domain Logic to Proper Locations
 
-Update all `require("utils/entry_utils")` → `require("entities/entry_entity")`  
-Update all `require("utils/navigation")` → `require("services/navigation_service")`
+```bash
+# Move entry logic to provider-specific location
+mv utils/entry_utils.lua providers/miniflux/entry_entity.lua
 
-### Final Clean Structure
+# Move navigation to core (can be shared across RSS providers)
+mv utils/navigation.lua core/services/navigation_service.lua
+
+# Update import references:
+# require("utils/entry_utils") → require("providers/miniflux/entry_entity")
+# require("utils/navigation") → require("core/services/navigation_service")
+```
+
+### Phase 3: Implement Container DI
+
+```bash
+# Create container with lazy loading
+# Implement provider registry
+# Add cleanup mechanisms
+# Update main.lua to use container orchestration
+```
+
+### Phase 4: Extract Core Components
+
+```bash
+# Extract reusable browser logic to core/browser/
+# Create base settings infrastructure in core/settings/
+# Move shared UI components to core/ui/
+```
+
+### Phase 5: Cleanup Testing & Validation
+
+```bash
+# Test plugin lifecycle cleanup
+# Validate memory management
+# Test UI context switching scenarios
+# Performance benchmarking on low-powered devices
+```
+
+### Final Target Structure
 
 ```
-entities/
-└── entry_entity.lua          # Domain entity (business logic)
-
-services/
-├── entry_service.lua          # Application service (workflow orchestration)
-├── entry_downloader.lua       # Application service (download workflows)  
-└── navigation_service.lua     # Domain service (navigation business rules)
-
-utils/                         # Pure generic utilities
-├── error.lua, notification.lua, time_utils.lua  # ✅ Already pure
-├── files.lua                  # Generic file operations only
-├── html_utils.lua             # Generic HTML processing  
-└── images.lua                 # Generic image processing
+feedreader.koplugin/
+├── main.lua                           # Plugin orchestrator
+├── container.lua                      # DI container with lifecycle management
+├── core/                              # Shared infrastructure  
+│   ├── browser/
+│   │   ├── base_browser.lua          # Reusable browser functionality
+│   │   └── browser_factory.lua       # Browser creation patterns
+│   ├── settings/
+│   │   └── base_settings.lua         # Core settings infrastructure  
+│   ├── services/
+│   │   └── navigation_service.lua    # Shared RSS navigation logic
+│   └── ui/
+│       ├── provider_menu.lua         # Provider selection interface
+│       └── provider_settings.lua     # Enable/disable providers
+├── providers/                         # Internal provider modules
+│   └── miniflux/
+│       ├── miniflux_provider.lua     # Provider implementation
+│       ├── miniflux_api.lua          # Miniflux API client
+│       ├── miniflux_browser.lua      # Provider-specific browser
+│       ├── miniflux_settings.lua     # Provider-specific settings
+│       └── entry_entity.lua          # Miniflux entry business logic
+├── services/                          # Application services
+│   ├── entry_service.lua             # Entry workflow orchestration
+│   └── entry_downloader.lua          # Download management
+└── utils/                             # Pure generic utilities
+    ├── error.lua, notification.lua   # ✅ Already pure
+    ├── files.lua                     # Generic file operations only
+    ├── html_utils.lua                # Generic HTML processing
+    └── images.lua                    # Generic image processing
 ```
+
+## Testing Requirements & Cleanup Validation
+
+### Critical Test Scenarios
+
+**Plugin Lifecycle Testing:**
+```lua
+-- Test 1: Memory cleanup on context switch
+1. Open Feed Reader in FileManager
+2. Create browser, download entries
+3. Switch to ReaderUI → back to FileManager  
+4. Verify: No memory leaks, no orphaned processes
+
+-- Test 2: Background operation cleanup
+1. Start entry download
+2. Switch UI context mid-download
+3. Verify: Download cancelled properly, temp files cleaned up
+
+-- Test 3: API request cleanup
+1. Initiate API calls  
+2. Force plugin termination
+3. Verify: Network requests cancelled, no hanging connections
+
+-- Test 4: Container cache validation
+1. Create multiple services through container
+2. Plugin destruction
+3. Verify: All cached services cleaned up, weak references working
+```
+
+**Provider Management Testing:**
+```lua
+-- Test 5: Provider enable/disable
+1. Disable miniflux provider
+2. Restart plugin
+3. Verify: Miniflux not in menu, no memory allocated for disabled provider
+
+-- Test 6: Container lazy loading
+1. Enable multiple providers
+2. Access only one provider
+3. Verify: Only accessed provider services created, others remain uninitialized
+```
+
+### Performance Benchmarks Required
+
+**Memory Usage Testing:**
+- Memory consumption with 0 providers accessed
+- Memory growth pattern when accessing 1, 2, 3 providers
+- Memory cleanup effectiveness after provider use
+- Weak reference garbage collection validation
+
+**Startup Performance:**
+- Plugin initialization time with container DI
+- First provider access latency (lazy loading overhead)
+- Menu building performance with multiple providers
 
 ## Key Architectural Principles
 
-1. **Don't Over-Engineer:** Solve problems you actually have
-2. **User Value First:** Focus on features users want
-3. **Honest Assessment:** Acknowledge when abstraction costs exceed benefits
-4. **Domain-Driven Design:** Put domain logic in appropriate layers
-5. **Clean Utils:** Keep utilities truly generic and reusable
+1. **Single Plugin Architecture:** Avoid plugin loading order issues by keeping everything in one plugin
+2. **Container DI for Scale:** Use dependency injection container to manage complexity as providers grow
+3. **Lazy Loading:** Create services only when needed to conserve memory on low-powered devices
+4. **Proper Cleanup:** Always implement cleanup methods for plugin lifecycle management
+5. **Core vs Provider Separation:** Share common functionality through core modules, isolate provider-specific logic
+6. **User Control:** Allow users to enable/disable providers within single plugin interface
+7. **Memory Consciousness:** Use weak references and proper garbage collection for cached services
 
-## Future Considerations
+## Decision Rationale Summary
 
-**If/when** we add support for other content providers:
+### Why Single Plugin + Container DI?
 
-1. **Assess at that time** whether provider abstraction adds value
-2. **Start simple** with clear domain boundaries  
-3. **Avoid premature optimization** for theoretical requirements
-4. **Focus on actual reuse patterns** rather than imagined ones
+**✅ Chosen Approach Benefits:**
+- No plugin loading order dependencies
+- Clean separation of concerns through internal modules
+- Memory-efficient lazy loading
+- User control over enabled providers
+- Scalable architecture for future providers
+- Proper lifecycle management
 
-The current single-provider focus is **architecturally sound** and **user-focused**. 
+**❌ Rejected Approaches:**
+- **Multiple plugins:** Plugin loading order hell, dependency fragility
+- **Manual DI without container:** Doesn't scale beyond 2-3 providers  
+- **Provider abstraction over current code:** 80%+ refactoring for theoretical benefits
+
+### Container DI Justification
+
+**When Container DI Makes Sense:**
+- Multi-provider architecture (our case)
+- Complex dependency graphs
+- Need for lazy loading
+- Memory-constrained environments
+- Plugin lifecycle management requirements
+
+**When Container DI is Overkill:**
+- Single provider with < 10 services (original concern was valid)
+- Simple linear dependencies
+- No memory constraints
+
+**Our Situation:** Multi-provider vision + memory constraints = Container DI is appropriate
+
+## Next Steps & Immediate Actions
+
+### Priority 1: Test Current Cleanup
+**Before implementing container**, validate current plugin cleanup:
+```bash
+# Test scenarios in current codebase:
+1. Open miniflux browser → switch FileManager ↔ ReaderUI → check for leaks
+2. Start download → switch context → verify cleanup
+3. Active API calls → plugin termination → verify no hanging requests
+```
+
+### Priority 2: Implement Container Architecture
+If cleanup testing reveals issues or if multi-provider development starts soon:
+```bash
+1. Create container.lua with basic provider registry
+2. Move utils/entry_utils.lua → providers/miniflux/entry_entity.lua  
+3. Move utils/navigation.lua → core/services/navigation_service.lua
+4. Implement proper cleanup in main.lua:onCloseWidget()
+5. Add comprehensive lifecycle testing
+```
+
+### Priority 3: Performance Validation
+```bash
+1. Memory benchmarks before/after container implementation
+2. Startup time measurements  
+3. Provider lazy loading effectiveness testing
+4. Low-powered device validation (e.g., older Kindles)
+```
+
+This architecture provides a **scalable foundation** for multi-provider support while being **appropriate for current needs** and **memory-conscious for KOReader's target devices**. 
