@@ -121,7 +121,7 @@ function Miniflux:onReadMinifluxEntries()
     browser:open()
 end
 
----Create and return a new browser instance
+---Create and return a new browser instance (BookList-based)
 ---@return MinifluxBrowser Browser instance
 function Miniflux:createBrowser()
     local MinifluxBrowser = require("browser/miniflux_browser")

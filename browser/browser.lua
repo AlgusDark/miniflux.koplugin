@@ -2,13 +2,12 @@
 Generic Browser - Base class for content browsers
 
 Provides generic browser functionality including navigation, menu integration,
-and UI management. Specialized browsers extend this class and implement
-abstract methods for provider-specific behavior.
+and UI management using BookList for enhanced features.
 
 @module browser.browser
 --]]
 
-local Menu = require("ui/widget/menu")
+local BookList = require("ui/widget/booklist")
 local UIManager = require("ui/uimanager")
 local _ = require("gettext")
 
@@ -18,12 +17,12 @@ local _ = require("gettext")
 ---@alias ForwardNavigationConfig {from: string, to: string, context?: NavigationContext}
 ---@alias RouteConfig {view_name: string, page_state?: number, context?: NavigationContext}
 
----@class BrowserOptions : MenuOptions
+---@class BrowserOptions : BookListOptions
 -- Constructor options table - fields defined by specific browser implementations
 
----@class Browser : Menu
--- Generic browser base class - specific browsers define their own dependencies and configuration
-local Browser = Menu:extend({
+---@class Browser : BookList
+-- Generic browser base class using BookList - specific browsers define their own dependencies and configuration
+local Browser = BookList:extend({
     title_shrink_font_to_fit = true,
     is_popout = false,
     covers_fullscreen = true,
@@ -43,8 +42,8 @@ function Browser:init()
         self:showConfigDialog()
     end
 
-    -- Initialize Menu parent
-    Menu.init(self)
+    -- Initialize BookList parent
+    BookList.init(self)
 end
 
 -- =============================================================================

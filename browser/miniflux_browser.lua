@@ -1,7 +1,7 @@
 --[[--
 Miniflux Browser - RSS Browser for Miniflux
 
-Extends generic Browser with Miniflux-specific functionality.
+Extends Browser (now BookList-based) with Miniflux-specific functionality.
 Handles RSS feeds, categories, and entries from Miniflux API.
 
 @module miniflux.browser.miniflux_browser
