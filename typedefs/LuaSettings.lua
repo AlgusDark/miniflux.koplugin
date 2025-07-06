@@ -1,8 +1,8 @@
 --[[--
 EmmyLua type definitions for LuaSettings
 
-@module koplugin.miniflux.typedefs.LuaSettings
---]]--
+@meta koplugin.miniflux.typedefs.LuaSettings
+--]] --
 
 ---@class LuaSettings
 ---@field open fun(file_path: string): LuaSettings Open settings file
@@ -11,4 +11,4 @@ EmmyLua type definitions for LuaSettings
 ---@field saveSetting fun(self: LuaSettings, key: string, value: any): nil Save a setting value
 ---@field toggle fun(self: LuaSettings, key: string): LuaSettings Toggles a boolean setting
 ---@field flush fun(self: LuaSettings): nil Flush settings to disk
----@field clear fun(self: LuaSettings): nil Clear all settings 
+---@field clear fun(self: LuaSettings): nil Clear all settings

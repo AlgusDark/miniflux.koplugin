@@ -1,7 +1,7 @@
 --[[--
 EmmyLua type definitions for ButtonDialogTitle
 
-@module koplugin.miniflux.typedefs.ButtonDialogTitle
+@meta koplugin.miniflux.typedefs.ButtonDialogTitle
 --]]
 
 ---@class ButtonDialogTitle

@@ -1,7 +1,7 @@
 --[[--
 EmmyLua type definitions for InfoMessage
 
-@module koplugin.miniflux.typedefs.InfoMessage
+@meta koplugin.miniflux.typedefs.InfoMessage
 --]] --
 
 ---@class InfoMessage

@@ -1,7 +1,7 @@
 --[[--
 EmmyLua type definitions for DocSettings
 
-@module koplugin.miniflux.typedefs.DocSettings
+@meta koplugin.miniflux.typedefs.DocSettings
 --]]
 
 ---@class DocSettings

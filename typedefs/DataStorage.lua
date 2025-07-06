@@ -1,7 +1,7 @@
 --[[--
 EmmyLua type definitions for DataStorage
 
-@module koplugin.miniflux.typedefs.DataStorage
+@meta koplugin.miniflux.typedefs.DataStorage
 --]]
 
 ---@class DataStorage

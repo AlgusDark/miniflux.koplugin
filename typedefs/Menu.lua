@@ -1,7 +1,7 @@
 --[[--
 EmmyLua type definitions for Menu
 
-@module koplugin.miniflux.typedefs.Menu
+@meta koplugin.miniflux.typedefs.Menu
 --]] --
 
 ---@class MenuOptions
