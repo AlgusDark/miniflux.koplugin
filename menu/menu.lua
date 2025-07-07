@@ -19,7 +19,6 @@ local MarkAsReadOnOpen = require("menu/settings/mark_as_read_on_open")
 local CopyCss = require("menu/settings/copy_css")
 local TestConnection = require("menu/settings/test_connection")
 
----@class Menu
 local Menu = {}
 
 ---Build the main menu structure for the Miniflux plugin
@@ -55,9 +54,9 @@ function Menu.build(plugin)
                     IncludeImages.getMenuItem(plugin.settings),
                     MarkAsReadOnOpen.getMenuItem(plugin.settings),
                     CopyCss.getMenuItem(plugin),
-                }
+                },
             },
-        }
+        },
     }
 end
 
