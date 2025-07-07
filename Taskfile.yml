@@ -1,0 +1,54 @@
+version: '3'
+
+tasks:
+  build:
+    desc: Build release artifact
+    cmds:
+      - task: clean
+      - task: copy-files
+      - task: verify
+
+  clean:
+    desc: Clean build directory
+    cmds:
+      - rm -rf dist
+      - mkdir -p dist
+
+  copy-files:
+    desc: Copy plugin files excluding development files
+    cmds:
+      - |
+        rsync -av \
+          --exclude='.git' \
+          --exclude='.github' \
+          --exclude='.gitignore' \
+          --exclude='typedefs' \
+          --exclude='scripts' \
+          --exclude='Taskfile.yml' \
+          --exclude='dist' \
+          . dist/miniflux.koplugin/
+
+  verify:
+    desc: Verify release artifact contents
+    cmds:
+      - echo "=== Release artifact contents ==="
+      - find dist -type f | sort
+
+  package:
+    desc: Create zip package (for local testing)
+    deps:
+      - build
+    cmds:
+      - cd dist && zip -r miniflux.koplugin.zip miniflux.koplugin/
+      - echo "Package created at dist/miniflux.koplugin.zip"
+
+  test-build:
+    desc: Test build locally and extract to verify
+    deps:
+      - package
+    cmds:
+      - rm -rf test-extract
+      - mkdir test-extract
+      - cd test-extract && unzip ../dist/miniflux.koplugin.zip
+      - echo "=== Extracted files ==="
+      - find test-extract -type f | sort
