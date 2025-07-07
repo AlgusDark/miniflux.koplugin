@@ -1,21 +1,20 @@
---[[--
-EmmyLua type definitions for TitleBar
+---@meta
+---@module "ui/widget/titlebar"
 
-@meta koplugin.miniflux.typedefs.TitleBar
---]]
+---@class TitleBarProps
+---@field width number Default to screen width
+---@field fullscreen boolean|string Larger font and adjustments if fullscreen
+---@field align "center"|"left" Title & subtitle alignment inside TitleBar
+---@field title string
+---@field subtitle string
 
 ---@class TitleBarOptions
----@field width? number Default to screen width
----@field fullscreen? boolean|string Larger font and adjustments if fullscreen
----@field align? "center"|"left" Title & subtitle alignment inside TitleBar
 ---@field with_bottom_line? boolean
 ---@field bottom_line_color? any Default to black
 ---@field bottom_line_h_padding? number Default to 0: full width
----@field title? string
 ---@field title_face? table Font face for title
 ---@field title_multilines? boolean Multilines if overflow
 ---@field title_shrink_font_to_fit? boolean Reduce font size so single line text fits
----@field subtitle? string
 ---@field subtitle_face? table Font face for subtitle
 ---@field subtitle_truncate_left? boolean Default with single line is to truncate right
 ---@field subtitle_fullwidth? boolean True to allow subtitle to extend below buttons
@@ -43,17 +42,11 @@ EmmyLua type definitions for TitleBar
 ---@field close_hold_callback? function
 ---@field show_parent? table Parent widget for UI management
 
----@class TitleBar
----@field width number
----@field fullscreen boolean|string
----@field align "center"|"left"
----@field title string
----@field subtitle string
+---@class TitleBar : TitleBarProps
 ---@field left_button IconButton|nil Left button widget
 ---@field right_button IconButton|nil Right button widget
 ---@field has_left_icon boolean
 ---@field has_right_icon boolean
----@field show_parent table
 ---@field new fun(self: TitleBar, o: TitleBarOptions): TitleBar Create new TitleBar instance
 ---@field init fun(self: TitleBar): nil Initialize TitleBar
 ---@field setTitle fun(self: TitleBar, title: string, no_refresh?: boolean): nil Set title text
@@ -61,3 +54,6 @@ EmmyLua type definitions for TitleBar
 ---@field setLeftIcon fun(self: TitleBar, icon: string): nil Set left icon
 ---@field setRightIcon fun(self: TitleBar, icon: string): nil Set right icon
 ---@field getHeight fun(self: TitleBar): number Get titlebar height
+local TitleBar = {}
+
+return TitleBar
