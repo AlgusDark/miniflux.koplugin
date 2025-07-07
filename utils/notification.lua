@@ -1,12 +1,3 @@
---[[--
-Notification Utility
-
-Simple notification wrapper around InfoMessage with consistent timeout handling.
-Always returns instance for consistent API.
-
-@module koplugin.miniflux.utils.notification
---]]
-
 local UIManager = require("ui/uimanager")
 local InfoMessage = require("ui/widget/infomessage")
 
@@ -43,6 +34,8 @@ function NotificationInstance:close()
     -- Safe to call multiple times - becomes no-op after first call
 end
 
+-- **Notification** - Simple notification wrapper around InfoMessage with
+-- consistent timeout handling. Always returns instance for consistent API.
 local Notification = {}
 
 ---Show success notification

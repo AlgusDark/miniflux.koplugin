@@ -1,13 +1,3 @@
---[[--
-Miniflux API
-
-Domain-specific API that provides all Miniflux operations.
-Uses the generic APIClient for HTTP communication while adding
-Miniflux-specific endpoint knowledge and request building.
-
-@module koplugin.miniflux.api.miniflux_api
---]]
-
 ---@class MinifluxEntriesResponse
 ---@field entries MinifluxEntry[] Array of entries
 ---@field total? number Total number of entries available
@@ -51,6 +41,9 @@ Miniflux-specific endpoint knowledge and request building.
 ---@field title string Category title
 ---@field total_unread? number Total unread entries in category
 
+-- Domain-specific API that provides all Miniflux operations.
+-- Uses the generic APIClient for HTTP communication while adding
+-- Miniflux-specific endpoint knowledge and request building.
 ---@class MinifluxAPI
 ---@field api_client APIClient Generic HTTP API client
 local MinifluxAPI = {}

@@ -1,15 +1,9 @@
---[[--
-Include Images Settings Component
-
-Handles include images submenu with ON/OFF toggle for image downloading.
-
-@module miniflux.menu.settings.include_images
---]]
-
 local UIManager = require("ui/uimanager")
 local Notification = require("utils/notification")
 local _ = require("gettext")
 
+-- **Include Images Settings** - Handles "include images" submenu with ON/OFF
+-- toggle for image downloading.
 local IncludeImages = {}
 
 ---Get the menu item for include images configuration

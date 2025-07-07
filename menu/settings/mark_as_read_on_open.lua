@@ -1,15 +1,9 @@
---[[--
-Mark as Read on Open Settings Component
-
-Handles mark as read on open submenu with ON/OFF toggle for automatic status updates.
-
-@module miniflux.menu.settings.mark_as_read_on_open
---]]
-
 local UIManager = require("ui/uimanager")
 local Notification = require("utils/notification")
 local _ = require("gettext")
 
+-- **Mark as Read on Open Settings** - Handles "mark as read on open" submenu
+-- with ON/OFF toggle for automatic status updates.
 local MarkAsReadOnOpen = {}
 
 ---Get the menu item for mark as read on open configuration

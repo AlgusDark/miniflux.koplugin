@@ -1,12 +1,3 @@
---[[--
-Miniflux Settings Module
-
-Settings management with idiomatic property access using metamethods.
-Uses LuaSettings for storage with proper initialization and state management.
-
-@module koplugin.miniflux.settings
---]]
-
 local DataStorage = require("datastorage")
 local LuaSettings = require("luasettings")
 
@@ -22,10 +13,9 @@ local DEFAULTS = {
     mark_as_read_on_open = true,
 }
 
--- =============================================================================
--- SETTINGS CLASS
--- =============================================================================
-
+-- **Miniflux Settings** - Settings management with idiomatic property access
+-- using metamethods. Uses LuaSettings for storage with proper initialization
+-- and state management.
 ---@class MinifluxSettings
 ---@field settings LuaSettings LuaSettings instance
 ---@field server_address string Server address
@@ -48,10 +38,6 @@ function MinifluxSettings:new()
     setmetatable(instance, self)
     return instance
 end
-
--- =============================================================================
--- METAMETHODS FOR PROPERTY ACCESS
--- =============================================================================
 
 ---Handle property reading with automatic defaults
 ---@param key string Property name
@@ -84,10 +70,6 @@ function MinifluxSettings:__newindex(key, value)
         rawset(self, key, value)
     end
 end
-
--- =============================================================================
--- UTILITY METHODS
--- =============================================================================
 
 ---Explicitly save settings to disk
 ---@return nil

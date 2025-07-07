@@ -1,13 +1,3 @@
---[[--
-Entry Workflow Service
-
-Handles the complete workflow for downloading and opening RSS entries.
-Uses Trapper for progress tracking and user interaction in a fire-and-forget pattern.
-Orchestrates the entire process: download, file creation, and opening.
-
-@module koplugin.miniflux.services.entry_workflow
---]]
-
 local socket_url = require("socket.url")
 local UIManager = require("ui/uimanager")
 local FFIUtil = require("ffi/util")
@@ -22,10 +12,6 @@ local Trapper = require("ui/trapper")
 local HtmlUtils = require("utils/html_utils")
 local Files = require("utils/files")
 local Notification = require("utils/notification")
-
--- =============================================================================
--- OPTIMIZATION: MODULE-LEVEL TEMPLATE HELPERS
--- =============================================================================
 
 -- Centralized workflow message templates for consistency and maintainability
 local WORKFLOW_MESSAGES = {
@@ -48,10 +34,6 @@ local WORKFLOW_MESSAGES = {
 local function createImageProgressMessage(opts)
     return T(WORKFLOW_MESSAGES.DOWNLOAD_IMAGES, opts.title, opts.current, opts.total)
 end
-
--- =============================================================================
--- PHASE TRACKING AND CANCELLATION HANDLING
--- =============================================================================
 
 -- Download phases for better state tracking and cancellation handling
 local PHASES = {
@@ -342,10 +324,10 @@ local function showCompletionSummary(config)
     return PHASE_RESULTS.SUCCESS
 end
 
--- =============================================================================
--- PUBLIC API
--- =============================================================================
-
+-- **Entry Workflow** - Handles the complete workflow for downloading and opening
+-- RSS entries. Uses Trapper for progress tracking and user interaction in a
+-- fire-and-forget pattern. Orchestrates the entire process: download, file
+-- creation, and opening.
 local EntryWorkflow = {}
 
 ---Execute complete entry workflow with progress tracking (fire-and-forget)

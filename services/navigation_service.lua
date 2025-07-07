@@ -1,13 +1,3 @@
---[[--
-Navigation Utilities for Miniflux Entries
-
-Consolidated navigation utilities including context management and entry navigation
-logic. Combines functionality from navigation_context and navigation_utils for
-better organization.
-
-@module miniflux.utils.navigation
---]]
-
 local lfs = require("libs/libkoreader-lfs")
 local Notification = require("utils/notification")
 local _ = require("gettext")
@@ -26,11 +16,10 @@ local PUBLISHED_BEFORE = "published_before"
 local MSG_FINDING_PREVIOUS = "Finding previous entry..."
 local MSG_FINDING_NEXT = "Finding next entry..."
 
+-- **Navigation Service** - Consolidated navigation utilities including context
+-- management and entry navigation logic. Combines functionality from
+-- navigation_context and navigation_utils for better organization.
 local Navigation = {}
-
--- =============================================================================
--- NAVIGATION CONTEXT UTILITIES
--- =============================================================================
 
 ---Get API options based on navigation context and entry metadata
 ---@param opts table Options containing base_options, context, entry_metadata

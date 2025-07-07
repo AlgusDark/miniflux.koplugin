@@ -1,14 +1,3 @@
---[[--
-Entry Service
-
-This service handles complex entry workflows and orchestration.
-It coordinates between the Entry entity, repositories, and infrastructure services
-to provide high-level entry operations including UI coordination, navigation,
-and dialog management.
-
-@module koplugin.miniflux.services.entry_service
---]]
-
 local UIManager = require("ui/uimanager")
 local ReaderUI = require("apps/reader/readerui")
 local FFIUtil = require("ffi/util")
@@ -23,6 +12,11 @@ local EntryEntity = require("entities/entry_entity")
 local Navigation = require("services/navigation_service")
 local EntryWorkflow = require("services/entry_workflow")
 
+-- **Entry Service** - Handles complex entry workflows and orchestration.
+--
+-- It coordinates between the Entry entity, repositories, and infrastructure
+-- services to provide high-level entry operations including UI coordination,
+-- navigation, and dialog management.
 ---@class EntryService
 ---@field settings MinifluxSettings Settings instance
 ---@field miniflux_api MinifluxAPI Miniflux API instance
@@ -46,10 +40,6 @@ function EntryService:new(deps)
     return instance
 end
 
--- =============================================================================
--- ENTRY READING WORKFLOW
--- =============================================================================
-
 ---Read an entry (download if needed and open)
 ---@param entry_data table Raw entry data from API
 ---@param browser? MinifluxBrowser Browser instance to close
@@ -68,10 +58,6 @@ function EntryService:readEntry(entry_data, browser)
         browser = browser
     })
 end
-
--- =============================================================================
--- ENTRY STATUS MANAGEMENT
--- =============================================================================
 
 ---Change entry status with validation and side effects
 ---@param entry_id number Entry ID

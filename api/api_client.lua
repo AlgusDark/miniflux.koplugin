@@ -1,19 +1,8 @@
---[[--
-Miniflux API Client
-
-This is the main API client that handles HTTP communication and coordinates
-with specialized API modules. It provides convenient HTTP methods and manages
-the connection to the Miniflux server.
-
-@module koplugin.miniflux.api.api_client
---]]
-
 local http = require("socket.http")
 local JSON = require("json")
 local ltn12 = require("ltn12")
 local socket = require("socket")
 local socketutil = require("socketutil")
-local UIManager = require("ui/uimanager")
 local _ = require("gettext")
 local logger = require("logger")
 local Files = require("utils/files")
@@ -21,8 +10,9 @@ local util = require("util")
 local Notification = require("utils/notification")
 local Error = require("utils/error")
 
--- No timeout constants needed - handled by Notification utility
-
+-- This is the main API client that handles HTTP communication and coordinates
+-- with specialized API modules. It provides convenient HTTP methods and manages
+-- the connection to the Miniflux server.
 ---@class APIClient
 ---@field settings MinifluxSettings Settings instance for configuration
 local APIClient = {}

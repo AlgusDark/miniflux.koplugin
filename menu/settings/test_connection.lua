@@ -1,14 +1,8 @@
---[[--
-Test Connection Settings Component
-
-Handles connection testing to the Miniflux server.
-
-@module miniflux.menu.settings.test_connection
---]]
-
 local Notification = require("utils/notification")
 local _ = require("gettext")
 
+-- **Test Connection Settings** - Handles connection testing to the Miniflux
+-- server.
 local TestConnection = {}
 
 ---Get the menu item for connection testing

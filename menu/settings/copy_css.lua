@@ -1,11 +1,3 @@
---[[--
-Copy CSS Settings Component
-
-Handles copying the plugin's CSS file to the styletweaks directory for use with KOReader's styletweaks functionality.
-
-@module miniflux.menu.settings.copy_css
---]]
-
 local ConfirmBox = require("ui/widget/confirmbox")
 local DataStorage = require("datastorage")
 local UIManager = require("ui/uimanager")
@@ -14,6 +6,8 @@ local logger = require("logger")
 local Notification = require("utils/notification")
 local _ = require("gettext")
 
+-- **Copy CSS Settings** - Handles copying the plugin's CSS file to the
+-- styletweaks directory for use with KOReader's styletweaks functionality.
 local CopyCss = {}
 
 ---Get the menu item for CSS copying functionality

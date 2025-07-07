@@ -1,15 +1,8 @@
---[[--
-Debug Logger for Miniflux Plugin
-
-Simple logging utility for debugging issues in KOReader environment.
-Logs are written to debug.log in the miniflux data directory.
-
-@module miniflux.utils.debugger
---]]
-
 local DataStorage = require("datastorage")
 local lfs = require("libs/libkoreader-lfs")
 
+-- **Debugger** - Simple logging utility for debugging issues in KOReader
+-- environment. Logs are written to debug.log in the miniflux data directory.
 local Debugger = {}
 
 -- Initialize log directory and file path

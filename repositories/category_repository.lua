@@ -1,14 +1,7 @@
---[[--
-Category Repository - Data Access Layer
-
-Handles all category-related data access and API interactions.
-Provides a clean interface for category data without UI concerns.
-
-@module miniflux.browser.repositories.category_repository
---]]
-
-local Error = require("utils/error")
-
+-- **Category Repository** - Data Access Layer
+--
+-- Handles all category-related data access and API interactions.
+-- Provides a clean interface for category data without UI concerns.
 ---@class CategoryRepository
 ---@field miniflux_api MinifluxAPI Miniflux API instance
 ---@field settings MinifluxSettings Settings instance
@@ -26,10 +19,6 @@ function CategoryRepository:new(deps)
     self.__index = self
     return obj
 end
-
--- =============================================================================
--- CATEGORY DATA ACCESS
--- =============================================================================
 
 ---Get all categories with counts
 ---@param config? table Configuration with optional dialogs

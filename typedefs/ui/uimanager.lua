@@ -1,6 +1,7 @@
 ---@meta
 ---@module 'ui/uimanager'
 
+-- This module manages widgets.
 ---@class UIManager
 ---@field show fun(widget: table): nil Show a widget
 ---@field close fun(widget: table): nil Close a widget

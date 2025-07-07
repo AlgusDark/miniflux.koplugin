@@ -1,12 +1,3 @@
---[[--
-Entry Entity
-
-Pure utility functions for entry operations, validation, and business logic.
-Delegates file operations to Files utilities while maintaining business logic.
-
-@module koplugin.miniflux.entities.entry_entity
---]]
-
 local DataStorage = require("datastorage")
 local lfs = require("libs/libkoreader-lfs")
 local UIManager = require("ui/uimanager")
@@ -16,11 +7,10 @@ local FileManager = require("apps/filemanager/filemanager")
 local Error = require("utils/error")
 local _ = require("gettext")
 
+-- **Entry Entity** - Pure utility functions for entry operations, validation,
+-- and business logic. Delegates file operations to Files utilities while
+-- maintaining business logic.
 local EntryEntity = {}
-
--- =============================================================================
--- DIRECTORY MANAGEMENT (STATIC)
--- =============================================================================
 
 ---Get the base download directory for all entries
 ---@return string Download directory path

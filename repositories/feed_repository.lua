@@ -1,18 +1,11 @@
---[[--
-Feed Repository - Data Access Layer
-
-Handles all feed-related data access and API interactions.
-Provides a clean interface for feed data without UI concerns.
-
-@module miniflux.browser.repositories.feed_repository
---]]
-
-local Error = require("utils/error")
-
 ---@class MinifluxFeedsWithCountersResult
 ---@field feeds MinifluxFeed[] Array of feeds
 ---@field counters MinifluxFeedCounters Feed counters with reads/unreads maps
 
+-- **Feed Repository** - Data Access Layer
+--
+-- Handles all feed-related data access and API interactions.
+-- Provides a clean interface for feed data without UI concerns.
 ---@class FeedRepository
 ---@field miniflux_api MinifluxAPI Miniflux API instance
 ---@field settings MinifluxSettings Settings instance
@@ -30,10 +23,6 @@ function FeedRepository:new(deps)
     self.__index = self
     return obj
 end
-
--- =============================================================================
--- FEED DATA ACCESS
--- =============================================================================
 
 ---Get all feeds
 ---@param config? table Configuration with optional dialogs

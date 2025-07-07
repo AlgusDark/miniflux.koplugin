@@ -1,14 +1,8 @@
---[[--
-Error Utilities for Miniflux Plugin
-
-Simple error handling utility that provides consistent error objects.
-Focuses on what we actually need: standardized error objects with message property.
-
-@module miniflux.utils.error
---]]
-
 local _ = require("gettext")
 
+-- **Error** - Simple error handling utility that provides consistent error
+-- objects. Focuses on what we actually need: standardized error objects with
+-- message property.
 ---@class Error # Error object with message property
 ---@field message string
 local Error = {}

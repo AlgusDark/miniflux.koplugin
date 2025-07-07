@@ -1,16 +1,10 @@
---[[--
-Sort Direction Settings Component
-
-Handles sort direction submenu with ascending/descending options.
-
-@module miniflux.menu.settings.sort_direction
---]]
-
 local UIManager = require("ui/uimanager")
 local Notification = require("utils/notification")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
+-- **Sort Direction Settings** - Handles "sort direction" submenu with
+-- ascending/descending options.
 local SortDirection = {}
 
 ---Get the menu item for sort direction configuration

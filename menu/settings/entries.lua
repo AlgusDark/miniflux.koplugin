@@ -1,17 +1,10 @@
---[[--
-Entries Limit Settings Component
-
-Handles entries limit configuration dialog.
-
-@module miniflux.menu.settings.entries
---]]
-
 local InputDialog = require("ui/widget/inputdialog")
 local UIManager = require("ui/uimanager")
 local Notification = require("utils/notification")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
+-- **Entries Limit Settings** - Handles entries limit configuration dialog.
 local Entries = {}
 
 ---Get the menu item for entries limit configuration

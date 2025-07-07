@@ -1,15 +1,10 @@
---[[--
-Time Utilities for Miniflux Plugin
-
-This utility module provides time-related functions including timestamp conversion
-and date parsing for RSS entries and navigation.
-
-@module miniflux.utils.time_utils
---]]
-
 local Error = require("utils/error")
 local _ = require("gettext")
 
+-- **TimeUtils** - Time utilities for Miniflux Plugin
+--
+-- This utility module provides time-related functions including timestamp
+-- conversion and date parsing for RSS entries and navigation.
 local TimeUtils = {}
 
 ---Convert ISO-8601 timestamp to Unix timestamp

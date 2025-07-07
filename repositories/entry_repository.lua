@@ -1,14 +1,7 @@
---[[--
-Entry Repository - Data Access Layer
-
-Handles all entry-related data access and API interactions.
-Provides a clean interface for entry data without UI concerns.
-
-@module miniflux.browser.repositories.entry_repository
---]]
-
-local Error = require("utils/error")
-
+-- **Entry Repository** - Data Access Layer
+--
+-- Handles all entry-related data access and API interactions.
+-- Provides a clean interface for entry data without UI concerns.
 ---@class EntryRepository
 ---@field miniflux_api MinifluxAPI Miniflux API instance
 ---@field settings MinifluxSettings Settings instance
@@ -50,10 +43,6 @@ function EntryRepository:getApiOptions()
 
     return options
 end
-
--- =============================================================================
--- ENTRY DATA ACCESS
--- =============================================================================
 
 ---Get unread entries
 ---@param config? table Configuration with optional dialogs

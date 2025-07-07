@@ -1,16 +1,10 @@
---[[--
-Server Configuration Settings Component
-
-Handles server address and API token configuration dialog.
-
-@module miniflux.menu.settings.server_config
---]]
-
 local MultiInputDialog = require("ui/widget/multiinputdialog")
 local UIManager = require("ui/uimanager")
 local Notification = require("utils/notification")
 local _ = require("gettext")
 
+-- **Server Configuration Settings** - Handles server address and API token
+-- configuration dialog.
 local ServerConfig = {}
 
 ---Get the menu item for server configuration

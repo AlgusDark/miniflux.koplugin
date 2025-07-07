@@ -1,16 +1,10 @@
---[[--
-Sort Order Settings Component
-
-Handles sort order submenu with various sorting options.
-
-@module miniflux.menu.settings.sort_order
---]]
-
 local UIManager = require("ui/uimanager")
 local Notification = require("utils/notification")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
+-- **Sort Order Settings** - Handles "sort order" submenu with various sorting
+-- options.
 local SortOrder = {}
 
 ---Get display names for sort orders

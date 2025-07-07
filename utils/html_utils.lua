@@ -1,15 +1,3 @@
---[[--
-HTML Utilities for Miniflux Browser
-
-This utility module handles HTML document creation and processing for offline
-viewing of RSS entries in KOReader.
-
-TODO: Extract Miniflux domain logic (entry-specific metadata, RSS-specific HTML structure)
-to make this module truly generic for any content type.
-
-@module miniflux.browser.utils.html_utils
---]]
-
 local _ = require("gettext")
 local util = require("util") -- Use KOReader's built-in utilities
 
@@ -21,6 +9,10 @@ local htmlparser = require("htmlparser")
 local Images = require("utils/images")
 local Error = require("utils/error")
 
+-- **HtmlUtils** - HTML utilities for Miniflux Browser
+--
+-- This utility module handles HTML document creation and processing for offline
+-- viewing of RSS entries in KOReader.
 local HtmlUtils = {}
 
 -- Escape string for use in Lua pattern matching

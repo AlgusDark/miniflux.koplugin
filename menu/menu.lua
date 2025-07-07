@@ -1,12 +1,3 @@
---[[--
-Main Menu Structure for Miniflux Plugin
-
-Simple menu builder that coordinates with individual settings components.
-Replaces the over-engineered MenuManager with clean, modular approach.
-
-@module miniflux.menu.menu
---]]
-
 local _ = require("gettext")
 
 -- Import settings components
