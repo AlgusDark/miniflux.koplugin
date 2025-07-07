@@ -13,15 +13,6 @@
 ---@field subtitle? string Subtitle text to display
 
 ---@class TitleBar : WidgetContainer
----@field title string Title text
----@field subtitle string|nil Subtitle text
----@field left_icon string|nil Left icon identifier
----@field right_icon string|nil Right icon identifier
----@field show_parent table Parent widget
----@field fullscreen string|boolean Fullscreen mode
----@field align "left"|"center"|"right" Title alignment
----@field left_icon_tap_callback function|nil Left icon tap callback
----@field right_icon_tap_callback function|nil Right icon tap callback
 ---@field extend fun(self: TitleBar, o: TitleBarOptions): TitleBar Extend TitleBar class
 ---@field new fun(self: TitleBar, o: TitleBarOptions): TitleBar Create new TitleBar instance
 ---@field init fun(self: TitleBar): nil Initialize title bar
@@ -29,6 +20,8 @@
 ---@field setLeftIcon fun(self: TitleBar, icon: string): nil Set the left icon
 ---@field setTitle fun(self: TitleBar, title: string): nil Set the title text
 ---@field setSubtitle fun(self: TitleBar, subtitle: string): nil Set the subtitle text
+---@field setRightIconTapCallback fun(self: TitleBar, callback: function): nil Set the right icon tap callback
+---@field setLeftIconTapCallback fun(self: TitleBar, callback: function): nil Set the left icon tap callback
 local TitleBar = {}
 
-return TitleBar 
+return TitleBar

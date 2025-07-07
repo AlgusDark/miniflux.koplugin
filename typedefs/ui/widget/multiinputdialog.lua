@@ -1,8 +1,5 @@
---[[--
-EmmyLua type definitions for MultiInputDialog
-
-@meta koplugin.miniflux.typedefs.MultiInputDialog
---]] --
+---@meta
+---@module 'ui/widget/multiinputdialog'
 
 ---@class MultiInputDialog
 ---@field title string Dialog title
@@ -10,3 +7,6 @@ EmmyLua type definitions for MultiInputDialog
 ---@field buttons table[][] Dialog buttons
 ---@field getFields fun(self: MultiInputDialog): string[] Get field values
 ---@field new fun(o: table): MultiInputDialog Create new multi-input dialog
+local MultiInputDialog = {}
+
+return MultiInputDialog

@@ -1,8 +1,5 @@
---[[--
-EmmyLua type definitions for InfoMessage
-
-@meta koplugin.miniflux.typedefs.InfoMessage
---]] --
+---@meta
+---@module 'ui/widge/infomessage'
 
 ---@class InfoMessage
 ---@field text string Message text
@@ -10,3 +7,6 @@ EmmyLua type definitions for InfoMessage
 ---@field dismiss_callback? function Callback when dismissed
 ---@field new fun(o: table): InfoMessage Create new info message
 ---@field init fun(self: InfoMessage) Initialize/reinitialize the widget
+local InfoMessage = {}
+
+return InfoMessage

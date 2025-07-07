@@ -1,8 +1,5 @@
---[[--
-EmmyLua type definitions for DocSettings
-
-@meta koplugin.miniflux.typedefs.DocSettings
---]]
+---@meta
+---@module 'docsettings'
 
 ---@class DocSettings
 ---@field open fun(file_path: string): DocSettings Open DocSettings for a file
@@ -11,3 +8,6 @@ EmmyLua type definitions for DocSettings
 ---@field saveSetting fun(self: DocSettings, key: string, value: any): nil Save a setting value
 ---@field flush fun(self: DocSettings): string|nil Flush settings to disk, returns result or nil
 ---@field close fun(self: DocSettings): nil Close DocSettings instance
+local DocSettings = {}
+
+return DocSettings

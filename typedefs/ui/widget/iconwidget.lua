@@ -1,8 +1,16 @@
---[[--
-EmmyLua type definitions for IconWidget
+---@meta
+---@module 'ui/widget/iconwidget'
 
-@meta koplugin.miniflux.typedefs.IconWidget
---]]
+---@class ImageWidgetOptions
+---@field file? string Image file path
+---@field image? table Image data
+---@field width? number Image width
+---@field height? number Image height
+
+---@class ImageWidget
+---@field file string Image file path
+---@field width number Image width
+---@field height number Image height
 
 ---@class IconWidgetOptions : ImageWidgetOptions
 ---@field icon? string Icon filename (without path or extension)
@@ -21,14 +29,6 @@ EmmyLua type definitions for IconWidget
 ---@field extend fun(self: IconWidget, o: IconWidgetOptions): IconWidget Extend IconWidget class
 ---@field new fun(self: IconWidget, o: IconWidgetOptions): IconWidget Create new IconWidget
 ---@field init fun(self: IconWidget): nil Initialize icon widget (resolves icon path)
+local IconWidget = {}
 
----@class ImageWidgetOptions
----@field file? string Image file path
----@field image? table Image data
----@field width? number Image width
----@field height? number Image height
-
----@class ImageWidget
----@field file string Image file path
----@field width number Image width
----@field height number Image height
+return IconWidget

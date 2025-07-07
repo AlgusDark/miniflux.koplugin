@@ -1,8 +1,5 @@
---[[--
-EmmyLua type definitions for InputContainer
-
-@meta koplugin.miniflux.typedefs.InputContainer
---]]
+---@meta
+---@module 'ui/widget/container/inputcontainer'
 
 ---@class TouchZone
 ---@field id string Zone identifier
@@ -50,3 +47,6 @@ EmmyLua type definitions for InputContainer
 ---@field closeInputDialog fun(self: InputContainer): nil Close input dialog
 ---@field onPhysicalKeyboardDisconnected fun(self: InputContainer): nil Handle keyboard disconnection
 ---@field isGestureAlwaysActive fun(self: InputContainer, ges: string, multiswipe_directions: table): boolean Check if gesture is always active
+local InputContainer = {}
+
+return InputContainer

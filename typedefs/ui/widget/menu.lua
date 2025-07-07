@@ -29,3 +29,7 @@
 ---@field updatePageInfo fun(self: Menu): nil Update page information
 ---@field extend fun(self: Menu, o: MenuOptions): Menu Extend menu class
 ---@field new fun(self: Menu, o: MenuOptions): Menu Create new menu instance
+---@field updateItems fun(self: Menu, select_number?: number, no_recalculate_dimen?: boolean): nil Update menu items
+local Menu = {}
+
+return Menu

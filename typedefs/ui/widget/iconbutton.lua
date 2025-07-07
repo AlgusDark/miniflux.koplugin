@@ -1,7 +1,8 @@
---[[--
-EmmyLua type definitions for IconButton
+---@meta
+---@module 'ui/widget/iconbutton'
 
-@meta koplugin.miniflux.typedefs.IconButton
+--[[--
+Button with a big icon image! Designed for touch devices.
 --]]
 
 ---@class IconButtonOptions
@@ -36,3 +37,6 @@ EmmyLua type definitions for IconButton
 ---@field setIcon fun(self: IconButton, icon: string): nil Set button icon
 ---@field onTapIconButton fun(self: IconButton): boolean Handle tap gesture
 ---@field onHoldIconButton fun(self: IconButton): boolean Handle hold gesture
+local IconButton = {}
+
+return IconButton
