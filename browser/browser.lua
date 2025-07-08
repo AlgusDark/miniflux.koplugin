@@ -52,7 +52,6 @@ Browser.BrowserMode = BrowserMode
 function Browser:init()
     self.current_mode = BrowserMode.NORMAL
     self.selected_items = nil
-    self.selected_count = 0
     self.last_selected_index = nil
 
     self.show_parent = self.show_parent or self
@@ -90,7 +89,6 @@ function Browser:transitionTo(target_mode)
         -- Exiting selection mode - clean up all selection state
         local previous_selection_count = self.selected_items and self:getSelectedCount() or 0
         self.selected_items = nil      -- Reset selection mode (enables early returns in updateItemDimStatus)
-        self.selected_count = 0        -- Reset cached counter
         self.last_selected_index = nil -- Reset range selection tracking
         self.title_bar:setRightIcon("exit")
         self:clearVisualSelection()    -- Remove visual indicators from all items
@@ -98,7 +96,6 @@ function Browser:transitionTo(target_mode)
     elseif target_mode == BrowserMode.SELECTION then
         -- Entering selection mode - initialize selection state
         self.selected_items = {}       -- Initialize selection mode (empty table, not nil)
-        self.selected_count = 0        -- Initialize cached counter
         self.last_selected_index = nil -- Initialize range selection tracking
         self.title_bar:setRightIcon("check")
     else
@@ -161,6 +158,24 @@ function Browser:showSelectionActionsDialog()
         table.insert(buttons, {}) -- separator
     end
 
+    -- Add select/deselect all buttons
+    table.insert(buttons, {
+        {
+            text = _("Select all"),
+            callback = function()
+                UIManager:close(self.selection_dialog)
+                self:selectAll()
+            end,
+        },
+        {
+            text = _("Deselect all"),
+            callback = function()
+                UIManager:close(self.selection_dialog)
+                self:deselectAll()
+            end,
+        },
+    })
+
     -- Add exit selection mode button
     table.insert(buttons, {
         {
@@ -202,7 +217,14 @@ end
 
 -- Helper method to get count of selected items
 function Browser:getSelectedCount()
-    return self.selected_count or 0
+    if not self.selected_items then
+        return 0
+    end
+    local count = 0
+    for _ in pairs(self.selected_items) do
+        count = count + 1
+    end
+    return count
 end
 
 -- Helper method to get array of selected items
@@ -222,13 +244,14 @@ end
 -- It ensures that visual selection indicators (item.dim) are properly maintained
 -- when the underlying item table changes.
 --
--- PERFORMANCE NOTE: The updateItemDimStatus call here benefits from the "visible items only"
--- optimization, so navigation remains fast even with large datasets.
+-- PERFORMANCE NOTE: Uses visible-only updates via HashMap lookup for optimal page navigation speed.
+-- Cross-page consistency is maintained through selection operations that use full updates when needed.
 function Browser:switchItemTable(title, items, page_state, menu_title, subtitle)
     if self:isCurrentMode(BrowserMode.SELECTION) then
         -- Add selection state to items before displaying
-        -- This ensures selected items appear dimmed when navigating between views/pages
-        self:updateItemDimStatus(items)
+        -- Use visible-only update for fast page navigation (HashMap lookup per visible item)
+        local visible_items = self:getVisibleItems(items)
+        self:updateItemDimStatus(visible_items)
     end
 
     -- Call parent BookList method to actually display the items
@@ -277,6 +300,7 @@ end
 --    - Debugging revealed we were processing ALL items (e.g., 100) when only 14 were visible
 --    - Reduces processing by 86-98% depending on page position and total item count
 --    - Makes performance independent of dataset size
+--    - NOTE: Cross-page visual consistency is handled lazily via HashMap lookup during navigation
 function Browser:updateItemDimStatus(items)
     -- Early return optimizations - skip work when not needed
     if not self:isCurrentMode(BrowserMode.SELECTION) or not self.selected_items then
@@ -289,11 +313,10 @@ function Browser:updateItemDimStatus(items)
         return
     end
 
-    -- PERFORMANCE OPTIMIZATION: Only process visible items instead of all items
-    -- This reduces processing from O(total_items) to O(visible_items)
-    local visible_items = self:getVisibleItems(items)
-
-    for _, item in ipairs(visible_items) do
+    -- Process all items passed to this function (caller determines scope)
+    -- When called from switchItemTable: processes current page items
+    -- When called from refreshCurrentView: processes visible items only
+    for _, item in ipairs(items) do
         local item_id = self:getItemId(item)
         item.dim = self.selected_items[item_id] and true or nil
     end
@@ -301,10 +324,9 @@ end
 
 -- Refresh current view to update visual state
 function Browser:refreshCurrentView()
-    -- Force re-render of current items to update visual state
+    -- Let updateItems handle the visual state update efficiently
     if self.item_table then
-        self:updateItemDimStatus(self.item_table)
-        self:updateItems()
+        self:updateItems(1, true) -- select_number=1, no_recalculate_dimen=true
     end
 end
 
@@ -316,7 +338,7 @@ function Browser:clearVisualSelection()
         for _, item in ipairs(visible_items) do
             item.dim = nil
         end
-        self:updateItems()
+        self:updateItems(1, true) -- select_number=1, no_recalculate_dimen=true
     end
 end
 
@@ -444,6 +466,23 @@ function Browser:close()
     UIManager:close(self)
 end
 
+-- Page navigation methods are inherited from BookList
+-- No need to override unless adding specific Browser functionality
+
+-- Override updateItems to maintain selection state during page navigation
+-- Clean approach: apply selection state to items before Menu builds the UI components
+function Browser:updateItems(select_number, no_recalculate_dimen)
+    -- Apply selection state to items BEFORE calling parent updateItems
+    -- This way Menu builds MenuItem widgets with the correct item.dim state from the start
+    if self:isCurrentMode(BrowserMode.SELECTION) and self.item_table then
+        local visible_items = self:getVisibleItems(self.item_table)
+        self:updateItemDimStatus(visible_items)
+    end
+
+    -- Now let parent build the UI with the correctly updated item.dim states
+    BookList.updateItems(self, select_number, no_recalculate_dimen)
+end
+
 -- =============================================================================
 -- ITEM SELECTION LOGIC
 -- =============================================================================
@@ -487,19 +526,14 @@ function Browser:toggleItemSelection(item)
 
     if self.selected_items[item_id] then
         self.selected_items[item_id] = nil
-        self.selected_count = self.selected_count - 1
     else
         self.selected_items[item_id] = item
-        self.selected_count = self.selected_count + 1
         self.last_selected_index = item_index
     end
 
     -- Update visual display to reflect selection changes
-    -- Benefits from "visible items only" optimization for large datasets
-    if self.item_table then
-        self:updateItemDimStatus(self.item_table)
-        self:updateItems(nil, true) -- Only visual state changed, no layout change
-    end
+    -- Use refreshCurrentView for better performance - navigation handles cross-page consistency
+    self:refreshCurrentView()
 end
 
 -- Select an item (used when entering selection mode)
@@ -508,14 +542,10 @@ function Browser:selectItem(item)
     local item_index = self:getItemIndex(item)
 
     self.selected_items[item_id] = item
-    self.selected_count = self.selected_count + 1
     self.last_selected_index = item_index
 
     -- Update visual display
-    if self.item_table then
-        self:updateItemDimStatus(self.item_table)
-        self:updateItems(nil, true) -- Only visual state changed
-    end
+    self:refreshCurrentView()
 end
 
 -- Check if an item is selected
@@ -574,15 +604,9 @@ function Browser:doRangeSelection(item)
         if range_item then
             local item_id = self:getItemId(range_item)
             if should_select then
-                if not self.selected_items[item_id] then  -- Only count if not already selected
-                    self.selected_items[item_id] = range_item
-                    self.selected_count = self.selected_count + 1
-                end
+                self.selected_items[item_id] = range_item
             else
-                if self.selected_items[item_id] then  -- Only count if actually selected
-                    self.selected_items[item_id] = nil
-                    self.selected_count = self.selected_count - 1
-                end
+                self.selected_items[item_id] = nil
             end
         end
     end
@@ -590,11 +614,43 @@ function Browser:doRangeSelection(item)
     -- Update last selected index to current item
     self.last_selected_index = current_index
 
-    -- Update visual display
-    if self.item_table then
-        self:updateItemDimStatus(self.item_table)
-        self:updateItems(nil, true) -- Only visual state changed
+    -- Update visual display (HashMap + current page only, other pages updated on navigation)
+    self:refreshCurrentView()
+end
+
+-- Select all items in the current view
+function Browser:selectAll()
+    if not self:isCurrentMode(BrowserMode.SELECTION) or not self.item_table then
+        return
     end
+
+    -- Select all items from the complete loaded dataset (item_table contains ALL loaded items)
+    for _, item in ipairs(self.item_table) do
+        local item_id = self:getItemId(item)
+        if item_id then
+            self.selected_items[item_id] = item
+        end
+    end
+
+    -- Update last selected index to last item for range selection
+    self.last_selected_index = #self.item_table
+
+    -- Update visual display (HashMap + current page only, other pages updated on navigation)
+    self:refreshCurrentView()
+end
+
+-- Deselect all items but remain in selection mode
+function Browser:deselectAll()
+    if not self:isCurrentMode(BrowserMode.SELECTION) or not self.selected_items then
+        return
+    end
+
+    -- Clear all selections
+    self.selected_items = {}
+    self.last_selected_index = nil
+
+    -- Update visual display
+    self:refreshCurrentView()
 end
 
 -- =============================================================================

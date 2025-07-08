@@ -237,6 +237,15 @@ end
 ---Mark selected entries as read (placeholder implementation)
 ---@param selected_item_ids table Array of selected entry IDs
 function MinifluxBrowser:markSelectedAsRead(selected_item_ids)
+    -- Add debugging to see what items are actually selected
+    local Debugger = require("utils/debugger")
+    Debugger.debug("markSelectedAsRead called with " .. #selected_item_ids .. " items")
+    Debugger.debug("Selected item IDs: " .. table.concat(selected_item_ids, ", "))
+    
+    -- Also debug the full selection state
+    local selected_count = self:getSelectedCount()
+    Debugger.debug("Browser reports " .. selected_count .. " selected items")
+    
     -- For now, just show notification with the selected IDs as requested
     local Notification = require("utils/notification")
     local message = _("Mark as Read called with entry IDs: ") .. table.concat(selected_item_ids, ", ")
