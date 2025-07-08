@@ -32,7 +32,8 @@ function CachedRepository:new(config)
         settings = config.settings,
         cache_prefix = config.cache_prefix,
         cache_store = CacheStore:new({
-            default_ttl = config.settings.api_cache_ttl or 300
+            default_ttl = config.settings.api_cache_ttl,
+            db_name = "miniflux_cache.sqlite"
         })
     }
     

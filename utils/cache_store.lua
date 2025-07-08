@@ -29,9 +29,9 @@ local logger = require("logger")
 local CacheStore = {}
 
 ---@class CacheConfig
----@field cache_size? number Cache size in bytes (defaults to 20MB)
+---@field cache_size? number Cache size in bytes (defaults to 10MB)
 ---@field default_ttl? number Default TTL in seconds (defaults to 300)
----@field db_name? string Database name (defaults to "rss_cache.sqlite")
+---@field db_name? string Database name (defaults to "content_cache.sqlite")
 
 ---Create a new CacheStore instance
 ---@param config? CacheConfig Configuration options
@@ -39,8 +39,8 @@ local CacheStore = {}
 function CacheStore:new(config)
     config = config or {}
     
-    local db_path = DataStorage:getDataDir() .. "/cache/" .. (config.db_name or "rss_cache.sqlite")
-    local cache_size = config.cache_size or (20 * 1024 * 1024) -- 20MB default
+    local db_path = DataStorage:getDataDir() .. "/cache/" .. (config.db_name or "content_cache.sqlite")
+    local cache_size = config.cache_size or (10 * 1024 * 1024) -- 10MB default
     
     local cache_instance
     local success, err = pcall(function()
