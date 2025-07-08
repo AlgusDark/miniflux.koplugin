@@ -26,7 +26,7 @@ local BrowserMode = {
 -- Through debugging, we discovered that selection operations were processing ALL items
 -- in the dataset (e.g., 100 items) even when only a small subset was visible per page
 -- (e.g., 14 items). This caused significant performance issues, especially on large feeds.
--- 
+--
 -- The optimization reduces processing time by 86-98% by only updating visual state
 -- for items that are actually visible on the current page, making the interface
 -- responsive regardless of dataset size.
@@ -52,6 +52,7 @@ Browser.BrowserMode = BrowserMode
 function Browser:init()
     self.current_mode = BrowserMode.NORMAL
     self.selected_items = nil
+    self.selected_count = 0
     self.last_selected_index = nil
 
     self.show_parent = self.show_parent or self
@@ -88,14 +89,16 @@ function Browser:transitionTo(target_mode)
     if target_mode == BrowserMode.NORMAL then
         -- Exiting selection mode - clean up all selection state
         local previous_selection_count = self.selected_items and self:getSelectedCount() or 0
-        self.selected_items = nil -- Reset selection mode (enables early returns in updateItemDimStatus)
+        self.selected_items = nil      -- Reset selection mode (enables early returns in updateItemDimStatus)
+        self.selected_count = 0        -- Reset cached counter
         self.last_selected_index = nil -- Reset range selection tracking
         self.title_bar:setRightIcon("exit")
-        self:clearVisualSelection() -- Remove visual indicators from all items
+        self:clearVisualSelection()    -- Remove visual indicators from all items
         -- self:refreshCurrentView()
     elseif target_mode == BrowserMode.SELECTION then
         -- Entering selection mode - initialize selection state
-        self.selected_items = {} -- Initialize selection mode (empty table, not nil)
+        self.selected_items = {}       -- Initialize selection mode (empty table, not nil)
+        self.selected_count = 0        -- Initialize cached counter
         self.last_selected_index = nil -- Initialize range selection tracking
         self.title_bar:setRightIcon("check")
     else
@@ -127,7 +130,7 @@ function Browser:showSelectionActionsDialog()
     local selection_actions = {}
     if actions_enabled then
         local available_actions = self:getSelectionActions()
-        
+
         for _, action in ipairs(available_actions) do
             table.insert(selection_actions, {
                 text = action.text,
@@ -199,14 +202,7 @@ end
 
 -- Helper method to get count of selected items
 function Browser:getSelectedCount()
-    if not self.selected_items then
-        return 0
-    end
-    local count = 0
-    for _ in pairs(self.selected_items) do
-        count = count + 1
-    end
-    return count
+    return self.selected_count or 0
 end
 
 -- Helper method to get array of selected items
@@ -247,7 +243,7 @@ end
 --
 -- Example scenarios discovered during debugging:
 -- - Feed with 100 items, page 1, perpage=14 → processes items 1-14 (86% reduction)
--- - Feed with 100 items, page 3, perpage=14 → processes items 29-42 (86% reduction)  
+-- - Feed with 100 items, page 3, perpage=14 → processes items 29-42 (86% reduction)
 -- - Feed with 100 items, page 8, perpage=14 → processes items 99-100 (98% reduction)
 --
 -- This optimization makes selection operations O(visible) instead of O(total),
@@ -257,14 +253,14 @@ function Browser:getVisibleItems(all_items)
     local perpage = self.perpage or 20
     local start_idx = (page - 1) * perpage + 1
     local end_idx = math.min(start_idx + perpage - 1, #all_items)
-    
+
     local visible_items = {}
     for i = start_idx, end_idx do
         if all_items[i] then
             table.insert(visible_items, all_items[i])
         end
     end
-    
+
     return visible_items
 end
 
@@ -277,7 +273,7 @@ end
 --    - Eliminates unnecessary work during normal browsing (95% of use cases)
 --    - Uses next() for O(1) empty table detection instead of counting
 --
--- 2. VISIBLE ITEMS ONLY: Only process items visible on current page  
+-- 2. VISIBLE ITEMS ONLY: Only process items visible on current page
 --    - Debugging revealed we were processing ALL items (e.g., 100) when only 14 were visible
 --    - Reduces processing by 86-98% depending on page position and total item count
 --    - Makes performance independent of dataset size
@@ -298,10 +294,8 @@ function Browser:updateItemDimStatus(items)
     local visible_items = self:getVisibleItems(items)
 
     for _, item in ipairs(visible_items) do
-        local success, item_id = self:getItemId(item)
-        if success and item_id then
-            item.dim = self.selected_items[item_id] and true or nil
-        end
+        local item_id = self:getItemId(item)
+        item.dim = self.selected_items[item_id] and true or nil
     end
 end
 
@@ -371,7 +365,7 @@ function Browser:goForward(nav_config)
     -- Navigate to new view (always start fresh when going forward)
     local route_config = {
         view_name = nav_config.to,
-        page_state = nil, -- start fresh
+        page_state = nil,              -- start fresh
         pending_nav_state = nav_state, -- Add to stack only on successful view render
     }
     if nav_config.context then
@@ -488,17 +482,15 @@ end
 
 -- Toggle selection state of an item
 function Browser:toggleItemSelection(item)
-    local success, item_id = self:getItemId(item)
-    if not success or not item_id then
-        return
-    end
-
+    local item_id = self:getItemId(item)
     local item_index = self:getItemIndex(item)
 
     if self.selected_items[item_id] then
         self.selected_items[item_id] = nil
+        self.selected_count = self.selected_count - 1
     else
         self.selected_items[item_id] = item
+        self.selected_count = self.selected_count + 1
         self.last_selected_index = item_index
     end
 
@@ -512,13 +504,11 @@ end
 
 -- Select an item (used when entering selection mode)
 function Browser:selectItem(item)
-    local success, item_id = self:getItemId(item)
-    if not success or not item_id then
-        return
-    end
-
+    local item_id = self:getItemId(item)
     local item_index = self:getItemIndex(item)
+
     self.selected_items[item_id] = item
+    self.selected_count = self.selected_count + 1
     self.last_selected_index = item_index
 
     -- Update visual display
@@ -533,10 +523,8 @@ function Browser:isItemSelected(item)
     if not self:isCurrentMode(BrowserMode.SELECTION) then
         return false
     end
-    local success, item_id = self:getItemId(item)
-    if not success or not item_id then
-        return false -- Return false if getItemId is not implemented
-    end
+    local item_id = self:getItemId(item)
+
     return self.selected_items[item_id] ~= nil
 end
 
@@ -576,22 +564,24 @@ function Browser:doRangeSelection(item)
     local end_index = math.max(self.last_selected_index, current_index)
 
     -- Determine if we should select or deselect based on the target item's current state
-    local success, target_item_id = self:getItemId(item)
+    local target_item_id = self:getItemId(item)
     local should_select = true
-    if success and target_item_id then
-        should_select = not self.selected_items[target_item_id]
-    end
+    should_select = not self.selected_items[target_item_id]
 
     -- Apply selection/deselection to range
     for i = start_index, end_index do
         local range_item = self.item_table[i]
         if range_item then
-            local item_success, item_id = self:getItemId(range_item)
-            if item_success and item_id then
-                if should_select then
+            local item_id = self:getItemId(range_item)
+            if should_select then
+                if not self.selected_items[item_id] then  -- Only count if not already selected
                     self.selected_items[item_id] = range_item
-                else
+                    self.selected_count = self.selected_count + 1
+                end
+            else
+                if self.selected_items[item_id] then  -- Only count if actually selected
                     self.selected_items[item_id] = nil
+                    self.selected_count = self.selected_count - 1
                 end
             end
         end

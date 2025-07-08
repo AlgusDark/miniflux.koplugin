@@ -178,7 +178,6 @@ function HtmlUtils.cleanHtmlContent(content)
     else
         return content
     end
-
 end
 
 return HtmlUtils

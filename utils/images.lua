@@ -6,6 +6,7 @@ local lfs = require("libs/libkoreader-lfs")
 local util = require("util")
 local _ = require("gettext")
 
+
 -- [Third party](https://github.com/koreader/koreader-base/tree/master/thirdparty) tool
 -- https://github.com/msva/lua-htmlparser
 local htmlparser = require("htmlparser")
@@ -14,6 +15,10 @@ local htmlparser = require("htmlparser")
 -- downloading, and HTML processing. Combines functionality from image_discovery,
 -- image_download, and image_utils for better organization.
 local Images = {}
+
+-- Pre-compiled regex patterns for performance
+local IMG_SRC_PATTERN = [[src="([^"]*)"]]
+local IMG_TAG_PATTERN = "(<%s*img [^>]*>)"
 
 -- =============================================================================
 -- IMAGE UTILITIES
@@ -266,53 +271,27 @@ function Images.processHtmlImages(content, opts)
         return content
     end
 
-    -- Use DOM parser approach (reliable)
-    local root = htmlparser.parse(content, 5000)
-    local img_elements = root:select("img")
+    -- Use regex approach for image replacement (proven pattern used by newsdownloader.koplugin)
+    local replaceImg = function(img_tag)
+        local src = img_tag:match(IMG_SRC_PATTERN)
 
-    if img_elements then
-        for _, img_element in ipairs(img_elements) do
-            local attrs = img_element.attributes or {}
-            local src = attrs.src
+        -- Skip data URLs, empty src, or if include_images is false
+        if not src or src == "" or src:sub(1, 5) == "data:" then
+            return img_tag
+        end
 
-            -- Only process images with src attributes (skip data URLs and empty src)
-            if src and src ~= "" and src:sub(1, 5) ~= "data:" then
-                -- Normalize the URL to match what we stored
-                local normalized_src = Images.normalizeImageUrl(src, base_url)
-                local img_info = seen_images[normalized_src]
+        local normalized_src = Images.normalizeImageUrl(src, base_url)
+        local img_info = seen_images[normalized_src]
 
-                -- Only replace if image was successfully downloaded
-                if img_info and img_info.downloaded then
-                    -- Replace with local path
-                    attrs.src = img_info.filename
-
-                    -- Preserve or set dimensions for proper display
-                    local style_parts = {}
-                    local existing_style = attrs.style
-
-                    if existing_style and existing_style ~= "" then
-                        table.insert(style_parts, existing_style)
-                    end
-
-                    if img_info.width then
-                        table.insert(style_parts, formatPixelValue("width", img_info.width))
-                    end
-                    if img_info.height then
-                        table.insert(style_parts, formatPixelValue("height", img_info.height))
-                    end
-
-                    -- Build final style attribute
-                    if #style_parts > 0 then
-                        attrs.style = table.concat(style_parts, "; ")
-                    end
-                end
-                -- If image wasn't downloaded or not in our list, leave unchanged
-            end
-            -- All other images (data URLs, no src, etc.) left unchanged
+        -- Only replace if image was successfully downloaded
+        if img_info and img_info.downloaded then
+            return Images.createLocalImageTag(img_info)
+        else
+            return img_tag -- Leave original unchanged
         end
     end
 
-    return root:getcontent() or content
+    return content:gsub(IMG_TAG_PATTERN, replaceImg)
 end
 
 ---Create a local image tag with proper styling
