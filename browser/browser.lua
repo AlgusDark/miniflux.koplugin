@@ -281,10 +281,6 @@ end
 --    - Debugging revealed we were processing ALL items (e.g., 100) when only 14 were visible
 --    - Reduces processing by 86-98% depending on page position and total item count
 --    - Makes performance independent of dataset size
---
--- 3. SAFE getItemId CALLS: Uses pcall to handle abstract method gracefully
---    - Prevents crashes when getItemId is not implemented by subclass
---    - Allows base class to work with partial implementations
 function Browser:updateItemDimStatus(items)
     -- Early return optimizations - skip work when not needed
     if not self:isCurrentMode(BrowserMode.SELECTION) or not self.selected_items then
@@ -302,7 +298,7 @@ function Browser:updateItemDimStatus(items)
     local visible_items = self:getVisibleItems(items)
 
     for _, item in ipairs(visible_items) do
-        local success, item_id = pcall(function() return self:getItemId(item) end)
+        local success, item_id = self:getItemId(item)
         if success and item_id then
             item.dim = self.selected_items[item_id] and true or nil
         end
@@ -492,7 +488,7 @@ end
 
 -- Toggle selection state of an item
 function Browser:toggleItemSelection(item)
-    local success, item_id = pcall(function() return self:getItemId(item) end)
+    local success, item_id = self:getItemId(item)
     if not success or not item_id then
         return
     end
@@ -516,7 +512,7 @@ end
 
 -- Select an item (used when entering selection mode)
 function Browser:selectItem(item)
-    local success, item_id = pcall(function() return self:getItemId(item) end)
+    local success, item_id = self:getItemId(item)
     if not success or not item_id then
         return
     end
@@ -537,7 +533,7 @@ function Browser:isItemSelected(item)
     if not self:isCurrentMode(BrowserMode.SELECTION) then
         return false
     end
-    local success, item_id = pcall(function() return self:getItemId(item) end)
+    local success, item_id = self:getItemId(item)
     if not success or not item_id then
         return false -- Return false if getItemId is not implemented
     end
@@ -580,7 +576,7 @@ function Browser:doRangeSelection(item)
     local end_index = math.max(self.last_selected_index, current_index)
 
     -- Determine if we should select or deselect based on the target item's current state
-    local success, target_item_id = pcall(function() return self:getItemId(item) end)
+    local success, target_item_id = self:getItemId(item)
     local should_select = true
     if success and target_item_id then
         should_select = not self.selected_items[target_item_id]
@@ -590,7 +586,7 @@ function Browser:doRangeSelection(item)
     for i = start_index, end_index do
         local range_item = self.item_table[i]
         if range_item then
-            local item_success, item_id = pcall(function() return self:getItemId(range_item) end)
+            local item_success, item_id = self:getItemId(range_item)
             if item_success and item_id then
                 if should_select then
                     self.selected_items[item_id] = range_item
