@@ -11,6 +11,10 @@ local DEFAULTS = {
     hide_read_entries = true,
     include_images = true,
     mark_as_read_on_open = true,
+    
+    -- API Cache settings
+    api_cache_enabled = true,
+    api_cache_ttl = 300, -- 5 minutes in seconds
 }
 
 -- **Miniflux Settings** - Settings management with idiomatic property access
@@ -26,6 +30,8 @@ local DEFAULTS = {
 ---@field hide_read_entries boolean Whether to hide read entries
 ---@field include_images boolean Whether to include images
 ---@field mark_as_read_on_open boolean Whether to automatically mark entries as read when opened
+---@field api_cache_enabled boolean Whether API response caching is enabled
+---@field api_cache_ttl number API cache TTL in seconds
 local MinifluxSettings = {}
 
 ---Create a new MinifluxSettings instance

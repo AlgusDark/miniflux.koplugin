@@ -58,7 +58,7 @@ function MainView.loadData(config)
     local Notification = require("utils/notification")
     local loading_notification = Notification:info(_("Loading..."))
 
-    -- Get unread count with dialog
+    -- Get unread count
     local unread_count, unread_err = repositories.entry:getUnreadCount()
     if unread_err then
         loading_notification:close()
@@ -66,11 +66,21 @@ function MainView.loadData(config)
     end
     ---@cast unread_count -nil
 
-    -- Get feeds count with dialog
-    local feeds_count = repositories.feed:getCount()
+    -- Get feeds count
+    local feeds_count, feeds_err = repositories.feed:getCount()
+    if feeds_err then
+        loading_notification:close()
+        return nil, feeds_err.message
+    end
+    ---@cast feeds_count -nil
 
-    -- Get categories count with dialog
-    local categories_count = repositories.category:getCount()
+    -- Get categories count
+    local categories_count, categories_err = repositories.category:getCount()
+    if categories_err then
+        loading_notification:close()
+        return nil, categories_err.message
+    end
+    ---@cast categories_count -nil
 
     loading_notification:close()
 

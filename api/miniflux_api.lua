@@ -64,6 +64,66 @@ end
 -- ENTRIES
 -- =============================================================================
 
+---Build full URL for entries endpoint with query parameters (for caching)
+---@param options? ApiOptions Query options for filtering and sorting
+---@return string url Full URL with query parameters
+function MinifluxAPI:buildEntriesUrl(options)
+    local base_url = self.api_client.settings.server_address .. "/v1/entries"
+    if not options then
+        return base_url
+    end
+    
+    -- Build query string from options (similar to newsdownloader URL caching)
+    local query_parts = {}
+    
+    if options.status then
+        -- Handle status parameter: can be repeated for multiple statuses (Miniflux >= 2.0.24)
+        -- If all statuses are requested (unread + read), omit parameter for default behavior
+        local has_unread = false
+        local has_read = false
+        for _, status in ipairs(options.status) do
+            if status == "unread" then
+                has_unread = true
+            elseif status == "read" then
+                has_read = true
+            end
+        end
+        
+        -- Only add status parameters if not requesting all entries
+        if not (has_unread and has_read and #options.status == 2) then
+            for _, status in ipairs(options.status) do
+                table.insert(query_parts, "status=" .. tostring(status))
+            end
+        end
+    end
+    
+    if options.order then
+        table.insert(query_parts, "order=" .. tostring(options.order))
+    end
+    
+    if options.direction then
+        table.insert(query_parts, "direction=" .. tostring(options.direction))
+    end
+    
+    if options.limit then
+        table.insert(query_parts, "limit=" .. tostring(options.limit))
+    end
+    
+    if options.feed_id then
+        table.insert(query_parts, "feed_id=" .. tostring(options.feed_id))
+    end
+    
+    if options.category_id then
+        table.insert(query_parts, "category_id=" .. tostring(options.category_id))
+    end
+    
+    if #query_parts > 0 then
+        return base_url .. "?" .. table.concat(query_parts, "&")
+    end
+    
+    return base_url
+end
+
 ---Get entries from the server
 ---@param options? ApiOptions Query options for filtering and sorting
 ---@param config? table Configuration including optional dialogs

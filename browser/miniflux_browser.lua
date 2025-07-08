@@ -1,13 +1,5 @@
---[[--
-Miniflux Browser - RSS Browser for Miniflux
-
-Extends Browser (now BookList-based) with Miniflux-specific functionality.
-Handles RSS feeds, categories, and entries from Miniflux API.
-
-@module miniflux.browser.miniflux_browser
---]]
-
 local Browser = require("browser/browser")
+local BrowserMode = Browser.BrowserMode
 local EntryRepository = require("repositories/entry_repository")
 local FeedRepository = require("repositories/feed_repository")
 local CategoryRepository = require("repositories/category_repository")
@@ -23,6 +15,10 @@ local EntriesView = require("browser/views/entries_view")
 -- Type aliases for cleaner annotations
 ---@alias MinifluxRepositories {entry: EntryRepository, feed: FeedRepository, category: CategoryRepository}
 
+-- **Miniflux Browser** - RSS Browser for Miniflux
+--
+-- Extends Browser with Miniflux-specific functionality.
+-- Handles RSS feeds, categories, and entries from Miniflux API.
 ---@class MinifluxBrowser : Browser
 ---@field repositories MinifluxRepositories Repository instances for data access
 ---@field settings MinifluxSettings Plugin settings
@@ -33,9 +29,7 @@ local EntriesView = require("browser/views/entries_view")
 ---@field new fun(self: MinifluxBrowser, o: BrowserOptions): MinifluxBrowser Create new MinifluxBrowser instance
 local MinifluxBrowser = Browser:extend({})
 
--- =============================================================================
--- INITIALIZATION
--- =============================================================================
+---@alias MinifluxNavigationContext {feed_id?: number, category_id?: number}
 
 function MinifluxBrowser:init()
     -- Initialize Miniflux-specific dependencies
@@ -61,7 +55,7 @@ end
 -- =============================================================================
 
 ---Override settings dialog with Miniflux-specific implementation
-function MinifluxBrowser:showConfigDialog()
+function MinifluxBrowser:onLeftButtonTap()
     if not self.settings then
         local Notification = require("utils/notification")
         Notification:error(_("Settings not available"))
@@ -103,7 +97,7 @@ function MinifluxBrowser:openItem(entry_data, context)
 end
 
 ---Get Miniflux-specific route handlers (implements Browser:getRouteHandlers)
----@param nav_config RouteConfig Navigation configuration
+---@param nav_config RouteConfig<MinifluxNavigationContext> Navigation configuration
 ---@return table<string, function> Route handlers lookup table
 function MinifluxBrowser:getRouteHandlers(nav_config)
     return {
@@ -186,6 +180,70 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
             })
         end,
     }
+end
+
+-- =============================================================================
+-- SELECTION MODE IMPLEMENTATION
+-- =============================================================================
+
+---Get unique identifier for an item (implements Browser:getItemId)
+---@param item_data table Menu item data
+---@return number|nil Entry/Feed/Category ID, or nil if item is not selectable
+function MinifluxBrowser:getItemId(item_data)
+    -- Check for entry data (most common case for selection)
+    if item_data.entry_data and item_data.entry_data.id then
+        return item_data.entry_data.id
+    end
+
+    -- Check for feed data
+    if item_data.feed_data and item_data.feed_data.id then
+        return item_data.feed_data.id
+    end
+
+    -- Check for category data
+    if item_data.category_data and item_data.category_data.id then
+        return item_data.category_data.id
+    end
+
+    -- Navigation items (Unread, Feeds, Categories) or items without data
+    -- should not be selectable - return nil
+    return nil
+end
+
+---Get selection actions available for RSS entries (implements Browser:getSelectionActions)
+---@return table[] Array of action objects with text and callback properties
+function MinifluxBrowser:getSelectionActions()
+    return {
+        {
+            text = _("Mark as Read"),
+            callback = function(selected_items)
+                self:markSelectedAsRead(selected_items)
+            end,
+        },
+        -- Future actions can be added here:
+        -- {
+        --     text = _("Delete Local Files"),
+        --     callback = function(selected_items)
+        --         self:deleteSelectedLocalFiles(selected_items)
+        --     end,
+        -- },
+    }
+end
+
+-- =============================================================================
+-- SELECTION ACTIONS IMPLEMENTATION
+-- =============================================================================
+
+---Mark selected entries as read (placeholder implementation)
+---@param selected_item_ids table Array of selected entry IDs
+function MinifluxBrowser:markSelectedAsRead(selected_item_ids)
+    -- For now, just show notification with the selected IDs as requested
+    local Notification = require("utils/notification")
+    local message = _("Mark as Read called with entry IDs: ") .. table.concat(selected_item_ids, ", ")
+    Notification:info(message)
+
+    -- Clear selection and exit selection mode
+    self:transitionTo(BrowserMode.NORMAL)
 end
 
 return MinifluxBrowser
