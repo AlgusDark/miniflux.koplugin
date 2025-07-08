@@ -57,72 +57,64 @@ function Images.discoverImages(content, base_url)
     local seen_images = {}
     local image_count = 0
 
-    -- Try DOM parser approach first (much more reliable than regex)
-    local success = pcall(function()
-        local root = htmlparser.parse(content, 5000)
-        local img_elements = root:select("img")
+    -- Use DOM parser approach (reliable)
+    local root = htmlparser.parse(content, 5000)
+    local img_elements = root:select("img")
 
-        if img_elements then
-            for _, img_element in ipairs(img_elements) do
-                local attrs = img_element.attributes or {}
-                local src = attrs.src
+    if img_elements then
+        for _, img_element in ipairs(img_elements) do
+            local attrs = img_element.attributes or {}
+            local src = attrs.src
 
-                if src and src ~= "" and src:sub(1, 5) ~= "data:" then
-                    -- Normalize URL
-                    local normalized_src = Images.normalizeImageUrl(src, base_url)
+            if src and src ~= "" and src:sub(1, 5) ~= "data:" then
+                -- Normalize URL
+                local normalized_src = Images.normalizeImageUrl(src, base_url)
 
-                    -- Check for duplicates
-                    if not seen_images[normalized_src] then
-                        image_count = image_count + 1
+                -- Check for duplicates
+                if not seen_images[normalized_src] then
+                    image_count = image_count + 1
 
-                        -- Get file extension
-                        local ext = Images.getImageExtension(normalized_src)
+                    -- Get file extension
+                    local ext = Images.getImageExtension(normalized_src)
 
-                        -- Use KOReader's safe filename utility
-                        local filename = generateImageFilename(image_count, ext)
+                    -- Use KOReader's safe filename utility
+                    local filename = generateImageFilename(image_count, ext)
 
-                        -- Extract dimensions and srcset directly from DOM attributes
-                        local width = tonumber(attrs.width)
-                        local height = tonumber(attrs.height)
-                        local srcset = attrs.srcset
+                    -- Extract dimensions and srcset directly from DOM attributes
+                    local width = tonumber(attrs.width)
+                    local height = tonumber(attrs.height)
+                    local srcset = attrs.srcset
 
-                        -- Extract high-resolution image URL from srcset
-                        local src2x
-                        if srcset then
-                            -- Add spaces around srcset for pattern matching
-                            srcset = " " .. srcset .. ", "
-                            src2x = srcset:match([[ (%S+) 2x, ]])
-                            if src2x then
-                                src2x = Images.normalizeImageUrl(src2x, base_url)
-                            end
+                    -- Extract high-resolution image URL from srcset
+                    local src2x
+                    if srcset then
+                        -- Add spaces around srcset for pattern matching
+                        srcset = " " .. srcset .. ", "
+                        src2x = srcset:match([[ (%S+) 2x, ]])
+                        if src2x then
+                            src2x = Images.normalizeImageUrl(src2x, base_url)
                         end
-
-                        local image_info = {
-                            src = normalized_src,
-                            src2x = src2x,
-                            original_tag = "", -- Will be reconstructed if needed
-                            filename = filename,
-                            width = width,
-                            height = height,
-                            downloaded = false,
-                        }
-
-                        -- Use direct indexing for performance
-                        images[image_count] = image_info
-                        seen_images[normalized_src] = image_info
                     end
+
+                    local image_info = {
+                        src = normalized_src,
+                        src2x = src2x,
+                        original_tag = "", -- Will be reconstructed if needed
+                        filename = filename,
+                        width = width,
+                        height = height,
+                        downloaded = false,
+                    }
+
+                    -- Use direct indexing for performance
+                    images[image_count] = image_info
+                    seen_images[normalized_src] = image_info
                 end
             end
         end
-    end)
-
-    if success and #images > 0 then
-        return images, seen_images
     end
 
-    -- If DOM parser fails, return empty arrays rather than attempting
-    -- unreliable regex fallback. This is safer and simpler.
-    return {}, {}
+    return images, seen_images
 end
 
 ---Normalize image URL for downloading using KOReader's socket_url utilities
@@ -274,85 +266,53 @@ function Images.processHtmlImages(content, opts)
         return content
     end
 
-    -- Try DOM parser approach first (much more reliable)
-    local success, processed_content = pcall(function()
-        local root = htmlparser.parse(content, 5000)
-        local img_elements = root:select("img")
+    -- Use DOM parser approach (reliable)
+    local root = htmlparser.parse(content, 5000)
+    local img_elements = root:select("img")
 
-        if img_elements then
-            for _, img_element in ipairs(img_elements) do
-                local attrs = img_element.attributes or {}
-                local src = attrs.src
+    if img_elements then
+        for _, img_element in ipairs(img_elements) do
+            local attrs = img_element.attributes or {}
+            local src = attrs.src
 
-                -- Only process images with src attributes (skip data URLs and empty src)
-                if src and src ~= "" and src:sub(1, 5) ~= "data:" then
-                    -- Normalize the URL to match what we stored
-                    local normalized_src = Images.normalizeImageUrl(src, base_url)
-                    local img_info = seen_images[normalized_src]
+            -- Only process images with src attributes (skip data URLs and empty src)
+            if src and src ~= "" and src:sub(1, 5) ~= "data:" then
+                -- Normalize the URL to match what we stored
+                local normalized_src = Images.normalizeImageUrl(src, base_url)
+                local img_info = seen_images[normalized_src]
 
-                    -- Only replace if image was successfully downloaded
-                    if img_info and img_info.downloaded then
-                        -- Replace with local path
-                        attrs.src = img_info.filename
+                -- Only replace if image was successfully downloaded
+                if img_info and img_info.downloaded then
+                    -- Replace with local path
+                    attrs.src = img_info.filename
 
-                        -- Preserve or set dimensions for proper display
-                        local style_parts = {}
-                        local existing_style = attrs.style
+                    -- Preserve or set dimensions for proper display
+                    local style_parts = {}
+                    local existing_style = attrs.style
 
-                        if existing_style and existing_style ~= "" then
-                            table.insert(style_parts, existing_style)
-                        end
-
-                        if img_info.width then
-                            table.insert(style_parts, formatPixelValue("width", img_info.width))
-                        end
-                        if img_info.height then
-                            table.insert(style_parts, formatPixelValue("height", img_info.height))
-                        end
-
-                        -- Build final style attribute
-                        if #style_parts > 0 then
-                            attrs.style = table.concat(style_parts, "; ")
-                        end
+                    if existing_style and existing_style ~= "" then
+                        table.insert(style_parts, existing_style)
                     end
-                    -- If image wasn't downloaded or not in our list, leave unchanged
+
+                    if img_info.width then
+                        table.insert(style_parts, formatPixelValue("width", img_info.width))
+                    end
+                    if img_info.height then
+                        table.insert(style_parts, formatPixelValue("height", img_info.height))
+                    end
+
+                    -- Build final style attribute
+                    if #style_parts > 0 then
+                        attrs.style = table.concat(style_parts, "; ")
+                    end
                 end
-                -- All other images (data URLs, no src, etc.) left unchanged
+                -- If image wasn't downloaded or not in our list, leave unchanged
             end
-        end
-
-        return root:getcontent() or content
-    end)
-
-    if success and processed_content and processed_content ~= "" then
-        return processed_content
-    end
-
-    -- Fallback to regex approach if DOM parser fails
-    local replaceImg = function(img_tag)
-        local src = img_tag:match([[src="([^"]*)"]])
-
-        -- Skip data URLs, empty src, or if include_images is false
-        if not src or src == "" or src:sub(1, 5) == "data:" then
-            return img_tag
-        end
-
-        local normalized_src = Images.normalizeImageUrl(src, base_url)
-        local img_info = seen_images[normalized_src]
-
-        -- Only replace if image was successfully downloaded
-        if img_info and img_info.downloaded then
-            return Images.createLocalImageTag(img_info)
-        else
-            return img_tag -- Leave original unchanged
+            -- All other images (data URLs, no src, etc.) left unchanged
         end
     end
 
-    local fallback_success, fallback_content = pcall(function()
-        return content:gsub("(<%s*img [^>]*>)", replaceImg)
-    end)
-
-    return (fallback_success and fallback_content) or content
+    return root:getcontent() or content
 end
 
 ---Create a local image tag with proper styling

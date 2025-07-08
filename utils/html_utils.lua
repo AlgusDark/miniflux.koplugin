@@ -145,64 +145,40 @@ function HtmlUtils.cleanHtmlContent(content)
         "style",  -- Style blocks (can cause display issues)
     }
 
-    -- Try HTML parser approach first (much more reliable)
-    local success, cleaned_content = pcall(function()
-        local root = htmlparser.parse(content, 5000)
+    -- Use HTML parser approach (reliable)
+    local root = htmlparser.parse(content, 5000)
 
-        -- Track elements that get removed for efficient string replacement
-        local removed_element_texts = {}
-        local total_removed = 0
+    -- Track elements that get removed for efficient string replacement
+    local removed_element_texts = {}
+    local total_removed = 0
 
-        -- Remove each type of unwanted element
-        for _, selector in ipairs(unwanted_selectors) do
-            local elements = root:select(selector)
-            if elements then
-                for _, element in ipairs(elements) do
-                    -- Get the original element text BEFORE removal
-                    local element_text = element:gettext()
-                    if element_text and element_text ~= "" then
-                        removed_element_texts[element_text] = true
-                        total_removed = total_removed + 1
-                    end
+    -- Remove each type of unwanted element
+    for _, selector in ipairs(unwanted_selectors) do
+        local elements = root:select(selector)
+        if elements then
+            for _, element in ipairs(elements) do
+                -- Get the original element text BEFORE removal
+                local element_text = element:gettext()
+                if element_text and element_text ~= "" then
+                    removed_element_texts[element_text] = true
+                    total_removed = total_removed + 1
                 end
             end
         end
+    end
 
-        -- Use efficient string replacement instead of DOM reconstruction
-        if total_removed > 0 then
-            local cleaned_content = content
-            for element_text, _ in pairs(removed_element_texts) do
-                local escaped_pattern = escapePattern(element_text)
-                cleaned_content = cleaned_content:gsub(escaped_pattern, "")
-            end
-            return cleaned_content
-        else
-            return content
+    -- Use efficient string replacement instead of DOM reconstruction
+    if total_removed > 0 then
+        local cleaned_content = content
+        for element_text, _ in pairs(removed_element_texts) do
+            local escaped_pattern = escapePattern(element_text)
+            cleaned_content = cleaned_content:gsub(escaped_pattern, "")
         end
-    end)
-
-    if success and cleaned_content and cleaned_content ~= "" then
         return cleaned_content
+    else
+        return content
     end
 
-    -- Fallback to regex patterns if HTML parser fails
-    local fallback_success, fallback_content = pcall(function()
-        local temp_content = content
-
-        -- Basic fallback patterns for critical elements
-        temp_content = temp_content:gsub("<%s*script[^>]*>.-<%s*/%s*script%s*>", "")
-        temp_content = temp_content:gsub("<%s*script[^>]*>", "")
-        temp_content = temp_content:gsub("<%s*style[^>]*>.-<%s*/%s*style%s*>", "")
-
-        return temp_content
-    end)
-
-    if fallback_success and fallback_content then
-        return fallback_content
-    end
-
-    -- If everything fails, return original content (safer than empty string)
-    return content
 end
 
 return HtmlUtils

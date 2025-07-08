@@ -150,16 +150,8 @@ function EntryService:showEndOfEntryDialog(entry_info)
         return nil
     end
 
-    -- Load entry metadata to check current status with error handling
-    local metadata = nil
-    local metadata_success = pcall(function()
-        metadata = EntryEntity.loadMetadata(entry_info.entry_id)
-    end)
-
-    if not metadata_success then
-        -- If metadata loading fails, assume unread status
-        metadata = { status = "unread" }
-    end
+    -- Load entry metadata to check current status
+    local metadata = EntryEntity.loadMetadata(entry_info.entry_id)
 
     -- Use status for business logic
     local entry_status = metadata and metadata.status or "unread"
@@ -178,95 +170,86 @@ function EntryService:showEndOfEntryDialog(entry_info)
     end
 
     -- Create dialog and return reference for caller management
-    local dialog = nil
-    local dialog_success = pcall(function()
-        dialog = ButtonDialogTitle:new({
-            title = _("You've reached the end of the entry."),
-            title_align = "center",
-            buttons = {
+    local dialog = ButtonDialogTitle:new({
+        title = _("You've reached the end of the entry."),
+        title_align = "center",
+        buttons = {
+            {
                 {
-                    {
-                        text = _("← Previous"),
-                        callback = function()
-                            UIManager:close(dialog)
-                            Navigation.navigateToEntry(entry_info, {
-                                navigation_options = { direction = "previous" },
-                                settings = self.settings,
-                                miniflux_api = self.miniflux_api,
-                                entry_service = self,
-                                miniflux_plugin = self.miniflux_plugin
-                            })
-                        end,
-                    },
-                    {
-                        text = _("Next →"),
-                        callback = function()
-                            UIManager:close(dialog)
-                            Navigation.navigateToEntry(entry_info, {
-                                navigation_options = { direction = "next" },
-                                settings = self.settings,
-                                miniflux_api = self.miniflux_api,
-                                entry_service = self,
-                                miniflux_plugin = self.miniflux_plugin
-                            })
-                        end,
-                    },
+                    text = _("← Previous"),
+                    callback = function()
+                        UIManager:close(dialog)
+                        Navigation.navigateToEntry(entry_info, {
+                            navigation_options = { direction = "previous" },
+                            settings = self.settings,
+                            miniflux_api = self.miniflux_api,
+                            entry_service = self,
+                            miniflux_plugin = self.miniflux_plugin
+                        })
+                    end,
                 },
                 {
-                    {
-                        text = _("⚠ Delete local entry"),
-                        callback = function()
-                            UIManager:close(dialog)
-                            -- Inline deletion with validation
-                            if not EntryEntity.isValidId(entry_info.entry_id) then
-                                Notification:warning(_("Cannot delete: invalid entry ID"))
-                                return
-                            end
-                            self:deleteLocalEntry(entry_info.entry_id)
-                        end,
-                    },
-                    {
-                        text = mark_button_text,
-                        callback = function()
-                            UIManager:close(dialog)
-                            mark_callback()
-                            -- TODO: Dialog Refresh After Status Change (Feature C - MVP excluded)
-                            -- CURRENT: Dialog closes, user needs to manually reopen to see updated status
-                            -- DESIRED: After API success notification (2.5s), automatically recreate dialog
-                            --          with opposite button text (read->unread or unread->read)
-                            -- IMPLEMENTATION: Add refreshDialog() callback to mark_callback, use
-                            --                UIManager:scheduleIn(2.5, refreshDialog) after successful API call
-                        end,
-                    },
-                },
-                {
-                    {
-                        text = _("⌂ Miniflux folder"),
-                        callback = function()
-                            UIManager:close(dialog)
-                            EntryEntity.openMinifluxFolder()
-                        end,
-                    },
-                    {
-                        text = _("Cancel"),
-                        callback = function()
-                            UIManager:close(dialog)
-                        end,
-                    },
+                    text = _("Next →"),
+                    callback = function()
+                        UIManager:close(dialog)
+                        Navigation.navigateToEntry(entry_info, {
+                            navigation_options = { direction = "next" },
+                            settings = self.settings,
+                            miniflux_api = self.miniflux_api,
+                            entry_service = self,
+                            miniflux_plugin = self.miniflux_plugin
+                        })
+                    end,
                 },
             },
-        })
-    end)
+            {
+                {
+                    text = _("⚠ Delete local entry"),
+                    callback = function()
+                        UIManager:close(dialog)
+                        -- Inline deletion with validation
+                        if not EntryEntity.isValidId(entry_info.entry_id) then
+                            Notification:warning(_("Cannot delete: invalid entry ID"))
+                            return
+                        end
+                        self:deleteLocalEntry(entry_info.entry_id)
+                    end,
+                },
+                {
+                    text = mark_button_text,
+                    callback = function()
+                        UIManager:close(dialog)
+                        mark_callback()
+                        -- TODO: Dialog Refresh After Status Change (Feature C - MVP excluded)
+                        -- CURRENT: Dialog closes, user needs to manually reopen to see updated status
+                        -- DESIRED: After API success notification (2.5s), automatically recreate dialog
+                        --          with opposite button text (read->unread or unread->read)
+                        -- IMPLEMENTATION: Add refreshDialog() callback to mark_callback, use
+                        --                UIManager:scheduleIn(2.5, refreshDialog) after successful API call
+                    end,
+                },
+            },
+            {
+                {
+                    text = _("⌂ Miniflux folder"),
+                    callback = function()
+                        UIManager:close(dialog)
+                        EntryEntity.openMinifluxFolder()
+                    end,
+                },
+                {
+                    text = _("Cancel"),
+                    callback = function()
+                        UIManager:close(dialog)
+                    end,
+                },
+            },
+        },
+    })
 
-    if dialog_success and dialog then
-        -- Show dialog and return reference for caller management
-        UIManager:show(dialog)
-        return dialog
-    else
-        -- If dialog creation fails, show a simple error message
-        Notification:error(_("Failed to create end of entry dialog"))
-        return nil
-    end
+    -- Show dialog and return reference for caller management
+    UIManager:show(dialog)
+    return dialog
 end
 
 -- =============================================================================
@@ -356,15 +339,12 @@ end
 function EntryService:deleteLocalEntry(entry_id)
     local entry_dir = EntryEntity.getEntryDirectory(entry_id)
 
-    local success = pcall(function()
-        if ReaderUI.instance then
-            ReaderUI.instance:onClose()
-        end
-        FFIUtil.purgeDir(entry_dir)
-        return true
-    end)
+    if ReaderUI.instance then
+        ReaderUI.instance:onClose()
+    end
+    local ok = FFIUtil.purgeDir(entry_dir)
 
-    if success then
+    if ok then
         Notification:success(_("Local entry deleted successfully"))
 
         -- Open Miniflux folder
@@ -372,7 +352,7 @@ function EntryService:deleteLocalEntry(entry_id)
 
         return true
     else
-        Notification:error(_("Failed to delete local entry"))
+        Notification:error(_("Failed to delete local entry: ") .. tostring(err))
         return false
     end
 end

@@ -38,33 +38,26 @@ local CacheStore = {}
 ---@return CacheStore
 function CacheStore:new(config)
     config = config or {}
-    
+
     local db_path = DataStorage:getDataDir() .. "/cache/" .. (config.db_name or "content_cache.sqlite")
     local cache_size = config.cache_size or (10 * 1024 * 1024) -- 10MB default
-    
-    local cache_instance
-    local success, err = pcall(function()
-        cache_instance = CacheSQLite:new{
-            slots = 500,       -- LRU slot count (newsdownloader pattern)
-            size = cache_size, -- Total cache size in bytes
-            db_path = db_path  -- SQLite database file path
-        }
-    end)
-    
-    if not success then
-        error("Failed to create CacheSQLite: " .. tostring(err))
-    end
-    
+
+    local cache_instance = CacheSQLite:new {
+        slots = 500,       -- LRU slot count (newsdownloader pattern)
+        size = cache_size, -- Total cache size in bytes
+        db_path = db_path  -- SQLite database file path
+    }
+
     local instance = {
         cache = cache_instance,
         default_ttl = config.default_ttl or 300 -- 5 minutes default
     }
-    
+
     setmetatable(instance, self)
     self.__index = self
-    
+
     logger.dbg("CacheStore: Initialized with database:", db_path)
-    
+
     return instance
 end
 
@@ -87,10 +80,10 @@ function CacheStore:isExpired(cache_entry)
     if not cache_entry or not cache_entry.created_at or not cache_entry.ttl then
         return true -- Invalid entry is considered expired
     end
-    
+
     local now = os.time() -- Use os.time() for seconds since epoch
     local age = now - cache_entry.created_at
-    
+
     return age >= cache_entry.ttl
 end
 
@@ -107,21 +100,19 @@ function CacheStore:set(key, opts)
         logger.err("CacheStore: Invalid cache key provided")
         return false
     end
-    
+
     if not opts or type(opts) ~= "table" then
         logger.err("CacheStore: Invalid options provided to set()")
         return false
     end
-    
+
     local data = opts.data
     local ttl = opts.ttl or self.default_ttl
-    
+
     local cache_entry = self:createCacheEntry(data, ttl)
-    
-    local success, err = pcall(function()
-        return self.cache:insert(key, cache_entry)
-    end)
-    
+
+    local success, err = self.cache:insert(key, cache_entry)
+
     if success and err then
         logger.dbg("CacheStore: Cached data for key:", key, "TTL:", ttl)
         return true
@@ -143,21 +134,21 @@ end
 function CacheStore:get(key, opts)
     opts = opts or {}
     local ttl = opts.ttl or self.default_ttl
-    
+
     -- Get entry from cache and update access time for LRU
     local cache_entry = self.cache:check(key)
-    
+
     if not cache_entry then
         return nil, false -- Cache miss
     end
-    
+
     -- Check if entry is expired
     if self:isExpired(cache_entry) then
         logger.dbg("CacheStore: Cache entry expired for key:", key)
         self.cache:remove(key) -- Remove expired entry
         return nil, false
     end
-    
+
     logger.dbg("CacheStore: Cache hit for key:", key)
     return cache_entry.data, true
 end
@@ -187,10 +178,9 @@ function CacheStore:getStats()
         size = self.cache.current_size or 0,
         count = 0 -- CacheSQLite doesn't expose count directly
     }
-    
+
     logger.dbg("CacheStore: Cache size:", stats.size, "bytes")
     return stats
 end
-
 
 return CacheStore
