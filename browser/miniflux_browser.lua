@@ -358,18 +358,35 @@ function MinifluxBrowser:markSelectedAsRead(selected_items)
         end
         success = self.entry_service:markEntriesAsRead(entry_ids)
     elseif item_type == "feed" then
-        -- Feed: single ID, use FeedService
-        local feed_id = selected_items[1].feed_data.id
-        success = self.feed_service:markAsRead(feed_id)
+        -- TODO: Implement batch notifications - show loading, track success/failed feeds, show summary
+        success = false
+        for _, item in ipairs(selected_items) do
+            local feed_id = item.feed_data.id
+            local result = self.feed_service:markAsRead(feed_id)
+            if result then
+                success = true -- At least one succeeded, keep as true even if others fail
+            end
+        end
     elseif item_type == "category" then
-        -- Category: single ID, use CategoryService
-        local category_id = selected_items[1].category_data.id
-        success = self.category_service:markAsRead(category_id)
+        -- TODO: Implement batch notifications - show loading, track success/failed categories, show summary
+        success = false
+        for _, item in ipairs(selected_items) do
+            local category_id = item.category_data.id
+            local result = self.category_service:markAsRead(category_id)
+            if result then
+                success = true -- At least one succeeded, keep as true even if others fail
+            end
+        end
     end
 
     if success then
         -- Update status in current item_table for immediate visual feedback
         self:updateItemTableStatus(selected_items, "read", item_type)
+        
+        -- For feed/category operations, refresh data to show updated counts
+        if item_type == "feed" or item_type == "category" then
+            self:refreshCurrentViewData()
+        end
     end
 
     -- Clear selection and exit selection mode

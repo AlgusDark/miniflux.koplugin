@@ -10,15 +10,22 @@ local Notification = require("utils/notification")
 ---@class CategoryService
 ---@field settings MinifluxSettings Settings instance
 ---@field category_repository CategoryRepository Category repository instance
+---@field feed_repository FeedRepository Feed repository for cross-invalidation
 local CategoryService = {}
 
+---@class CategoryServiceDeps
+---@field category_repository CategoryRepository
+---@field feed_repository FeedRepository
+---@field settings MinifluxSettings
+
 ---Create a new CategoryService instance
----@param deps table Dependencies containing category_repository, settings
+---@param deps CategoryServiceDeps Dependencies containing repositories and settings
 ---@return CategoryService
 function CategoryService:new(deps)
     local instance = {
         settings = deps.settings,
         category_repository = deps.category_repository,
+        feed_repository = deps.feed_repository,
     }
     setmetatable(instance, self)
     self.__index = self
@@ -52,8 +59,9 @@ function CategoryService:markAsRead(category_id)
         -- Error dialog already shown by API system
         return false
     else
-        -- Invalidate category cache so next navigation shows correct counts
+        -- Invalidate both category and feed caches so next navigation shows correct counts
         self.category_repository:invalidateCache()
+        self.feed_repository:invalidateCache()
         return true
     end
 end

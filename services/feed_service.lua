@@ -10,15 +10,22 @@ local Notification = require("utils/notification")
 ---@class FeedService
 ---@field settings MinifluxSettings Settings instance
 ---@field feed_repository FeedRepository Feed repository instance
+---@field category_repository CategoryRepository Category repository for cross-invalidation
 local FeedService = {}
 
+---@class FeedServiceDeps
+---@field feed_repository FeedRepository
+---@field category_repository CategoryRepository  
+---@field settings MinifluxSettings
+
 ---Create a new FeedService instance
----@param deps table Dependencies containing feed_repository, settings
+---@param deps FeedServiceDeps Dependencies containing repositories and settings
 ---@return FeedService
 function FeedService:new(deps)
     local instance = {
         settings = deps.settings,
         feed_repository = deps.feed_repository,
+        category_repository = deps.category_repository,
     }
     setmetatable(instance, self)
     self.__index = self
@@ -52,8 +59,9 @@ function FeedService:markAsRead(feed_id)
         -- Error dialog already shown by API system
         return false
     else
-        -- Invalidate feed cache so next navigation shows correct counts
+        -- Invalidate both feed and category caches so next navigation shows correct counts
         self.feed_repository:invalidateCache()
+        self.category_repository:invalidateCache()
         return true
     end
 end

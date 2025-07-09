@@ -64,14 +64,7 @@ function Miniflux:init()
     -- Initialize Miniflux-specific API
     self.miniflux_api = MinifluxAPI:new({ api_client = self.api_client })
 
-    -- Initialize service instances
-    self.entry_service = EntryService:new({
-        settings = self.settings,
-        miniflux_api = self.miniflux_api,
-        miniflux_plugin = self
-    })
-    
-    -- Initialize repositories for service dependencies
+    -- Initialize repositories first
     local FeedRepository = require("repositories/feed_repository")
     local CategoryRepository = require("repositories/category_repository")
     
@@ -84,15 +77,26 @@ function Miniflux:init()
         miniflux_api = self.miniflux_api,
         settings = self.settings
     })
+
+    -- Initialize service instances with repository dependencies
+    self.entry_service = EntryService:new({
+        settings = self.settings,
+        miniflux_api = self.miniflux_api,
+        miniflux_plugin = self,
+        feed_repository = feed_repository,
+        category_repository = category_repository
+    })
     
     -- Initialize feed and category services
     self.feed_service = FeedService:new({
         feed_repository = feed_repository,
+        category_repository = category_repository,
         settings = self.settings
     })
     
     self.category_service = CategoryService:new({
         category_repository = category_repository,
+        feed_repository = feed_repository,
         settings = self.settings
     })
 

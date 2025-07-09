@@ -21,16 +21,27 @@ local EntryWorkflow = require("services/entry_workflow")
 ---@field settings MinifluxSettings Settings instance
 ---@field miniflux_api MinifluxAPI Miniflux API instance
 ---@field miniflux_plugin Miniflux Plugin instance for context management
+---@field feed_repository FeedRepository Feed repository for cache invalidation
+---@field category_repository CategoryRepository Category repository for cache invalidation
 local EntryService = {}
 
+---@class EntryServiceDeps
+---@field settings MinifluxSettings
+---@field miniflux_api MinifluxAPI
+---@field miniflux_plugin Miniflux
+---@field feed_repository FeedRepository
+---@field category_repository CategoryRepository
+
 ---Create a new EntryService instance
----@param deps table Dependencies containing settings, miniflux_api, miniflux_plugin
+---@param deps EntryServiceDeps Dependencies containing settings, API, plugin, and repositories
 ---@return EntryService
 function EntryService:new(deps)
     local instance = {
         settings = deps.settings,
         miniflux_api = deps.miniflux_api,
         miniflux_plugin = deps.miniflux_plugin,
+        feed_repository = deps.feed_repository,
+        category_repository = deps.category_repository,
     }
     setmetatable(instance, self)
     self.__index = self
@@ -88,6 +99,11 @@ function EntryService:markEntriesAsRead(entry_ids)
         for _, entry_id in ipairs(entry_ids) do
             EntryEntity.updateEntryStatus(entry_id, "read")
         end
+        
+        -- Invalidate caches so next navigation shows updated counts
+        self.feed_repository:invalidateCache()
+        self.category_repository:invalidateCache()
+        
         return true
     end
 end
@@ -121,6 +137,11 @@ function EntryService:markEntriesAsUnread(entry_ids)
         for _, entry_id in ipairs(entry_ids) do
             EntryEntity.updateEntryStatus(entry_id, "unread")
         end
+        
+        -- Invalidate caches so next navigation shows updated counts
+        self.feed_repository:invalidateCache()
+        self.category_repository:invalidateCache()
+        
         return true
     end
 end
@@ -156,6 +177,11 @@ function EntryService:changeEntryStatus(entry_id, new_status)
     else
         -- Update local metadata
         EntryEntity.updateEntryStatus(entry_id, new_status)
+        
+        -- Invalidate caches so next navigation shows updated counts
+        self.feed_repository:invalidateCache()
+        self.category_repository:invalidateCache()
+        
         return true
     end
 end
@@ -359,6 +385,13 @@ function EntryService:spawnUpdateStatus(entry_id, new_status)
 
     -- Step 1: Optimistic update - immediately update local metadata
     local update_success = EntryEntity.updateEntryStatus(entry_id, new_status)
+    
+    -- NOTE: We deliberately do NOT invalidate caches here because:
+    -- 1. This is fire-and-forget background operation - user doesn't expect immediate UI updates
+    -- 2. API call happens in subprocess and could fail, causing auto-healing to revert local metadata
+    -- 3. If we invalidate cache but API fails, cache shows wrong counts until next natural refresh
+    -- 4. Cache will refresh naturally when user navigates later
+    -- For immediate user-triggered operations, use changeEntryStatus() which invalidates after API success
 
     -- Step 2: Background API call with auto-healing
     local FFIUtil = require("ffi/util")
@@ -423,5 +456,6 @@ function EntryService:deleteLocalEntry(entry_id)
         return false
     end
 end
+
 
 return EntryService
