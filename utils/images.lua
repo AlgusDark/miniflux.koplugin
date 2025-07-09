@@ -291,7 +291,9 @@ function Images.processHtmlImages(content, opts)
         end
     end
 
-    return content:gsub(IMG_TAG_PATTERN, replaceImg)
+    local processed_content = content:gsub(IMG_TAG_PATTERN, replaceImg)
+
+    return processed_content
 end
 
 ---Create a local image tag with proper styling

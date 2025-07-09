@@ -36,10 +36,10 @@ function CachedRepository:new(config)
             db_name = "miniflux_cache.sqlite"
         })
     }
-    
+
     setmetatable(instance, self)
     self.__index = self
-    
+
     return instance
 end
 
@@ -49,7 +49,7 @@ end
 ---@return string cache_key
 function CachedRepository:generateCacheKey(method_name, params)
     local key_parts = { self.cache_prefix, method_name }
-    
+
     if params then
         -- Sort params for consistent keys
         local sorted_params = {}
@@ -57,12 +57,12 @@ function CachedRepository:generateCacheKey(method_name, params)
             table.insert(sorted_params, k .. "=" .. tostring(v))
         end
         table.sort(sorted_params)
-        
+
         for _, param in ipairs(sorted_params) do
             table.insert(key_parts, param)
         end
     end
-    
+
     return table.concat(key_parts, "_")
 end
 
@@ -79,43 +79,43 @@ function CachedRepository:getCached(cache_key, opts)
         logger.err("CachedRepository: Invalid cache key provided")
         return nil, Error.new("Invalid cache key")
     end
-    
+
     if not opts or type(opts) ~= "table" or not opts.api_call then
         logger.err("CachedRepository: Invalid options provided to getCached()")
         return nil, Error.new("Invalid options - api_call required")
     end
-    
+
     -- Check if caching is enabled
     if not self.settings.api_cache_enabled then
         logger.dbg("CachedRepository: Cache disabled, calling API directly")
         return opts.api_call()
     end
-    
+
     local ttl = opts.ttl or self.settings.api_cache_ttl
-    
+
     -- Try cache first
-    local cached_data, is_valid = self.cache_store:get(cache_key, {ttl = ttl})
+    local cached_data, is_valid = self.cache_store:get(cache_key, { ttl = ttl })
     if is_valid and cached_data then
         logger.dbg("CachedRepository: Cache hit for key:", cache_key)
         return cached_data.result, cached_data.error
     end
-    
+
     -- Cache miss - call API
     logger.dbg("CachedRepository: Cache miss for key:", cache_key)
     local result, error = opts.api_call()
-    
+
     -- Cache the result (even if it's an error, to avoid repeated failed calls)
     local cache_data = {
         result = result,
         error = error,
         timestamp = os.time()
     }
-    
+
     self.cache_store:set(cache_key, {
-        data = cache_data, 
+        data = cache_data,
         ttl = ttl
     })
-    
+
     return result, error
 end
 
@@ -126,9 +126,9 @@ function CachedRepository:invalidate(cache_key)
     if not self.settings.api_cache_enabled then
         return true -- Nothing to invalidate
     end
-    
+
     logger.dbg("CachedRepository: Invalidating cache for key:", cache_key)
-    return self.cache_store:delete(cache_key)
+    return self.cache_store:remove(cache_key)
 end
 
 ---Invalidate all cache entries for this repository
@@ -137,11 +137,12 @@ function CachedRepository:invalidateAll()
     if not self.settings.api_cache_enabled then
         return true -- Nothing to invalidate, but that's success
     end
-    
+
     logger.info("CachedRepository: Invalidating all cache for prefix:", self.cache_prefix)
-    
+
     -- For now, clear everything (could be optimized to only clear prefixed keys)
-    return self.cache_store:clear()
+    self.cache_store:clear()
+    return true
 end
 
 ---Get cache statistics for this repository
@@ -150,7 +151,7 @@ function CachedRepository:getCacheStats()
     if not self.settings.api_cache_enabled then
         return { count = 0, size = 0 }
     end
-    
+
     local stats = self.cache_store:getStats()
     return {
         count = stats.count,

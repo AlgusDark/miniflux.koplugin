@@ -59,6 +59,72 @@ function EntryService:readEntry(entry_data, browser)
     })
 end
 
+---Mark multiple entries as read in batch
+---@param entry_ids table Array of entry IDs
+---@return boolean success
+function EntryService:markEntriesAsRead(entry_ids)
+    if not entry_ids or #entry_ids == 0 then
+        return false
+    end
+
+    -- Show progress notification
+    local progress_message = _("Marking ") .. #entry_ids .. _(" entries as read...")
+
+    -- Use batch API call
+    local result, err = self.miniflux_api:updateEntries(entry_ids, {
+        body = { status = "read" },
+        dialogs = {
+            loading = { text = progress_message },
+            success = { text = _("Successfully marked ") .. #entry_ids .. _(" entries as read") },
+            error = { text = _("Failed to mark entries as read") }
+        }
+    })
+
+    if err then
+        return false
+    else
+        -- TODO: Create EntryEntity.updateEntriesStatus(entry_ids, status) for batch local metadata updates
+        -- Currently doing individual updates which could be optimized for large selections
+        for _, entry_id in ipairs(entry_ids) do
+            EntryEntity.updateEntryStatus(entry_id, "read")
+        end
+        return true
+    end
+end
+
+---Mark multiple entries as unread in batch
+---@param entry_ids table Array of entry IDs
+---@return boolean success
+function EntryService:markEntriesAsUnread(entry_ids)
+    if not entry_ids or #entry_ids == 0 then
+        return false
+    end
+
+    -- Show progress notification
+    local progress_message = _("Marking ") .. #entry_ids .. _(" entries as unread...")
+
+    -- Use batch API call
+    local result, err = self.miniflux_api:updateEntries(entry_ids, {
+        body = { status = "unread" },
+        dialogs = {
+            loading = { text = progress_message },
+            success = { text = _("Successfully marked ") .. #entry_ids .. _(" entries as unread") },
+            error = { text = _("Failed to mark entries as unread") }
+        }
+    })
+
+    if err then
+        return false
+    else
+        -- TODO: Create EntryEntity.updateEntriesStatus(entry_ids, status) for batch local metadata updates
+        -- Currently doing individual updates which could be optimized for large selections
+        for _, entry_id in ipairs(entry_ids) do
+            EntryEntity.updateEntryStatus(entry_id, "unread")
+        end
+        return true
+    end
+end
+
 ---Change entry status with validation and side effects
 ---@param entry_id number Entry ID
 ---@param new_status string New status
@@ -170,7 +236,8 @@ function EntryService:showEndOfEntryDialog(entry_info)
     end
 
     -- Create dialog and return reference for caller management
-    local dialog = ButtonDialogTitle:new({
+    local dialog
+    dialog = ButtonDialogTitle:new({
         title = _("You've reached the end of the entry."),
         title_align = "center",
         buttons = {
@@ -352,7 +419,7 @@ function EntryService:deleteLocalEntry(entry_id)
 
         return true
     else
-        Notification:error(_("Failed to delete local entry: ") .. tostring(err))
+        Notification:error(_("Failed to delete local entry: ") .. tostring(ok))
         return false
     end
 end

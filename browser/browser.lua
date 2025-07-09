@@ -15,27 +15,16 @@ local BrowserMode = {
     SELECTION = "selection" -- Selection mode for batch operations
 }
 
--- **Generic Browser** - Base class for content browsers
---
--- Provides generic browser functionality including navigation, menu integration,
--- and UI management using BookList for enhanced features. Implements a state machine
--- for mode transitions between normal browsing and selection modes.
---
--- PERFORMANCE OPTIMIZATION NOTE:
--- This class implements a "visible items only" optimization for selection state updates.
--- Through debugging, we discovered that selection operations were processing ALL items
--- in the dataset (e.g., 100 items) even when only a small subset was visible per page
--- (e.g., 14 items). This caused significant performance issues, especially on large feeds.
---
--- The optimization reduces processing time by 86-98% by only updating visual state
--- for items that are actually visible on the current page, making the interface
--- responsive regardless of dataset size.
---
+-- Generic Browser - Base class for content browsers extending BookList
+-- Implements state machine (normal/selection modes) with navigation stack
 ---@class Browser : BookList
 ---@field current_mode BrowserMode # Current browser mode (state machine)
 ---@field selected_items table<string|number, table>|nil # Selection mode state: nil = normal mode, table = selection mode (hash table with item IDs as keys, item data as values)
 ---@field last_selected_index number|nil # Track last selected item index for range selection
 ---@field selection_dialog ButtonDialog|nil # Dialog for selection mode actions
+---@field paths table[] # Navigation history stack: {from: string, to: string, page_state: number, context?: any}[]
+---@field show_parent any # Parent widget for UI management
+---@field title_bar TitleBar # Custom title bar widget
 local Browser = BookList:extend({
     title_shrink_font_to_fit = true,
     is_popout = false,
@@ -49,13 +38,18 @@ local Browser = BookList:extend({
 -- Export BrowserMode enum
 Browser.BrowserMode = BrowserMode
 
+---Initialize Browser instance with state machine and custom title bar
+---@param self Browser
 function Browser:init()
+    -- Initialize state machine in normal mode
     self.current_mode = BrowserMode.NORMAL
-    self.selected_items = nil
-    self.last_selected_index = nil
+    self.selected_items = nil      -- nil = normal mode, {} = selection mode
+    self.last_selected_index = nil -- for range selection tracking
 
+    -- Set up parent widget reference for UI management
     self.show_parent = self.show_parent or self
 
+    -- Create custom title bar with mode-aware icons
     local TitleBar = require("ui/widget/titlebar")
     self.title_bar = TitleBar:new {
         show_parent = self.show_parent,
@@ -74,11 +68,11 @@ function Browser:init()
     -- Tell BookList to use our custom title bar
     self.custom_title_bar = self.title_bar
 
-    -- Initialize BookList parent
+    -- Initialize BookList parent (sets up Menu infrastructure)
     BookList.init(self)
 end
 
----Transition to a new browser mode
+---Transition between normal and selection modes with proper state cleanup
 ---@param target_mode BrowserMode Target mode to transition to
 function Browser:transitionTo(target_mode)
     if self.current_mode == target_mode then
@@ -227,8 +221,8 @@ function Browser:getSelectedCount()
     return count
 end
 
--- Helper method to get array of selected items
-function Browser:getSelectedItems()
+-- Helper method to get array of selected item IDs
+function Browser:getSelectedItemIds()
     local selected = {}
     if self.selected_items then
         for item_id, _ in pairs(self.selected_items) do
@@ -238,14 +232,32 @@ function Browser:getSelectedItems()
     return selected
 end
 
--- Override switchItemTable to maintain selection state across navigation
---
--- This method is called whenever the browser navigates to a new view or page.
--- It ensures that visual selection indicators (item.dim) are properly maintained
--- when the underlying item table changes.
---
--- PERFORMANCE NOTE: Uses visible-only updates via HashMap lookup for optimal page navigation speed.
--- Cross-page consistency is maintained through selection operations that use full updates when needed.
+-- Helper method to get array of selected item objects
+function Browser:getSelectedItems()
+    local selected = {}
+    if self.selected_items then
+        for item_id, item_object in pairs(self.selected_items) do
+            table.insert(selected, item_object)
+        end
+    end
+    return selected
+end
+
+-- Helper method to get item type for selection processing
+function Browser:getItemType(item_data)
+    -- Default implementation - subclasses can override
+    if item_data.entry_data then return "entry" end
+    if item_data.feed_data then return "feed" end
+    if item_data.category_data then return "category" end
+    return nil
+end
+
+---Override switchItemTable to maintain selection state across navigation
+---@param title string Menu title
+---@param items table[] Array of item objects to display
+---@param page_state number|nil Item number for focus/pagination
+---@param menu_title string|nil Title for menu header
+---@param subtitle string|nil Subtitle text
 function Browser:switchItemTable(title, items, page_state, menu_title, subtitle)
     if self:isCurrentMode(BrowserMode.SELECTION) then
         -- Add selection state to items before displaying
@@ -258,19 +270,7 @@ function Browser:switchItemTable(title, items, page_state, menu_title, subtitle)
     BookList.switchItemTable(self, title, items, page_state, menu_title, subtitle)
 end
 
--- Helper method to get only visible items on current page
---
--- PERFORMANCE OPTIMIZATION: This method implements the "visible items only" optimization.
--- Instead of processing all items in the dataset (which can be 100+ items), we only
--- process items that are actually visible on the current page (typically 14-20 items).
---
--- Example scenarios discovered during debugging:
--- - Feed with 100 items, page 1, perpage=14 → processes items 1-14 (86% reduction)
--- - Feed with 100 items, page 3, perpage=14 → processes items 29-42 (86% reduction)
--- - Feed with 100 items, page 8, perpage=14 → processes items 99-100 (98% reduction)
---
--- This optimization makes selection operations O(visible) instead of O(total),
--- providing consistent performance regardless of dataset size.
+-- Helper method to get only visible items on current page (performance optimization)
 function Browser:getVisibleItems(all_items)
     local page = self.page or 1
     local perpage = self.perpage or 20
@@ -287,29 +287,16 @@ function Browser:getVisibleItems(all_items)
     return visible_items
 end
 
--- Update dim status of items based on selection status (set item.dim for selected items)
---
--- PERFORMANCE OPTIMIZATION: This method implements multiple performance optimizations
--- discovered through debugging large feeds (100+ items):
---
--- 1. EARLY RETURNS: Skip processing entirely when not in selection mode or no selections exist
---    - Eliminates unnecessary work during normal browsing (95% of use cases)
---    - Uses next() for O(1) empty table detection instead of counting
---
--- 2. VISIBLE ITEMS ONLY: Only process items visible on current page
---    - Debugging revealed we were processing ALL items (e.g., 100) when only 14 were visible
---    - Reduces processing by 86-98% depending on page position and total item count
---    - Makes performance independent of dataset size
---    - NOTE: Cross-page visual consistency is handled lazily via HashMap lookup during navigation
+---Update dim status of items based on selection status with performance optimizations
+---@param items table[] Array of item objects to process (caller determines scope)
 function Browser:updateItemDimStatus(items)
     -- Early return optimizations - skip work when not needed
     if not self:isCurrentMode(BrowserMode.SELECTION) or not self.selected_items then
         return
     end
 
-    -- Only process if items exist and we have selections
-    -- Note: next(table) == nil is the standard Lua idiom for checking empty tables (O(1))
-    if #items == 0 or next(self.selected_items) == nil then
+    -- Only process if items exist
+    if #items == 0 then
         return
     end
 
@@ -326,7 +313,7 @@ end
 function Browser:refreshCurrentView()
     -- Let updateItems handle the visual state update efficiently
     if self.item_table then
-        self:updateItems(1, true) -- select_number=1, no_recalculate_dimen=true
+        self:updateItems(nil, true) -- select_number=1, no_recalculate_dimen=true
     end
 end
 
@@ -344,14 +331,6 @@ end
 
 -- =============================================================================
 -- NAVIGATION MANAGEMENT
---
--- Simple navigation using self.paths (like OPDSBrowser) to store NavigationState objects.
--- Each navigation state contains: {from, to, page_state, context}
---
--- Flow:
--- 1. User clicks "Feeds" → goForward() → store current state in self.paths → navigate()
--- 2. User hits back → goBack() → pop from self.paths → navigate()
--- 3. navigate() routes to appropriate view using provider-specific getRouteHandlers()
 -- =============================================================================
 
 ---Get current item number for page state restoration
@@ -369,7 +348,7 @@ function Browser:getCurrentItemNumber()
     return math.max(current_item, 1)
 end
 
----Navigate forward (route to new view and store state only on success)
+---Navigate forward with atomic state management
 ---@generic T
 ---@param nav_config NavigationState<T> Forward navigation configuration
 function Browser:goForward(nav_config)
@@ -398,6 +377,11 @@ end
 
 ---Navigate back (pop previous state from paths and route back)
 function Browser:goBack()
+    -- Exit selection mode before navigating back to prevent crashes
+    if self:isCurrentMode(BrowserMode.SELECTION) then
+        self:transitionTo(BrowserMode.NORMAL)
+    end
+
     local prev_nav = table.remove(self.paths)
     if prev_nav then
         -- Navigate back to previous view (restore page position)
@@ -412,7 +396,7 @@ function Browser:goBack()
     end
 end
 
----Core navigation method (handles view routing, back button setup, and browser visibility)
+---Core navigation method - handles view routing, back button setup, and browser visibility
 ---@generic T
 ---@param nav_config RouteConfig<T> Navigation configuration
 function Browser:navigate(nav_config)
@@ -437,6 +421,9 @@ function Browser:navigate(nav_config)
     if nav_config.pending_nav_state then
         table.insert(self.paths, nav_config.pending_nav_state)
     end
+
+    -- Store view data for access by subclasses (e.g., settings dialog)
+    self.view_data = view_data
 
     -- Handle navigation state based on view data
     if view_data.is_root then
@@ -471,6 +458,8 @@ end
 
 -- Override updateItems to maintain selection state during page navigation
 -- Clean approach: apply selection state to items before Menu builds the UI components
+---@param select_number number|nil
+---@param no_recalculate_dimen boolean|nil
 function Browser:updateItems(select_number, no_recalculate_dimen)
     -- Apply selection state to items BEFORE calling parent updateItems
     -- This way Menu builds MenuItem widgets with the correct item.dim state from the start
@@ -487,7 +476,9 @@ end
 -- ITEM SELECTION LOGIC
 -- =============================================================================
 
--- Override Menu's onMenuSelect to handle selection mode
+---Override Menu's onMenuSelect to handle selection mode
+---@param item table Item data object with id, callback, and other properties
+---@return boolean true (event handled)
 function Browser:onMenuSelect(item)
     if self:isCurrentMode(BrowserMode.SELECTION) then
         -- Selection mode: toggle item selection
@@ -506,8 +497,16 @@ function Browser:onMenuSelect(item)
     end
 end
 
--- Override Menu's onMenuHold to enter selection mode or do range selection (like FileManager)
+---Override Menu's onMenuHold to enter selection mode or do range selection
+---@param item table Item data object
+---@return boolean true (event handled)
 function Browser:onMenuHold(item)
+    -- Only allow selection mode for items that have IDs (getItemId returns non-nil)
+    local item_id = self:getItemId(item)
+    if not item_id then
+        return true -- Item not selectable, ignore hold event
+    end
+
     if not self:isCurrentMode(BrowserMode.SELECTION) then
         -- Enter selection mode and select this item
         self:transitionTo(BrowserMode.SELECTION)
@@ -618,46 +617,56 @@ function Browser:doRangeSelection(item)
     self:refreshCurrentView()
 end
 
--- Select all items in the current view
-function Browser:selectAll()
+---Select all items in the current view (FileChooser pattern)
+---@param do_select boolean|nil true to select all, false to deselect all, nil defaults to true
+function Browser:selectAllInCurrentView(do_select)
     if not self:isCurrentMode(BrowserMode.SELECTION) or not self.item_table then
         return
     end
 
-    -- Select all items from the complete loaded dataset (item_table contains ALL loaded items)
+    -- Default to select if not specified
+    if do_select == nil then do_select = true end
+
+    -- Update selection state for all items (following FileChooser pattern)
     for _, item in ipairs(self.item_table) do
         local item_id = self:getItemId(item)
         if item_id then
-            self.selected_items[item_id] = item
+            if do_select then
+                self.selected_items[item_id] = item
+                item.dim = true
+            else
+                self.selected_items[item_id] = nil
+                item.dim = nil
+            end
         end
     end
 
-    -- Update last selected index to last item for range selection
-    self.last_selected_index = #self.item_table
-
-    -- Update visual display (HashMap + current page only, other pages updated on navigation)
-    self:refreshCurrentView()
-end
-
--- Deselect all items but remain in selection mode
-function Browser:deselectAll()
-    if not self:isCurrentMode(BrowserMode.SELECTION) or not self.selected_items then
-        return
+    -- Update last selected index for range selection
+    if do_select then
+        self.last_selected_index = #self.item_table
+    else
+        self.last_selected_index = nil
     end
 
-    -- Clear all selections
-    self.selected_items = {}
-    self.last_selected_index = nil
+    -- Efficient visual update (following FileChooser pattern)
+    self:updateItems(1, true)
+end
 
-    -- Update visual display
-    self:refreshCurrentView()
+-- Legacy method for backward compatibility
+function Browser:selectAll()
+    self:selectAllInCurrentView(true)
+end
+
+-- Legacy method for backward compatibility
+function Browser:deselectAll()
+    self:selectAllInCurrentView(false)
 end
 
 -- =============================================================================
 -- ABSTRACT METHODS (Must be implemented by subclasses)
 -- =============================================================================
 
----Get route handlers for this browser type
+---Get route handlers for this browser type (abstract method)
 ---@generic T
 ---@param nav_config RouteConfig<T> Navigation configuration
 ---@return table<string, function> Route handlers lookup table
@@ -673,7 +682,7 @@ function Browser:openItem(item_data, context)
 end
 
 ---Get unique identifier for an item (required for selection functionality)
----@param item_data table Item data
+---@param item_data table Item data object
 ---@return string|number Unique identifier for the item
 function Browser:getItemId(item_data)
     error("Browser subclass must implement getItemId() for selection functionality")

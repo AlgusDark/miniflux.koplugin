@@ -59,6 +59,14 @@ function CategoryRepository:getCount(config)
     return #categories, nil
 end
 
+---Mark all entries in a category as read
+---@param category_id number The category ID
+---@param config? table Configuration including optional dialogs
+---@return table|nil result, Error|nil error
+function CategoryRepository:markAsRead(category_id, config)
+    return self.miniflux_api:markCategoryAsRead(category_id, config)
+end
+
 ---Invalidate all category cache (useful when categories are added/removed)
 ---@return boolean success
 function CategoryRepository:invalidateCache()

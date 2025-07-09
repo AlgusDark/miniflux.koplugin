@@ -8,6 +8,7 @@ Handles data fetching, menu building, and UI rendering.
 --]]
 
 local _ = require("gettext")
+local ViewUtils = require("browser/views/view_utils")
 
 local MainView = {}
 
@@ -35,16 +36,15 @@ function MainView.show(config)
         }
     })
 
-    -- Build subtitle
-    local hide_read = config.settings and config.settings.hide_read_entries
-    local subtitle = hide_read and "⊘ " or "◯ "
+    -- Build title with status indicator using ViewUtils
+    local title = ViewUtils.addStatusIndicator(_("Miniflux"), config.settings)
 
     -- Return view data for browser to render
     return {
-        title = _("Miniflux"),
+        title = title,
         items = main_items,
         page_state = nil,
-        subtitle = subtitle,
+        subtitle = nil,
         is_root = true -- Signals browser to clear navigation history
     }
 end

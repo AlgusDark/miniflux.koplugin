@@ -195,6 +195,19 @@ function MinifluxAPI:getFeedEntries(feed_id, options, config)
     })
 end
 
+---Mark all entries in a feed as read
+---@param feed_id number The feed ID
+---@param config? table Configuration including optional dialogs
+---@return table|nil result, Error|nil error
+function MinifluxAPI:markFeedAsRead(feed_id, config)
+    config = config or {}
+    local endpoint = "/feeds/" .. tostring(feed_id) .. "/mark-all-as-read"
+
+    return self.api_client:put(endpoint, {
+        dialogs = config.dialogs
+    })
+end
+
 -- =============================================================================
 -- CATEGORIES
 -- =============================================================================
@@ -227,6 +240,19 @@ function MinifluxAPI:getCategoryEntries(category_id, options, config)
 
     return self.api_client:get(endpoint, {
         query = options,
+        dialogs = config.dialogs
+    })
+end
+
+---Mark all entries in a category as read
+---@param category_id number The category ID
+---@param config? table Configuration including optional dialogs
+---@return table|nil result, Error|nil error
+function MinifluxAPI:markCategoryAsRead(category_id, config)
+    config = config or {}
+    local endpoint = "/categories/" .. tostring(category_id) .. "/mark-all-as-read"
+
+    return self.api_client:put(endpoint, {
         dialogs = config.dialogs
     })
 end

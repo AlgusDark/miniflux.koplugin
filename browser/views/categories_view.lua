@@ -44,9 +44,12 @@ function CategoriesView.show(config)
         item_type = "categories"
     })
 
+    -- Build title with status indicator using ViewUtils
+    local title = ViewUtils.addStatusIndicator(_("Categories"), config.settings)
+
     -- Return view data for browser to render
     return {
-        title = _("Categories"),
+        title = title,
         items = menu_items,
         page_state = config.page_state,
         subtitle = subtitle

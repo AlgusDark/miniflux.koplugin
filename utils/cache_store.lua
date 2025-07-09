@@ -163,11 +163,9 @@ function CacheStore:remove(key)
 end
 
 ---Clear all cache entries (useful for settings changes)
----@return boolean success
 function CacheStore:clear()
-    local success = self.cache:clear()
+    self.cache:clear()
     logger.info("CacheStore: Cleared all cache entries")
-    return success
 end
 
 ---Get cache statistics from SQLite

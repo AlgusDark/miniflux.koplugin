@@ -67,4 +67,24 @@ function ViewUtils.formatCountDisplay(config)
     end
 end
 
+---Add status indicator to title for consistent display across all views
+---@param title string Base title text
+---@param settings? MinifluxSettings Settings instance
+---@param force_unread_indicator? boolean Force unread indicator (●) regardless of setting
+---@return string title_with_indicator
+function ViewUtils.addStatusIndicator(title, settings, force_unread_indicator)
+    if force_unread_indicator then
+        return title .. " ●"
+    end
+    
+    -- Safety check for settings
+    if not settings then
+        return title .. " ◯" -- Default to show all entries indicator
+    end
+    
+    local hide_read = settings.hide_read_entries
+    local status_indicator = hide_read and "⊘" or "◯"
+    return title .. " " .. status_indicator
+end
+
 return ViewUtils

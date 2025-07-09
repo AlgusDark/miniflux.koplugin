@@ -36,7 +36,7 @@ end
 ---@return MinifluxFeed[]|nil result, Error|nil error
 function FeedRepository:getAll(config)
     local cache_key = self.cache:generateCacheKey("getAll")
-    
+
     return self.cache:getCached(cache_key, {
         api_call = function()
             local feeds, err = self.miniflux_api:getFeeds(config)
@@ -55,7 +55,7 @@ end
 ---@return MinifluxFeedsWithCountersResult|nil result, Error|nil error
 function FeedRepository:getAllWithCounters(config)
     local cache_key = self.cache:generateCacheKey("getAllWithCounters")
-    
+
     return self.cache:getCached(cache_key, {
         api_call = function()
             -- Get feeds first
@@ -91,10 +91,19 @@ function FeedRepository:getCount(config)
     return #feeds, nil
 end
 
+---Mark all entries in a feed as read
+---@param feed_id number The feed ID
+---@param config? table Configuration including optional dialogs
+---@return table|nil result, Error|nil error
+function FeedRepository:markAsRead(feed_id, config)
+    return self.miniflux_api:markFeedAsRead(feed_id, config)
+end
+
 ---Invalidate all feed cache (useful when feeds are added/removed)
 ---@return boolean success
 function FeedRepository:invalidateCache()
-    return self.cache:invalidateAll()
+    self.cache:invalidateAll()
+    return true
 end
 
 return FeedRepository

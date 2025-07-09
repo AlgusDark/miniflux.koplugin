@@ -97,12 +97,39 @@ function EntriesView.show(config)
         end
     end
 
+    -- Add status indicator to title using ViewUtils
+    local force_unread = (entry_type == "unread")
+    title = ViewUtils.addStatusIndicator(title, config.settings, force_unread)
+
     -- Return view data for browser to render
     return {
         title = title,
         items = menu_items,
         page_state = config.page_state,
         subtitle = subtitle
+    }
+end
+
+---Build a single entry menu item with status indicators
+---@param entry table Entry data
+---@param config {show_feed_names: boolean, onSelectItem: function}
+---@return table Menu item for single entry
+function EntriesView.buildSingleItem(entry, config)
+    local entry_title = entry.title or _("Untitled Entry")
+    local status_indicator = entry.status == "read" and "○ " or "● "
+    local display_text = status_indicator .. entry_title
+
+    if config.show_feed_names and entry.feed and entry.feed.title then
+        display_text = display_text .. " (" .. entry.feed.title .. ")"
+    end
+
+    return {
+        text = display_text,
+        action_type = "read_entry",
+        entry_data = entry,
+        callback = function()
+            config.onSelectItem(entry)
+        end
     }
 end
 
@@ -123,22 +150,11 @@ function EntriesView.buildItems(config)
     end
 
     for _, entry in ipairs(entries) do
-        local entry_title = entry.title or _("Untitled Entry")
-        local status_indicator = entry.status == "read" and "○ " or "● "
-        local display_text = status_indicator .. entry_title
-
-        if show_feed_names and entry.feed and entry.feed.title then
-            display_text = display_text .. " (" .. entry.feed.title .. ")"
-        end
-
-        table.insert(menu_items, {
-            text = display_text,
-            action_type = "read_entry",
-            entry_data = entry,
-            callback = function()
-                onSelectItem(entry)
-            end
+        local item = EntriesView.buildSingleItem(entry, {
+            show_feed_names = show_feed_names,
+            onSelectItem = onSelectItem
         })
+        table.insert(menu_items, item)
     end
 
     return menu_items

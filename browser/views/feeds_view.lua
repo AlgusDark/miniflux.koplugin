@@ -45,9 +45,12 @@ function FeedsView.show(config)
         item_type = "feeds"
     })
 
+    -- Build title with status indicator using ViewUtils
+    local title = ViewUtils.addStatusIndicator(_("Feeds"), config.settings)
+
     -- Return view data for browser to render
     return {
-        title = _("Feeds"),
+        title = title,
         items = menu_items,
         page_state = config.page_state,
         subtitle = subtitle

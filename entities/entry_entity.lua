@@ -330,7 +330,7 @@ end
 ---@return string|nil User choice based on context (nil if dialog fails)
 function EntryEntity.showCancellationDialog(context)
     local user_choice = nil
-    local choice_dialog = nil
+    local choice_dialog = nil --[[@type ButtonDialog]]
 
     -- Context-specific dialog configuration
     local dialog_config = {}

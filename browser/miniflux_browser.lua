@@ -25,6 +25,8 @@ local EntriesView = require("browser/views/entries_view")
 ---@field miniflux_api MinifluxAPI Miniflux API
 ---@field download_dir string Download directory path
 ---@field entry_service EntryService Entry service instance
+---@field feed_service FeedService Feed service instance
+---@field category_service CategoryService Category service instance
 ---@field miniflux_plugin Miniflux Plugin instance for context management
 ---@field new fun(self: MinifluxBrowser, o: BrowserOptions): MinifluxBrowser Create new MinifluxBrowser instance
 local MinifluxBrowser = Browser:extend({})
@@ -38,6 +40,8 @@ function MinifluxBrowser:init()
     self.download_dir = self.download_dir
     self.miniflux_plugin = self.miniflux_plugin or error("miniflux_plugin required")
     self.entry_service = self.entry_service or error("entry_service required")
+    self.feed_service = self.feed_service or error("feed_service required")
+    self.category_service = self.category_service or error("category_service required")
 
     -- Create Miniflux-specific repository instances
     self.repositories = {
@@ -54,6 +58,7 @@ end
 -- MINIFLUX-SPECIFIC FUNCTIONALITY
 -- =============================================================================
 
+
 ---Override settings dialog with Miniflux-specific implementation
 function MinifluxBrowser:onLeftButtonTap()
     if not self.settings then
@@ -65,16 +70,37 @@ function MinifluxBrowser:onLeftButtonTap()
     local UIManager = require("ui/uimanager")
     local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
 
-    local buttons = {
-        {
+    -- Check if we're in an unread-only view (status toggle doesn't make sense here)
+    local current_path = self.paths and #self.paths > 0 and self.paths[#self.paths]
+    local is_unread_view = current_path and current_path.to == "unread_entries"
+
+    local buttons = {}
+
+    if not is_unread_view then
+        -- Only show status toggle for non-unread views
+        local hide_read_entries = self.settings.hide_read_entries
+        local toggle_text = hide_read_entries and _("Show all entries") or _("Show unread entries")
+
+        table.insert(buttons, {
             {
-                text = _("Close"),
+                text = toggle_text,
                 callback = function()
                     UIManager:close(self.config_dialog)
+                    self:toggleHideReadEntries()
                 end,
             },
+        })
+    end
+
+    -- Always show close button
+    table.insert(buttons, {
+        {
+            text = _("Close"),
+            callback = function()
+                UIManager:close(self.config_dialog)
+            end,
         },
-    }
+    })
 
     self.config_dialog = ButtonDialogTitle:new({
         title = _("Miniflux Settings"),
@@ -82,6 +108,61 @@ function MinifluxBrowser:onLeftButtonTap()
         buttons = buttons,
     })
     UIManager:show(self.config_dialog)
+end
+
+---Toggle the hide_read_entries setting and refresh the current view
+function MinifluxBrowser:toggleHideReadEntries()
+    -- Toggle the setting
+    self.settings.hide_read_entries = not self.settings.hide_read_entries
+
+    -- Save the setting to disk
+    self.settings:save()
+
+    -- Show notification about the change
+    local Notification = require("utils/notification")
+    local status_text = self.settings.hide_read_entries and _("Now showing unread entries only") or
+    _("Now showing all entries")
+    Notification:info(status_text)
+
+    -- Refresh the current view to apply the new filter
+    -- This will trigger a data re-fetch with the new setting
+    self:refreshCurrentViewData()
+end
+
+---Refresh current view data to apply setting changes
+function MinifluxBrowser:refreshCurrentViewData()
+    -- Get current view info without manipulating navigation stack
+    local current_path = self.paths and self.paths[#self.paths]
+    if current_path then
+        -- Get view handlers and refresh data directly
+        local nav_config = {
+            view_name = current_path.to,
+            page_state = self:getCurrentItemNumber(),
+        }
+        if current_path.context then
+            nav_config.context = current_path.context
+        end
+        
+        local view_handlers = self:getRouteHandlers(nav_config)
+        local handler = view_handlers[current_path.to]
+        if handler then
+            -- Get fresh view data
+            local view_data = handler()
+            if view_data then
+                -- Update view data without changing navigation
+                self.view_data = view_data
+                
+                -- Re-render with fresh data
+                self:switchItemTable(
+                    view_data.title,
+                    view_data.items,
+                    view_data.page_state,
+                    view_data.menu_title,
+                    view_data.subtitle
+                )
+            end
+        end
+    end
 end
 
 ---Open an entry with optional navigation context (implements Browser:openItem)
@@ -169,10 +250,10 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
             })
         end,
         unread_entries = function()
-            return EntriesView.show({
+            local UnreadEntriesView = require("browser/views/unread_entries_view")
+            return UnreadEntriesView.show({
                 repositories = self.repositories,
                 settings = self.settings,
-                entry_type = "unread",
                 page_state = nav_config.page_state,
                 onSelectItem = function(entry_data)
                     self:openItem(entry_data, nil) -- No context for global unread
@@ -213,46 +294,199 @@ end
 ---Get selection actions available for RSS entries (implements Browser:getSelectionActions)
 ---@return table[] Array of action objects with text and callback properties
 function MinifluxBrowser:getSelectionActions()
-    return {
-        {
+    -- Check what type of items are selected to determine available actions
+    local selected_items = self:getSelectedItems()
+    if #selected_items == 0 then
+        return {}
+    end
+
+    -- Check if selected items are entries (only entries can be marked as unread)
+    local item_type = self:getItemType(selected_items[1])
+    local actions = {}
+
+    if item_type == "entry" then
+        -- For entries: show both "Mark as unread" (left) and "Mark as read" (right)
+        table.insert(actions, {
+            text = _("Mark as Unread"),
+            callback = function(selected_items)
+                self:markSelectedAsUnread(selected_items)
+            end,
+        })
+        table.insert(actions, {
             text = _("Mark as Read"),
             callback = function(selected_items)
                 self:markSelectedAsRead(selected_items)
             end,
-        },
-        -- Future actions can be added here:
-        -- {
-        --     text = _("Delete Local Files"),
-        --     callback = function(selected_items)
-        --         self:deleteSelectedLocalFiles(selected_items)
-        --     end,
-        -- },
-    }
+        })
+    else
+        -- For feeds and categories: only show "Mark as read"
+        table.insert(actions, {
+            text = _("Mark as Read"),
+            callback = function(selected_items)
+                self:markSelectedAsRead(selected_items)
+            end,
+        })
+    end
+
+    return actions
 end
 
 -- =============================================================================
 -- SELECTION ACTIONS IMPLEMENTATION
 -- =============================================================================
 
----Mark selected entries as read (placeholder implementation)
----@param selected_item_ids table Array of selected entry IDs
-function MinifluxBrowser:markSelectedAsRead(selected_item_ids)
-    -- Add debugging to see what items are actually selected
-    local Debugger = require("utils/debugger")
-    Debugger.debug("markSelectedAsRead called with " .. #selected_item_ids .. " items")
-    Debugger.debug("Selected item IDs: " .. table.concat(selected_item_ids, ", "))
-    
-    -- Also debug the full selection state
-    local selected_count = self:getSelectedCount()
-    Debugger.debug("Browser reports " .. selected_count .. " selected items")
-    
-    -- For now, just show notification with the selected IDs as requested
-    local Notification = require("utils/notification")
-    local message = _("Mark as Read called with entry IDs: ") .. table.concat(selected_item_ids, ", ")
-    Notification:info(message)
+---Mark selected items as read with immediate visual feedback
+---@param selected_items table Array of selected item objects
+function MinifluxBrowser:markSelectedAsRead(selected_items)
+    if #selected_items == 0 then
+        return
+    end
+
+    -- Determine item type from first item (all items same type in a view)
+    local item_type = self:getItemType(selected_items[1])
+    if not item_type then
+        return
+    end
+
+    local success = false
+
+    if item_type == "entry" then
+        -- Extract entry IDs and use existing EntryService
+        local entry_ids = {}
+        for _, item in ipairs(selected_items) do
+            table.insert(entry_ids, item.entry_data.id)
+        end
+        success = self.entry_service:markEntriesAsRead(entry_ids)
+    elseif item_type == "feed" then
+        -- Feed: single ID, use FeedService
+        local feed_id = selected_items[1].feed_data.id
+        success = self.feed_service:markAsRead(feed_id)
+    elseif item_type == "category" then
+        -- Category: single ID, use CategoryService
+        local category_id = selected_items[1].category_data.id
+        success = self.category_service:markAsRead(category_id)
+    end
+
+    if success then
+        -- Update status in current item_table for immediate visual feedback
+        self:updateItemTableStatus(selected_items, "read", item_type)
+    end
 
     -- Clear selection and exit selection mode
     self:transitionTo(BrowserMode.NORMAL)
+
+    -- Refresh visual state to show updated read/unread indicators
+    self:refreshCurrentView()
+end
+
+---Mark selected entries as unread with immediate visual feedback
+---@param selected_items table Array of selected item objects
+function MinifluxBrowser:markSelectedAsUnread(selected_items)
+    if #selected_items == 0 then
+        return
+    end
+
+    -- Only entries can be marked as unread
+    local item_type = self:getItemType(selected_items[1])
+    if item_type ~= "entry" then
+        return
+    end
+
+    -- Extract entry IDs
+    local entry_ids = {}
+    for _, item in ipairs(selected_items) do
+        table.insert(entry_ids, item.entry_data.id)
+    end
+
+    -- Use EntryService for batch processing
+    local success = self.entry_service:markEntriesAsUnread(entry_ids)
+
+    if success then
+        -- Update status in current item_table for immediate visual feedback
+        self:updateItemTableStatus(selected_items, "unread", item_type)
+    end
+
+    -- Clear selection and exit selection mode
+    self:transitionTo(BrowserMode.NORMAL)
+
+    -- Refresh visual state to show updated read/unread indicators
+    self:refreshCurrentView()
+end
+
+---Get configuration for rebuilding entry items
+---@return table Configuration for EntriesView.buildSingleItem
+function MinifluxBrowser:getEntryItemConfig()
+    -- Determine if we should show feed names based on current view
+    local show_feed_names = false
+    local current_path = self.paths and self.paths[#self.paths]
+    if current_path then
+        show_feed_names = (current_path.to == "unread_entries" or current_path.to == "category_entries")
+    end
+
+    return {
+        show_feed_names = show_feed_names,
+        onSelectItem = function(entry_data)
+            self:openItem(entry_data)
+        end
+    }
+end
+
+---Update item status in current item_table for immediate visual feedback
+---@param selected_items table Array of selected item objects
+---@param new_status string New status ("read" or "unread")
+---@param item_type string Type of items ("entry", "feed", "category")
+function MinifluxBrowser:updateItemTableStatus(selected_items, new_status, item_type)
+    if not self.item_table then
+        return
+    end
+
+    if item_type == "entry" then
+        local EntriesView = require("browser/views/entries_view")
+        local item_config = self:getEntryItemConfig()
+
+        -- Create lookup table for faster searching
+        local ids_to_update = {}
+        for _, item in ipairs(selected_items) do
+            ids_to_update[item.entry_data.id] = true
+        end
+
+        -- Selective updates - only rebuild changed items (O(k) where k = selected items)
+        for _, item in ipairs(self.item_table) do
+            if item.entry_data and item.entry_data.id and ids_to_update[item.entry_data.id] then
+                -- Update underlying data
+                item.entry_data.status = new_status
+
+                -- Rebuild this item using view logic
+                local updated_item = EntriesView.buildSingleItem(item.entry_data, item_config)
+
+                -- Replace item properties with updated display
+                item.text = updated_item.text
+                -- Keep other properties unchanged (callback, action_type, etc.)
+            end
+        end
+    elseif item_type == "feed" then
+        -- Update feed unread count to 0 for visual feedback
+        for _, item in ipairs(self.item_table) do
+            if item.feed_data and item.feed_data.id == selected_items[1].feed_data.id then
+                item.feed_data.unread_count = 0
+                -- Update display text if it includes count
+                if item.mandatory and item.mandatory:match("%(") then
+                    item.mandatory = item.mandatory:gsub("%(%d+%)", "(0)")
+                end
+            end
+        end
+    elseif item_type == "category" then
+        -- Update category unread count to 0 for visual feedback
+        for _, item in ipairs(self.item_table) do
+            if item.category_data and item.category_data.id == selected_items[1].category_data.id then
+                item.category_data.unread_count = 0
+                -- Update display text if it includes count
+                if item.mandatory and item.mandatory:match("%(") then
+                    item.mandatory = item.mandatory:gsub("%(%d+%)", "(0)")
+                end
+            end
+        end
+    end
 end
 
 return MinifluxBrowser

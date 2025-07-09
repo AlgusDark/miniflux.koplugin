@@ -17,6 +17,8 @@ local MinifluxAPI = require("api/miniflux_api")
 local MinifluxSettings = require("settings/settings")
 local Menu = require("menu/menu")
 local EntryService = require("services/entry_service")
+local FeedService = require("services/feed_service")
+local CategoryService = require("services/category_service")
 local EntryEntity = require("entities/entry_entity")
 
 -- Static browser context shared across all plugin instances
@@ -30,6 +32,8 @@ local _static_browser_context = nil
 ---@field api_client APIClient Generic API client instance
 ---@field miniflux_api MinifluxAPI Miniflux-specific API instance
 ---@field entry_service EntryService Entry service instance
+---@field feed_service FeedService Feed service instance
+---@field category_service CategoryService Category service instance
 local Miniflux = WidgetContainer:extend({
     name = "miniflux",
     is_doc_only = false,
@@ -60,11 +64,36 @@ function Miniflux:init()
     -- Initialize Miniflux-specific API
     self.miniflux_api = MinifluxAPI:new({ api_client = self.api_client })
 
-    -- Initialize EntryService instance with settings, miniflux API, and plugin dependencies
+    -- Initialize service instances
     self.entry_service = EntryService:new({
         settings = self.settings,
         miniflux_api = self.miniflux_api,
         miniflux_plugin = self
+    })
+    
+    -- Initialize repositories for service dependencies
+    local FeedRepository = require("repositories/feed_repository")
+    local CategoryRepository = require("repositories/category_repository")
+    
+    local feed_repository = FeedRepository:new({
+        miniflux_api = self.miniflux_api,
+        settings = self.settings
+    })
+    
+    local category_repository = CategoryRepository:new({
+        miniflux_api = self.miniflux_api,
+        settings = self.settings
+    })
+    
+    -- Initialize feed and category services
+    self.feed_service = FeedService:new({
+        feed_repository = feed_repository,
+        settings = self.settings
+    })
+    
+    self.category_service = CategoryService:new({
+        category_repository = category_repository,
+        settings = self.settings
     })
 
     -- Override ReaderStatus EndOfBook behavior for miniflux entries
@@ -129,6 +158,8 @@ function Miniflux:createBrowser()
         miniflux_api = self.miniflux_api,
         download_dir = self.download_dir,
         entry_service = self.entry_service,
+        feed_service = self.feed_service,
+        category_service = self.category_service,
         miniflux_plugin = self, -- Pass plugin reference for context management
     })
     return browser
