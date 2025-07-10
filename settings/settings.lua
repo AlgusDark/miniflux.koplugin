@@ -1,12 +1,3 @@
---[[--
-Miniflux Settings Module
-
-Settings management with idiomatic property access using metamethods.
-Uses LuaSettings for storage with proper initialization and state management.
-
-@module koplugin.miniflux.settings
---]]
-
 local DataStorage = require("datastorage")
 local LuaSettings = require("luasettings")
 
@@ -19,12 +10,21 @@ local DEFAULTS = {
     direction = "desc",
     hide_read_entries = true,
     include_images = true,
+    mark_as_read_on_open = true,
+
+    -- API Cache settings
+    api_cache_enabled = true,
+    api_cache_ttl = 300, -- 5 minutes in seconds
+
+    -- Proxy Image Downloader settings
+    proxy_image_downloader_enabled = false,
+    proxy_image_downloader_url = "",
+    proxy_image_downloader_token = "",
 }
 
--- =============================================================================
--- SETTINGS CLASS
--- =============================================================================
-
+-- **Miniflux Settings** - Settings management with idiomatic property access
+-- using metamethods. Uses LuaSettings for storage with proper initialization
+-- and state management.
 ---@class MinifluxSettings
 ---@field settings LuaSettings LuaSettings instance
 ---@field server_address string Server address
@@ -34,6 +34,12 @@ local DEFAULTS = {
 ---@field direction "asc"|"desc" Sort direction
 ---@field hide_read_entries boolean Whether to hide read entries
 ---@field include_images boolean Whether to include images
+---@field mark_as_read_on_open boolean Whether to automatically mark entries as read when opened
+---@field api_cache_enabled boolean Whether API response caching is enabled
+---@field api_cache_ttl number API cache TTL in seconds
+---@field proxy_image_downloader_enabled boolean Whether proxy image downloader is enabled
+---@field proxy_image_downloader_url string Proxy URL for image downloads
+---@field proxy_image_downloader_token string Proxy API token for authentication
 local MinifluxSettings = {}
 
 ---Create a new MinifluxSettings instance
@@ -46,10 +52,6 @@ function MinifluxSettings:new()
     setmetatable(instance, self)
     return instance
 end
-
--- =============================================================================
--- METAMETHODS FOR PROPERTY ACCESS
--- =============================================================================
 
 ---Handle property reading with automatic defaults
 ---@param key string Property name
@@ -83,22 +85,10 @@ function MinifluxSettings:__newindex(key, value)
     end
 end
 
--- =============================================================================
--- UTILITY METHODS
--- =============================================================================
-
 ---Explicitly save settings to disk
 ---@return nil
 function MinifluxSettings:save()
     self.settings:flush()
-end
-
----Toggle hide read entries setting
----@return boolean New value after toggle
-function MinifluxSettings:toggleHideReadEntries()
-    local new_value = not self.hide_read_entries
-    self.hide_read_entries = new_value
-    return new_value
 end
 
 return MinifluxSettings

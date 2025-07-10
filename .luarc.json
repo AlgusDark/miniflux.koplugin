@@ -1,0 +1,20 @@
+{
+  "$schema": "https://raw.githubusercontent.com/sumneko/vscode-lua/master/setting/schema.json",
+  "workspace": {
+    "library": [
+      "./typedefs"
+    ],
+    "checkThirdParty": false
+  },
+  "completion": {
+    "requireSeparator": "/"
+  },
+  "diagnostics": {
+    "globals": [
+      "require"
+    ]
+  },
+  "runtime": {
+    "version": "Lua 5.1"
+  }
+} 

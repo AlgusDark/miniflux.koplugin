@@ -11,16 +11,21 @@ local _ = require("gettext")
 local ViewUtils = {}
 
 ---Build subtitle for content views
----@param config {count: number, hide_read?: boolean, is_unread_only?: boolean, item_type?: string}
+---@param config {count: number, hide_read?: boolean, is_unread_only?: boolean, is_local_only?: boolean, item_type?: string}
 ---@return string Formatted subtitle
 function ViewUtils.buildSubtitle(config)
     local count = config.count
     local hide_read = config.hide_read
     local is_unread_only = config.is_unread_only
+    local is_local_only = config.is_local_only
     local item_type = config.item_type
 
     if is_unread_only then
         return "⊘ " .. count .. " " .. _("unread entries")
+    end
+
+    if is_local_only then
+        return "⌂ " .. count .. " " .. _("local entries")
     end
 
     local icon = hide_read and "⊘ " or "◯ "
@@ -65,6 +70,38 @@ function ViewUtils.formatCountDisplay(config)
     else
         return ""
     end
+end
+
+---Add status indicator to title for consistent display across all views
+---@param title string Base title text
+---@param settings? MinifluxSettings Settings instance
+---@param force_unread_indicator? boolean Force unread indicator (●) regardless of setting
+---@return string title_with_indicator
+function ViewUtils.addStatusIndicator(title, settings, force_unread_indicator)
+    if force_unread_indicator then
+        return title .. " ●"
+    end
+    
+    -- Safety check for settings
+    if not settings then
+        return title .. " ◯" -- Default to show all entries indicator
+    end
+    
+    local hide_read = settings.hide_read_entries
+    local status_indicator = hide_read and "⊘" or "◯"
+    return title .. " " .. status_indicator
+end
+
+---Build filter mode subtitle for displaying current filter setting
+---@param settings? MinifluxSettings Settings instance
+---@return string filter_mode_subtitle
+function ViewUtils.buildFilterModeSubtitle(settings)
+    if not settings then
+        return "◯ Show all entries" -- Default to show all entries
+    end
+    
+    local hide_read = settings.hide_read_entries
+    return hide_read and "⊘ Showing unread entries only" or "◯ Show all entries"
 end
 
 return ViewUtils

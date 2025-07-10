@@ -1,85 +1,109 @@
---[[--
-Feed Repository - Data Access Layer
+local CachedRepository = require("repositories/cached_repository")
 
-Handles all feed-related data access and API interactions.
-Provides a clean interface for feed data without UI concerns.
+---@class MinifluxFeedsWithCountersResult
+---@field feeds MinifluxFeed[] Array of feeds
+---@field counters MinifluxFeedCounters Feed counters with reads/unreads maps
 
-@module miniflux.browser.repositories.feed_repository
---]]
-
----@class FeedsWithCountersResult
----@field feeds table[] Array of feeds
----@field counters table Feed counters with reads/unreads maps
-
+-- **Feed Repository** - Data Access Layer
+--
+-- Handles all feed-related data access and API interactions with caching support.
+-- Provides a clean interface for feed data without UI concerns.
 ---@class FeedRepository
----@field api MinifluxAPI API client instance
+---@field miniflux_api MinifluxAPI Miniflux API instance
 ---@field settings MinifluxSettings Settings instance
+---@field cache CachedRepository Cache instance for feed operations
 local FeedRepository = {}
 
 ---Create a new FeedRepository instance
----@param api MinifluxAPI The API client instance
----@param settings MinifluxSettings The settings instance
+---@param deps {miniflux_api: MinifluxAPI, settings: MinifluxSettings} Dependencies table
 ---@return FeedRepository
-function FeedRepository:new(api, settings)
+function FeedRepository:new(deps)
     local obj = {
-        api = api,
-        settings = settings,
+        miniflux_api = deps.miniflux_api,
+        settings = deps.settings,
+        cache = CachedRepository:new({
+            settings = deps.settings,
+            cache_prefix = "miniflux_feeds"
+        })
     }
     setmetatable(obj, self)
     self.__index = self
     return obj
 end
 
--- =============================================================================
--- FEED DATA ACCESS
--- =============================================================================
-
----Get all feeds
+---Get all feeds with caching support
 ---@param config? table Configuration with optional dialogs
----@return table[]|nil feeds Array of feeds or nil on error
----@return string|nil error Error message if failed
+---@return MinifluxFeed[]|nil result, Error|nil error
 function FeedRepository:getAll(config)
-    local success, feeds = self.api.feeds:getAll(config)
-    if not success then
-        return nil, feeds
-    end
+    local cache_key = self.cache:generateCacheKey("getAll")
 
-    return feeds, nil
+    return self.cache:getCached(cache_key, {
+        api_call = function()
+            local feeds, err = self.miniflux_api:getFeeds(config)
+            if err then
+                return nil, err
+            end
+            ---@cast feeds -nil
+
+            return feeds, nil
+        end
+    })
 end
 
----Get feeds with their read/unread counters
+---Get feeds with their read/unread counters (cached separately)
 ---@param config? table Configuration with optional dialogs
----@return FeedsWithCountersResult|nil result Result containing feeds and counters, or nil on error
----@return string|nil error Error message if failed
+---@return MinifluxFeedsWithCountersResult|nil result, Error|nil error
 function FeedRepository:getAllWithCounters(config)
-    -- Get feeds first
-    local feeds, error_msg = self:getAll(config)
-    if not feeds then
-        return nil, error_msg
-    end
+    local cache_key = self.cache:generateCacheKey("getAllWithCounters")
 
-    -- Get counters (optional - continue without if it fails)
-    local counters_success, counters = self.api.feeds:getCounters()
-    if not counters_success then
-        counters = { reads = {}, unreads = {} } -- Empty counters on failure
-    end
+    return self.cache:getCached(cache_key, {
+        api_call = function()
+            -- Get feeds first
+            local feeds, err = self:getAll(config)
+            if err then
+                return nil, err
+            end
 
-    return {
-        feeds = feeds,
-        counters = counters
-    }, nil
+            -- Get counters (optional - continue without if it fails)
+            local counters, counters_err = self.miniflux_api:getFeedCounters()
+            if counters_err then
+                counters = { reads = {}, unreads = {} } -- Empty counters on failure
+            end
+
+            return {
+                feeds = feeds,
+                counters = counters
+            }, nil
+        end,
+        ttl = 60 -- Shorter TTL for counters (1 minute)
+    })
 end
 
----Get feeds count for initialization
+---Get feeds count for initialization (uses cached feeds)
 ---@param config? table Configuration with optional dialogs
----@return number count Count of feeds (0 if failed)
+---@return number|nil result, Error|nil error
 function FeedRepository:getCount(config)
-    local feeds, error_msg = self:getAll(config)
-    if not feeds then
-        return 0 -- Continue with 0 feeds instead of failing
+    local feeds, err = self:getAll(config)
+    if err then
+        return nil, err
     end
 
-    return #feeds
+    return #feeds, nil
+end
+
+---Mark all entries in a feed as read
+---@param feed_id number The feed ID
+---@param config? table Configuration including optional dialogs
+---@return table|nil result, Error|nil error
+function FeedRepository:markAsRead(feed_id, config)
+    return self.miniflux_api:markFeedAsRead(feed_id, config)
+end
+
+---Invalidate all feed cache (useful when feeds are added/removed)
+---@return boolean success
+function FeedRepository:invalidateCache()
+    self.cache:invalidateAll()
+    return true
 end
 
 return FeedRepository

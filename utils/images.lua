@@ -1,178 +1,188 @@
---[[--
-Image Processing Utilities
-
-Consolidated image utilities for RSS entries including discovery, downloading,
-and HTML processing. Combines functionality from image_discovery, image_download,
-and image_utils for better organization.
-
-@module miniflux.utils.images
---]]
-
 local http = require("socket.http")
 local ltn12 = require("ltn12")
 local socket_url = require("socket.url")
 local socketutil = require("socketutil")
+local lfs = require("libs/libkoreader-lfs")
+local util = require("util")
 local _ = require("gettext")
 
+
+-- [Third party](https://github.com/koreader/koreader-base/tree/master/thirdparty) tool
+-- https://github.com/msva/lua-htmlparser
+local htmlparser = require("htmlparser")
+
+-- **Images** - Consolidated image utilities for RSS entries including discovery,
+-- downloading, and HTML processing. Combines functionality from image_discovery,
+-- image_download, and image_utils for better organization.
 local Images = {}
+
+-- Pre-compiled regex patterns for performance
+local IMG_SRC_PATTERN = [[src="([^"]*)"]]
+local IMG_TAG_PATTERN = "(<%s*img [^>]*>)"
+
+-- =============================================================================
+-- IMAGE UTILITIES
+-- =============================================================================
+
+-- Valid image file extensions for validation
+local valid_extensions = {
+    jpg = true, jpeg = true, png = true, gif = true, webp = true, svg = true
+}
+
+-- Generate consistent image filename with safe formatting
+local function generateImageFilename(image_count, ext)
+    local base_filename = "image_" .. string.format("%03d", image_count) .. "." .. ext
+    return util.getSafeFilename(base_filename)
+end
+
+-- Format CSS pixel values consistently
+local function formatPixelValue(dimension, value)
+    return string.format("%s: %spx", dimension, value)
+end
 
 -- =============================================================================
 -- IMAGE DISCOVERY
 -- =============================================================================
 
--- Pre-compiled patterns for better performance
-local IMG_PATTERN = "(<%s*img [^>]*>)"
-local SRC_PATTERN = [[src="([^"]*)]]
-local WIDTH_PATTERN = [[width="([^"]*)]]
-local HEIGHT_PATTERN = [[height="([^"]*)]]
-local QUERY_PATTERN = "(.-)%?"
-local EXT_PATTERN = ".*%.(%S%S%S?%S?%S?)$"
-
--- Pre-compiled URL type detection patterns
-local PROTOCOL_RELATIVE_PREFIX = "//"
-local ABSOLUTE_PATH_PREFIX = "/"
-local DATA_URL_PREFIX = "data:"
-local HTTP_PATTERN = "^https?://"
-
--- Pre-compiled extension validation lookup (constant table)
-local VALID_EXTENSIONS = {
-    jpg = true,
-    jpeg = true,
-    png = true,
-    gif = true,
-    webp = true,
-    svg = true
-}
-
 ---@class ImageInfo
 ---@field src string Original image URL
+---@field src2x? string High-resolution image URL from srcset
 ---@field original_tag string Original HTML img tag
 ---@field filename string Local filename for downloaded image
 ---@field width? number Image width
 ---@field height? number Image height
 ---@field downloaded boolean Whether image was successfully downloaded
+---@field error_reason? string Error reason if download failed
 
--- Module-level function to avoid closure creation overhead
----@param img_tag string HTML img tag
----@param base_url? table Parsed base URL for resolving relative URLs
----@param images table Array to store discovered images
----@param seen_images table Map of URLs to image info
----@param image_count_ref table Reference to image counter
----@return string Original img tag (unchanged)
-local function collectImgTag(img_tag, base_url, images, seen_images, image_count_ref)
-    -- Extract src attribute
-    local src = img_tag:match(SRC_PATTERN)
-    if not src or src == "" then
-        return img_tag
-    end
-
-    -- Skip data URLs with single prefix check
-    if src:sub(1, 5) == DATA_URL_PREFIX then
-        return img_tag
-    end
-
-    -- Normalize URL
-    local normalized_src = Images.normalizeImageUrl(src, base_url)
-
-    -- Check for duplicates
-    if not seen_images[normalized_src] then
-        image_count_ref[1] = image_count_ref[1] + 1
-        local image_count = image_count_ref[1]
-
-        -- Get file extension
-        local ext = Images.getImageExtension(normalized_src)
-        local filename = "image_" .. string.format("%03d", image_count) .. "." .. ext
-
-        -- Extract dimensions with pre-compiled patterns
-        local width = tonumber(img_tag:match(WIDTH_PATTERN))
-        local height = tonumber(img_tag:match(HEIGHT_PATTERN))
-
-        local image_info = {
-            src = normalized_src,
-            original_tag = img_tag,
-            filename = filename,
-            width = width,
-            height = height,
-            downloaded = false,
-        }
-
-        -- Use direct indexing instead of table.insert
-        images[image_count] = image_info
-        seen_images[normalized_src] = image_info
-    end
-
-    return img_tag
-end
-
----Discover images in HTML content
+---Discover images in HTML content using DOM parser (more reliable than regex)
 ---@param content string HTML content to scan
 ---@param base_url? table Parsed base URL for resolving relative URLs
----@return ImageInfo[] Array of discovered images
----@return table<string, ImageInfo> Map of URLs to image info for deduplication
+---@return ImageInfo[] images, table<string, ImageInfo> seen_images
 function Images.discoverImages(content, base_url)
     local images = {}
     local seen_images = {}
-    local image_count_ref = { 0 } -- Use table reference for counter
+    local image_count = 0
 
-    -- Scan content for images using pre-compiled pattern
-    local scan_success = pcall(function()
-        content:gsub(IMG_PATTERN, function(img_tag)
-            return collectImgTag(img_tag, base_url, images, seen_images, image_count_ref)
-        end)
-    end)
+    -- Use DOM parser approach (reliable)
+    local root = htmlparser.parse(content, 5000)
+    local img_elements = root:select("img")
 
-    if not scan_success then
-        return {}, {}
+    if img_elements then
+        for _, img_element in ipairs(img_elements) do
+            local attrs = img_element.attributes or {}
+            local src = attrs.src
+
+            if src and src ~= "" and src:sub(1, 5) ~= "data:" then
+                -- Normalize URL
+                local normalized_src = Images.normalizeImageUrl(src, base_url)
+
+                -- Check for duplicates
+                if not seen_images[normalized_src] then
+                    image_count = image_count + 1
+
+                    -- Get file extension
+                    local ext = Images.getImageExtension(normalized_src)
+
+                    -- Use KOReader's safe filename utility
+                    local filename = generateImageFilename(image_count, ext)
+
+                    -- Extract dimensions and srcset directly from DOM attributes
+                    local width = tonumber(attrs.width)
+                    local height = tonumber(attrs.height)
+                    local srcset = attrs.srcset
+
+                    -- Extract high-resolution image URL from srcset
+                    local src2x
+                    if srcset then
+                        -- Add spaces around srcset for pattern matching
+                        srcset = " " .. srcset .. ", "
+                        src2x = srcset:match([[ (%S+) 2x, ]])
+                        if src2x then
+                            src2x = Images.normalizeImageUrl(src2x, base_url)
+                        end
+                    end
+
+                    local image_info = {
+                        src = normalized_src,
+                        src2x = src2x,
+                        original_tag = "", -- Will be reconstructed if needed
+                        filename = filename,
+                        width = width,
+                        height = height,
+                        downloaded = false,
+                    }
+
+                    -- Use direct indexing for performance
+                    images[image_count] = image_info
+                    seen_images[normalized_src] = image_info
+                end
+            end
+        end
     end
 
     return images, seen_images
 end
 
----Normalize image URL for downloading with optimized type detection
+---Normalize image URL for downloading using KOReader's socket_url utilities
 ---@param src string Original image URL
 ---@param base_url? table Parsed base URL
 ---@return string Normalized absolute URL
 function Images.normalizeImageUrl(src, base_url)
-    -- Single string analysis for URL type detection
-    local first_char = src:sub(1, 1)
-    local first_two = src:sub(1, 2)
-
-    if first_two == PROTOCOL_RELATIVE_PREFIX then
+    -- Handle protocol-relative URLs
+    if src:sub(1, 2) == "//" then
         return "https:" .. src
-    elseif first_char == ABSOLUTE_PATH_PREFIX and base_url then
+    end
+
+    -- Handle root-relative and other relative URLs using KOReader's URL utilities
+    if src:sub(1, 1) == "/" and base_url then
         return socket_url.absolute(base_url, src)
-    elseif not src:match(HTTP_PATTERN) and base_url then
+    elseif base_url and not (src:sub(1, 7) == "http://" or src:sub(1, 8) == "https://") then
         return socket_url.absolute(base_url, src)
     else
         return src
     end
 end
 
----Get appropriate file extension for image URL with optimized processing
+---Get appropriate file extension for image URL
 ---@param url string Image URL
 ---@return string File extension (without dot)
 function Images.getImageExtension(url)
-    -- Single operation to remove query parameters
-    local clean_url = url:find("?") and url:match(QUERY_PATTERN) or url
+    -- Remove query parameters and extract extension
+    local clean_url = url:find("?") and url:match("(.-)%?") or url
+    local ext = clean_url:match(".*%.(%S%S%S?%S?%S?)$")
 
-    -- Extract extension with pre-compiled pattern
-    local ext = clean_url:match(EXT_PATTERN)
     if not ext then
         return "jpg"
     end
 
     ext = ext:lower()
 
-    -- Use pre-compiled lookup table
-    return VALID_EXTENSIONS[ext] and ext or "jpg"
+    -- Check if extension is valid
+    return valid_extensions[ext] and ext or "jpg"
 end
 
 -- =============================================================================
 -- IMAGE DOWNLOADING
 -- =============================================================================
 
----Download a single image from URL (simplified without atomic operations)
----@param config {url: string, entry_dir: string, filename: string} Configuration table
+---Apply proxy URL to image download URL if proxy is enabled and configured
+---@param settings MinifluxSettings Settings instance with proxy configuration
+---@param image_url string Original image URL to download
+---@return string Final URL to use for download (proxied or original)
+function Images.applyProxyUrl(settings, image_url)
+    -- Check if proxy is enabled and URL is configured
+    if settings.proxy_image_downloader_enabled and 
+       settings.proxy_image_downloader_url and 
+       settings.proxy_image_downloader_url ~= "" then
+        return settings.proxy_image_downloader_url .. util.urlEncode(image_url)
+    end
+    
+    -- Return original URL if proxy not configured
+    return image_url
+end
+
+---Download a single image from URL with high-res support
+---@param config {url: string, url2x?: string, entry_dir: string, filename: string, settings?: MinifluxSettings} Configuration table
 ---@return boolean True if download successful
 function Images.downloadImage(config)
     -- Validate input
@@ -183,14 +193,35 @@ function Images.downloadImage(config)
 
     local filepath = config.entry_dir .. config.filename
 
-    -- Set network timeout
-    socketutil:set_timeout(10, 30)
+    -- Choose high-resolution image if available
+    local download_url = config.url2x or config.url
+    
+    -- Build HTTP request configuration
+    local http_config = {
+        url = download_url,
+        sink = ltn12.sink.file(io.open(filepath, "wb")),
+    }
+    
+    -- Apply proxy settings if provided
+    if config.settings then
+        download_url = Images.applyProxyUrl(config.settings, download_url)
+        http_config.url = download_url
+        
+        -- Add proxy authentication headers if needed
+        if config.settings.proxy_image_downloader_enabled and 
+           config.settings.proxy_image_downloader_token and 
+           config.settings.proxy_image_downloader_token ~= "" then
+            http_config.headers = {
+                ["Authorization"] = "Bearer " .. config.settings.proxy_image_downloader_token
+            }
+        end
+    end
+
+    -- Use KOReader's proper timeout constants
+    socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
 
     -- Perform HTTP request - download directly to final file
-    local result, status_code, headers = http.request({
-        url = config.url,
-        sink = ltn12.sink.file(io.open(filepath, "wb")),
-    })
+    local result, status_code, headers = http.request(http_config)
 
     -- Always reset timeout
     socketutil:reset_timeout()
@@ -211,16 +242,14 @@ function Images.downloadImage(config)
         end
     end
 
-    -- Check file was created and has reasonable size
-    local file = io.open(filepath, "rb")
-    if not file then
+    -- Check file was created and has reasonable size using lfs
+    local file_attrs = lfs.attributes(filepath)
+    if not file_attrs then
         os.remove(filepath)
         return false
     end
 
-    file:seek("end")
-    local file_size = file:seek()
-    file:close()
+    local file_size = file_attrs.size
 
     -- Sanity check file size (10 bytes minimum, 50MB maximum)
     if file_size < 10 or file_size > 50 * 1024 * 1024 then
@@ -244,7 +273,6 @@ end
 ---@param entry_dir string Entry directory path
 ---@return number Number of temp files cleaned
 function Images.cleanupTempFiles(entry_dir)
-    local lfs = require("libs/libkoreader-lfs")
     local cleaned_count = 0
 
     if lfs.attributes(entry_dir, "mode") == "directory" then
@@ -263,67 +291,42 @@ end
 -- HTML IMAGE PROCESSING
 -- =============================================================================
 
----Process HTML content to replace image tags based on download results
+---Process HTML content to replace image tags based on download results using DOM parser
 ---@param content string Original HTML content
----@param seen_images table<string, ImageInfo> Map of URLs to image info
----@param include_images boolean Whether to include images in output
----@param base_url? table Parsed base URL for normalizing URLs
+---@param opts table Options containing seen_images, include_images, base_url
 ---@return string Processed HTML content
-function Images.processHtmlImages(content, seen_images, include_images, base_url)
+function Images.processHtmlImages(content, opts)
+    -- Extract parameters from opts
+    local seen_images = opts.seen_images
+    local include_images = opts.include_images
+    local base_url = opts.base_url
+
+    -- If include_images is false, return content unchanged (no processing needed)
+    if not include_images then
+        return content
+    end
+
+    -- Use regex approach for image replacement (proven pattern used by newsdownloader.koplugin)
     local replaceImg = function(img_tag)
-        -- Find which image this tag corresponds to
-        local src = img_tag:match([[src="([^"]*)"]])
-        if src == nil or src == "" then
-            if include_images then
-                return img_tag -- Keep original if we can't identify it
-            else
-                return ""      -- Remove if include_images is false
-            end
+        local src = img_tag:match(IMG_SRC_PATTERN)
+
+        -- Skip data URLs, empty src, or if include_images is false
+        if not src or src == "" or src:sub(1, 5) == "data:" then
+            return img_tag
         end
 
-        -- Skip data URLs
-        if src and src:sub(1, 5) == "data:" then
-            if include_images then
-                return img_tag -- Keep data URLs as-is
-            else
-                return ""      -- Remove if include_images is false
-            end
-        end
-
-        -- Normalize the URL to match what we stored
-        local normalized_src = Images.normalizeImageUrl(src or "", base_url)
-
+        local normalized_src = Images.normalizeImageUrl(src, base_url)
         local img_info = seen_images[normalized_src]
-        if img_info then
-            if include_images and img_info.downloaded then
-                -- Image was successfully downloaded, use local path
-                return Images.createLocalImageTag(img_info)
-            elseif include_images then
-                -- Image download failed but include_images is true - keep original URL
-                return img_tag
-            else
-                -- include_images is false - remove image
-                return ""
-            end
+
+        -- Only replace if image was successfully downloaded
+        if img_info and img_info.downloaded then
+            return Images.createLocalImageTag(img_info)
         else
-            -- Image not in our list (shouldn't happen, but handle gracefully)
-            if include_images then
-                return img_tag -- Keep original
-            else
-                return ""      -- Remove
-            end
+            return img_tag -- Leave original unchanged
         end
     end
 
-    -- Replace img tags in HTML content
-    local processed_content
-    local process_success = pcall(function()
-        processed_content = content:gsub("(<%s*img [^>]*>)", replaceImg)
-    end)
-
-    if not process_success then
-        return content -- Use original content if processing failed
-    end
+    local processed_content = content:gsub(IMG_TAG_PATTERN, replaceImg)
 
     return processed_content
 end
@@ -335,10 +338,10 @@ function Images.createLocalImageTag(img_info)
     local style_props = {}
 
     if img_info.width then
-        table.insert(style_props, string.format("width: %spx", img_info.width))
+        table.insert(style_props, formatPixelValue("width", img_info.width))
     end
     if img_info.height then
-        table.insert(style_props, string.format("height: %spx", img_info.height))
+        table.insert(style_props, formatPixelValue("height", img_info.height))
     end
 
     local style = table.concat(style_props, "; ")

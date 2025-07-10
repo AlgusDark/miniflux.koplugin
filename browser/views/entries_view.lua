@@ -8,12 +8,15 @@ Handles data fetching, menu building, and UI rendering.
 --]]
 
 local ViewUtils = require("browser/views/view_utils")
+local EntryEntity = require("entities/entry_entity")
 local _ = require("gettext")
 
 local EntriesView = {}
 
+---@alias EntriesViewConfig {repositories: MinifluxRepositories, settings: MinifluxSettings, entry_type: "unread"|"feed"|"category", id?: number, page_state?: number, onSelectItem: function}
+
 ---Complete entries view component (React-style) - returns view data for rendering
----@param config {repositories: table, settings: table, entry_type: "unread"|"feed"|"category", id?: number, page_state?: number, onSelectItem: function}
+---@param config EntriesViewConfig
 ---@return table|nil View data for browser rendering, or nil on error
 function EntriesView.show(config)
     local entry_type = config.entry_type
@@ -23,6 +26,7 @@ function EntriesView.show(config)
     if (entry_type == "feed" or entry_type == "category") and not id then
         error("ID is required for " .. entry_type .. " entry type")
     end
+    ---@cast id -nil
 
     -- Prepare loading messages
     local loading_messages = {
@@ -40,18 +44,19 @@ function EntriesView.show(config)
     }
 
     -- Fetch data based on type
-    local entries, error_msg
+    local entries, err
     if entry_type == "unread" then
-        entries, error_msg = config.repositories.entry:getUnread(dialog_config)
+        entries, err = config.repositories.entry:getUnread(dialog_config)
     elseif entry_type == "feed" then
-        entries, error_msg = config.repositories.entry:getByFeed(id, dialog_config)
+        entries, err = config.repositories.entry:getByFeed(id, dialog_config)
     elseif entry_type == "category" then
-        entries, error_msg = config.repositories.entry:getByCategory(id, dialog_config)
+        entries, err = config.repositories.entry:getByCategory(id, dialog_config)
     end
 
-    if not entries then
+    if err then
         return nil -- Error dialog already shown by API system
     end
+    ---@cast entries -nil
 
     -- Generate menu items using internal builder
     local show_feed_names = (entry_type == "unread" or entry_type == "category")
@@ -93,12 +98,49 @@ function EntriesView.show(config)
         end
     end
 
+    -- Clean title (status shown in subtitle now)
+
     -- Return view data for browser to render
     return {
         title = title,
         items = menu_items,
         page_state = config.page_state,
         subtitle = subtitle
+    }
+end
+
+---Build a single entry menu item with status indicators
+---@param entry table Entry data
+---@param config {show_feed_names: boolean, onSelectItem: function}
+---@return table Menu item for single entry
+function EntriesView.buildSingleItem(entry, config)
+    local entry_title = entry.title or _("Untitled Entry")
+    
+    -- Check both read status and local download status
+    local is_read = entry.status == "read"
+    local is_downloaded = EntryEntity.isEntryDownloaded(entry.id)
+    
+    -- Create 2x2 indicator matrix: read/unread × downloaded/not downloaded
+    local status_indicator
+    if is_downloaded then
+        status_indicator = is_read and "◎ " or "◉ "  -- Downloaded: ◎=read, ◉=unread
+    else
+        status_indicator = is_read and "○ " or "● "  -- Not downloaded: ○=read, ●=unread
+    end
+    
+    local display_text = status_indicator .. entry_title
+
+    if config.show_feed_names and entry.feed and entry.feed.title then
+        display_text = display_text .. " (" .. entry.feed.title .. ")"
+    end
+
+    return {
+        text = display_text,
+        action_type = "read_entry",
+        entry_data = entry,
+        callback = function()
+            config.onSelectItem(entry)
+        end
     }
 end
 
@@ -119,22 +161,11 @@ function EntriesView.buildItems(config)
     end
 
     for _, entry in ipairs(entries) do
-        local entry_title = entry.title or _("Untitled Entry")
-        local status_indicator = entry.status == "read" and "○ " or "● "
-        local display_text = status_indicator .. entry_title
-
-        if show_feed_names and entry.feed and entry.feed.title then
-            display_text = display_text .. " (" .. entry.feed.title .. ")"
-        end
-
-        table.insert(menu_items, {
-            text = display_text,
-            action_type = "read_entry",
-            entry_data = entry,
-            callback = function()
-                onSelectItem(entry)
-            end
+        local item = EntriesView.buildSingleItem(entry, {
+            show_feed_names = show_feed_names,
+            onSelectItem = onSelectItem
         })
+        table.insert(menu_items, item)
     end
 
     return menu_items
