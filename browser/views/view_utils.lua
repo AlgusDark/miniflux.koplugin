@@ -87,4 +87,16 @@ function ViewUtils.addStatusIndicator(title, settings, force_unread_indicator)
     return title .. " " .. status_indicator
 end
 
+---Build filter mode subtitle for displaying current filter setting
+---@param settings? MinifluxSettings Settings instance
+---@return string filter_mode_subtitle
+function ViewUtils.buildFilterModeSubtitle(settings)
+    if not settings then
+        return "◯ Show all entries" -- Default to show all entries
+    end
+    
+    local hide_read = settings.hide_read_entries
+    return hide_read and "⊘ Showing unread entries only" or "◯ Show all entries"
+end
+
 return ViewUtils

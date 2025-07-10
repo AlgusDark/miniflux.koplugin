@@ -11,6 +11,7 @@ local logger = require("logger")
 local EntryEntity = require("entities/entry_entity")
 local Navigation = require("services/navigation_service")
 local EntryWorkflow = require("services/entry_workflow")
+local Files = require("utils/files")
 
 -- **Entry Service** - Handles complex entry workflows and orchestration.
 --
@@ -49,6 +50,179 @@ function EntryService:new(deps)
 
 
     return instance
+end
+
+-- =============================================================================
+-- OFFLINE STATUS QUEUE MANAGEMENT
+-- =============================================================================
+
+---Get the path to the status queue file
+---@return string Queue file path
+function EntryService:getQueueFilePath()
+    local DataStorage = require("datastorage")
+    local miniflux_dir = DataStorage:getDataDir() .. "/miniflux"
+    return miniflux_dir .. "/status_queue.lua"
+end
+
+---Load the status queue from disk
+---@return table Queue data (entry_id -> {new_status, original_status, timestamp})
+function EntryService:loadQueue()
+    local queue_file = self:getQueueFilePath()
+    
+    -- Check if queue file exists
+    local lfs = require("libs/libkoreader-lfs")
+    if not lfs.attributes(queue_file, "mode") then
+        return {} -- Empty queue if file doesn't exist
+    end
+    
+    -- Load and execute the Lua file
+    local success, queue_data = pcall(dofile, queue_file)
+    if success and type(queue_data) == "table" then
+        return queue_data
+    else
+        logger.warn("Failed to load status queue, starting fresh: " .. tostring(queue_data))
+        return {}
+    end
+end
+
+---Save the status queue to disk
+---@param queue table Queue data to save
+---@return boolean success
+function EntryService:saveQueue(queue)
+    local queue_file = self:getQueueFilePath()
+    
+    -- Ensure miniflux directory exists
+    local miniflux_dir = queue_file:match("(.+)/[^/]+$")
+    local success, err = Files.createDirectory(miniflux_dir)
+    if not success then
+        logger.err("Failed to create miniflux directory: " .. tostring(err))
+        return false
+    end
+    
+    -- Convert queue table to Lua code
+    local queue_content = "return {\n"
+    for entry_id, opts in pairs(queue) do
+        queue_content = queue_content .. string.format(
+            "  [%d] = {\n    new_status = %q,\n    original_status = %q,\n    timestamp = %d\n  },\n",
+            entry_id, opts.new_status, opts.original_status, opts.timestamp
+        )
+    end
+    queue_content = queue_content .. "}\n"
+    
+    -- Write to file
+    local write_success, write_err = Files.writeFile(queue_file, queue_content)
+    if not write_success then
+        logger.err("Failed to save status queue: " .. tostring(write_err))
+        return false
+    end
+    
+    return true
+end
+
+---Add a status change to the queue
+---@param entry_id number Entry ID
+---@param opts table Options {new_status: string, original_status: string}
+---@return boolean success
+function EntryService:enqueueStatusChange(entry_id, opts)
+    if not EntryEntity.isValidId(entry_id) then
+        logger.warn("Cannot queue invalid entry ID: " .. tostring(entry_id))
+        return false
+    end
+    
+    local queue = self:loadQueue()
+    
+    -- Add/update entry in queue (automatic deduplication via entry_id key)
+    queue[entry_id] = {
+        new_status = opts.new_status,
+        original_status = opts.original_status,
+        timestamp = os.time()
+    }
+    
+    local success = self:saveQueue(queue)
+    if success then
+        logger.info("Queued status change for entry " .. entry_id .. ": " .. opts.original_status .. " -> " .. opts.new_status)
+    end
+    
+    return success
+end
+
+---Process the status queue when network is available
+---@return boolean success
+function EntryService:processStatusQueue()
+    local queue = self:loadQueue()
+    local queue_size = 0
+    for _ in pairs(queue) do queue_size = queue_size + 1 end
+    
+    if queue_size == 0 then
+        return true -- Nothing to process
+    end
+    
+    logger.info("Processing status queue with " .. queue_size .. " entries")
+    
+    -- Show notification to user
+    Notification:info(_("Syncing ") .. queue_size .. _(" status changes..."))
+    
+    local processed_count = 0
+    local failed_entries = {}
+    
+    -- Process each queued entry
+    for entry_id, opts in pairs(queue) do
+        -- Smart check: verify if sync is still needed by checking local metadata
+        local local_metadata = EntryEntity.loadMetadata(entry_id)
+        local current_status = local_metadata and local_metadata.status or "unread"
+        local is_already_synced = EntryEntity.isEntryRead(current_status) == EntryEntity.isEntryRead(opts.new_status)
+        
+        if is_already_synced then
+            -- Entry already in desired state, remove from queue
+            processed_count = processed_count + 1
+            logger.info("Entry " .. entry_id .. " already synced to " .. opts.new_status .. ", removing from queue")
+        else
+            -- Still needs sync, try API call
+            local success = self:tryUpdateEntryStatus(entry_id, opts.new_status)
+            if success then
+                processed_count = processed_count + 1
+                logger.info("Successfully synced entry " .. entry_id .. " status to " .. opts.new_status)
+            else
+                -- Keep failed entries in queue for next attempt
+                failed_entries[entry_id] = opts
+                logger.warn("Failed to sync entry " .. entry_id .. " status, keeping in queue")
+            end
+        end
+    end
+    
+    -- Save remaining failed entries back to queue
+    local save_success = self:saveQueue(failed_entries)
+    
+    if processed_count > 0 then
+        logger.info("Successfully processed " .. processed_count .. "/" .. queue_size .. " queued status changes")
+        if processed_count == queue_size then
+            Notification:success(_("All status changes synced successfully"))
+        else
+            Notification:info(_("Synced ") .. processed_count .. "/" .. queue_size .. _(" status changes"))
+        end
+    end
+    
+    return save_success
+end
+
+---Try to update entry status via API (helper for queue processing)
+---@param entry_id number Entry ID
+---@param new_status string New status
+---@return boolean success
+function EntryService:tryUpdateEntryStatus(entry_id, new_status)
+    -- Use existing API with minimal dialogs
+    local result, err = self.miniflux_api:updateEntries(entry_id, {
+        body = { status = new_status }
+        -- No dialogs for background queue processing
+    })
+    
+    if not err then
+        -- Update local metadata on success
+        EntryEntity.updateEntryStatus(entry_id, new_status)
+        return true
+    end
+    
+    return false
 end
 
 ---Read an entry (download if needed and open)
@@ -144,6 +318,22 @@ function EntryService:markEntriesAsUnread(entry_ids)
         
         return true
     end
+end
+
+---Download multiple entries without opening them
+---@param entry_data_list table Array of entry data objects
+---@param completion_callback? function Optional callback called when batch completes
+---@return boolean success Always returns true (fire-and-forget operations)
+function EntryService:downloadEntries(entry_data_list, completion_callback)
+    local BatchDownloadEntriesWorkflow = require("services/batch_download_entries_workflow")
+    
+    BatchDownloadEntriesWorkflow.execute({
+        entry_data_list = entry_data_list,
+        settings = self.settings,
+        completion_callback = completion_callback
+    })
+    
+    return true
 end
 
 ---Change entry status with validation and side effects
@@ -379,11 +569,22 @@ function EntryService:spawnUpdateStatus(entry_id, new_status)
     -- Check connectivity before making API call
     local NetworkMgr = require("ui/network/manager")
     if not NetworkMgr:isConnected() then
-        -- TODO: Implement offline batching - queue status changes when no network
-        return nil
+        -- Main thread - safe to queue immediately when offline
+        self:enqueueStatusChange(entry_id, {
+            new_status = new_status,
+            original_status = original_status
+        })
+        logger.info("Queued status change for offline processing: entry " .. entry_id)
+        return nil -- Skip subprocess when offline
     end
 
-    -- Step 1: Optimistic update - immediately update local metadata
+    -- Step 1: Queue the operation first (handles all failure scenarios)
+    self:enqueueStatusChange(entry_id, {
+        new_status = new_status,
+        original_status = original_status
+    })
+
+    -- Step 2: Optimistic update - immediately update local metadata
     local update_success = EntryEntity.updateEntryStatus(entry_id, new_status)
     
     -- NOTE: We deliberately do NOT invalidate caches here because:
@@ -428,6 +629,8 @@ function EntryService:spawnUpdateStatus(entry_id, new_status)
         end
 
         -- Process exits automatically - no return value needed for fire-and-forget
+        -- Note: Entry remains queued and will be processed by queue processor on next network event
+        -- Queue processor will check actual status and only sync if still needed
     end)
 
     return pid

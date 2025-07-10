@@ -52,6 +52,7 @@ end
 ---@field width? number Image width
 ---@field height? number Image height
 ---@field downloaded boolean Whether image was successfully downloaded
+---@field error_reason? string Error reason if download failed
 
 ---Discover images in HTML content using DOM parser (more reliable than regex)
 ---@param content string HTML content to scan
@@ -164,8 +165,24 @@ end
 -- IMAGE DOWNLOADING
 -- =============================================================================
 
+---Apply proxy URL to image download URL if proxy is enabled and configured
+---@param settings MinifluxSettings Settings instance with proxy configuration
+---@param image_url string Original image URL to download
+---@return string Final URL to use for download (proxied or original)
+function Images.applyProxyUrl(settings, image_url)
+    -- Check if proxy is enabled and URL is configured
+    if settings.proxy_image_downloader_enabled and 
+       settings.proxy_image_downloader_url and 
+       settings.proxy_image_downloader_url ~= "" then
+        return settings.proxy_image_downloader_url .. image_url
+    end
+    
+    -- Return original URL if proxy not configured
+    return image_url
+end
+
 ---Download a single image from URL with high-res support
----@param config {url: string, url2x?: string, entry_dir: string, filename: string} Configuration table
+---@param config {url: string, url2x?: string, entry_dir: string, filename: string, settings?: MinifluxSettings} Configuration table
 ---@return boolean True if download successful
 function Images.downloadImage(config)
     -- Validate input
@@ -178,15 +195,33 @@ function Images.downloadImage(config)
 
     -- Choose high-resolution image if available
     local download_url = config.url2x or config.url
+    
+    -- Build HTTP request configuration
+    local http_config = {
+        url = download_url,
+        sink = ltn12.sink.file(io.open(filepath, "wb")),
+    }
+    
+    -- Apply proxy settings if provided
+    if config.settings then
+        download_url = Images.applyProxyUrl(config.settings, download_url)
+        http_config.url = download_url
+        
+        -- Add proxy authentication headers if needed
+        if config.settings.proxy_image_downloader_enabled and 
+           config.settings.proxy_image_downloader_token and 
+           config.settings.proxy_image_downloader_token ~= "" then
+            http_config.headers = {
+                ["X-Auth-Token"] = config.settings.proxy_image_downloader_token
+            }
+        end
+    end
 
     -- Use KOReader's proper timeout constants
     socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
 
     -- Perform HTTP request - download directly to final file
-    local result, status_code, headers = http.request({
-        url = download_url,
-        sink = ltn12.sink.file(io.open(filepath, "wb")),
-    })
+    local result, status_code, headers = http.request(http_config)
 
     -- Always reset timeout
     socketutil:reset_timeout()

@@ -305,7 +305,13 @@ function MinifluxBrowser:getSelectionActions()
     local actions = {}
 
     if item_type == "entry" then
-        -- For entries: show both "Mark as unread" (left) and "Mark as read" (right)
+        -- For entries: show download, mark as unread, and mark as read actions
+        table.insert(actions, {
+            text = _("Download Selected"),
+            callback = function(selected_items)
+                self:downloadSelectedEntries(selected_items)
+            end,
+        })
         table.insert(actions, {
             text = _("Mark as Unread"),
             callback = function(selected_items)
@@ -428,6 +434,35 @@ function MinifluxBrowser:markSelectedAsUnread(selected_items)
 
     -- Refresh visual state to show updated read/unread indicators
     self:refreshCurrentView()
+end
+
+---Download selected entries without opening them
+---@param selected_items table Array of selected entry items
+function MinifluxBrowser:downloadSelectedEntries(selected_items)
+    if #selected_items == 0 then
+        return
+    end
+    
+    -- Extract entry data from selected items
+    local entry_data_list = {}
+    for _, item in ipairs(selected_items) do
+        table.insert(entry_data_list, item.entry_data)
+    end
+    
+    -- Call batch download service with completion callback
+    self.entry_service:downloadEntries(entry_data_list, function(status)
+        -- Refresh view data to rebuild menu items with updated download status indicators
+        self:refreshCurrentViewData()
+        
+        -- Only transition to normal mode if download completed successfully
+        -- Keep selection mode for cancelled downloads so user can modify and retry
+        if status == "completed" then
+            self:transitionTo(BrowserMode.NORMAL)
+        end
+        -- For "cancelled" status, stay in selection mode to preserve user's selection
+    end)
+    
+    -- Don't transition immediately - wait for completion callback
 end
 
 ---Get configuration for rebuilding entry items

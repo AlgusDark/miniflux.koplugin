@@ -190,8 +190,10 @@ local function downloadImagesWithProgress(opts)
         -- Download individual image (delegates to Images utility)
         local success = Images.downloadImage({
             url = img.src,
+            url2x = img.src2x,
             entry_dir = context.entry_dir,
-            filename = img.filename
+            filename = img.filename,
+            settings = settings
         })
 
         -- Track download results for later analysis and user feedback

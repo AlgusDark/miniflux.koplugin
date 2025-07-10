@@ -56,6 +56,9 @@ function Browser:init()
         fullscreen = "true",
         align = "center",
         title = self.title or _("Browser"),
+        subtitle = "", -- Enable subtitle support (like FileManager)
+        subtitle_truncate_left = true, -- For long subtitles
+        subtitle_fullwidth = true, -- Allow full width display
 
         left_icon = "appbar.settings",
         left_icon_tap_callback = function() self:onLeftButtonTap() end,

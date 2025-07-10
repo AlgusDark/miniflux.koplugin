@@ -36,15 +36,18 @@ function MainView.show(config)
         }
     })
 
-    -- Build title with status indicator using ViewUtils
-    local title = ViewUtils.addStatusIndicator(_("Miniflux"), config.settings)
+    -- Build clean title (status shown in subtitle now)
+    local title = _("Miniflux")
+    
+    -- Build filter mode subtitle
+    local filter_subtitle = ViewUtils.buildFilterModeSubtitle(config.settings)
 
     -- Return view data for browser to render
     return {
         title = title,
         items = main_items,
         page_state = nil,
-        subtitle = nil,
+        subtitle = filter_subtitle,
         is_root = true -- Signals browser to clear navigation history
     }
 end

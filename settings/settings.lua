@@ -11,10 +11,15 @@ local DEFAULTS = {
     hide_read_entries = true,
     include_images = true,
     mark_as_read_on_open = true,
-    
+
     -- API Cache settings
     api_cache_enabled = true,
     api_cache_ttl = 300, -- 5 minutes in seconds
+
+    -- Proxy Image Downloader settings
+    proxy_image_downloader_enabled = false,
+    proxy_image_downloader_url = "",
+    proxy_image_downloader_token = "",
 }
 
 -- **Miniflux Settings** - Settings management with idiomatic property access
@@ -32,6 +37,9 @@ local DEFAULTS = {
 ---@field mark_as_read_on_open boolean Whether to automatically mark entries as read when opened
 ---@field api_cache_enabled boolean Whether API response caching is enabled
 ---@field api_cache_ttl number API cache TTL in seconds
+---@field proxy_image_downloader_enabled boolean Whether proxy image downloader is enabled
+---@field proxy_image_downloader_url string Proxy URL for image downloads
+---@field proxy_image_downloader_token string Proxy API token for authentication
 local MinifluxSettings = {}
 
 ---Create a new MinifluxSettings instance

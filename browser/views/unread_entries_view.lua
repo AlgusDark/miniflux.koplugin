@@ -40,10 +40,13 @@ function UnreadEntriesView.show(config)
         onSelectItem = config.onSelectItem
     })
 
-    -- Build title with unread indicator using ViewUtils
+    -- Build clean title (status shown in subtitle now)
     local ViewUtils = require("browser/views/view_utils")
-    local title = ViewUtils.addStatusIndicator(_("Unread Entries"), config.settings, true)
-    local subtitle = string.format(_("%d entries"), #entries)
+    local title = _("Unread Entries")
+    local subtitle = ViewUtils.buildSubtitle({
+        count = #entries,
+        is_unread_only = true
+    })
 
     -- Return view data for browser to render
     return {

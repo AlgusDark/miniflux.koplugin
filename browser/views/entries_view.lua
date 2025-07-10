@@ -8,6 +8,7 @@ Handles data fetching, menu building, and UI rendering.
 --]]
 
 local ViewUtils = require("browser/views/view_utils")
+local EntryEntity = require("entities/entry_entity")
 local _ = require("gettext")
 
 local EntriesView = {}
@@ -97,9 +98,7 @@ function EntriesView.show(config)
         end
     end
 
-    -- Add status indicator to title using ViewUtils
-    local force_unread = (entry_type == "unread")
-    title = ViewUtils.addStatusIndicator(title, config.settings, force_unread)
+    -- Clean title (status shown in subtitle now)
 
     -- Return view data for browser to render
     return {
@@ -116,7 +115,19 @@ end
 ---@return table Menu item for single entry
 function EntriesView.buildSingleItem(entry, config)
     local entry_title = entry.title or _("Untitled Entry")
-    local status_indicator = entry.status == "read" and "○ " or "● "
+    
+    -- Check both read status and local download status
+    local is_read = entry.status == "read"
+    local is_downloaded = EntryEntity.isEntryDownloaded(entry.id)
+    
+    -- Create 2x2 indicator matrix: read/unread × downloaded/not downloaded
+    local status_indicator
+    if is_downloaded then
+        status_indicator = is_read and "◎ " or "◉ "  -- Downloaded: ◎=read, ◉=unread
+    else
+        status_indicator = is_read and "○ " or "● "  -- Not downloaded: ○=read, ●=unread
+    end
+    
     local display_text = status_indicator .. entry_title
 
     if config.show_feed_names and entry.feed and entry.feed.title then

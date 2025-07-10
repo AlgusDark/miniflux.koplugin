@@ -237,4 +237,30 @@ function Miniflux:getBrowserContext()
     return _static_browser_context
 end
 
+-- =============================================================================
+-- NETWORK EVENT HANDLERS
+-- =============================================================================
+
+---Handle network connected event - process offline status queue
+function Miniflux:onNetworkConnected()
+    logger.dbg("Miniflux: Network connected - processing status queue")
+    
+    -- Only process if EntryService is available (plugin initialized)
+    if self.entry_service then
+        self.entry_service:processStatusQueue()
+    end
+end
+
+---Handle device suspend event - any active operations are already queued
+function Miniflux:onSuspend()
+    logger.dbg("Miniflux: Device suspending - offline queue will handle any interrupted operations")
+    -- Active subprocess operations are already queued and will be processed on next network connection
+end
+
+---Handle widget close event - ensure plugin cleanup
+function Miniflux:onCloseWidget()
+    logger.dbg("Miniflux: Plugin closing - offline queue will handle any interrupted operations")
+    -- Active subprocess operations are already queued and will be processed on next network connection
+end
+
 return Miniflux
