@@ -34,6 +34,7 @@ function Menu.build(plugin)
                 help_text = _("Sync pending read/unread status changes"),
                 callback = function()
                     if plugin.entry_service then
+                        -- Use new subprocess-based queue processor with user confirmation
                         plugin.entry_service:processStatusQueue()
                     end
                 end,

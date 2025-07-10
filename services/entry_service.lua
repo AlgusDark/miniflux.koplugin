@@ -236,75 +236,18 @@ function EntryService:processStatusQueue(auto_confirm)
         return true -- Dialog shown, actual processing happens if user confirms
     end
     
-    -- User confirmed or auto_confirm is true, proceed with sync
-    logger.info("Processing status queue with " .. queue_size .. " entries")
+    -- User confirmed, use subprocess to process queue
+    logger.info("User confirmed, starting subprocess to process queue")
+    local pid = self:processStatusQueueInSubprocess()
     
-    -- Show notification to user
-    Notification:info(_("Syncing ") .. queue_size .. _(" status changes..."))
-    
-    local processed_count = 0
-    local failed_entries = {}
-    
-    -- Process each queued entry
-    for entry_id, opts in pairs(queue) do
-        Debugger.debug("Processing queue entry " .. entry_id)
-        
-        -- Smart check: verify if sync is still needed by checking local metadata
-        local local_metadata = EntryEntity.loadMetadata(entry_id)
-        local current_status = local_metadata and local_metadata.status or "unread"
-        
-        Debugger.debug("Entry " .. entry_id .. " - Current status: " .. current_status .. ", Desired: " .. opts.new_status)
-        Debugger.debug("Entry " .. entry_id .. " - Current is_read: " .. tostring(EntryEntity.isEntryRead(current_status)) .. ", Desired is_read: " .. tostring(EntryEntity.isEntryRead(opts.new_status)))
-        
-        local is_already_synced = EntryEntity.isEntryRead(current_status) == EntryEntity.isEntryRead(opts.new_status)
-        
-        Debugger.debug("Entry " .. entry_id .. " - is_already_synced: " .. tostring(is_already_synced))
-        
-        if is_already_synced then
-            -- Entry already in desired state, remove from queue
-            processed_count = processed_count + 1
-            Debugger.info("Entry " .. entry_id .. " already synced to " .. opts.new_status .. ", removing from queue")
-            logger.info("Entry " .. entry_id .. " already synced to " .. opts.new_status .. ", removing from queue")
-        else
-            -- Still needs sync, try API call
-            Debugger.debug("Entry " .. entry_id .. " needs sync, trying API call")
-            local success = self:tryUpdateEntryStatus(entry_id, opts.new_status)
-            Debugger.debug("Entry " .. entry_id .. " API call result: " .. tostring(success))
-            
-            if success then
-                processed_count = processed_count + 1
-                Debugger.info("Successfully synced entry " .. entry_id .. " status to " .. opts.new_status)
-                logger.info("Successfully synced entry " .. entry_id .. " status to " .. opts.new_status)
-            else
-                -- Keep failed entries in queue for next attempt
-                failed_entries[entry_id] = opts
-                Debugger.warn("Failed to sync entry " .. entry_id .. " status, keeping in queue")
-                logger.warn("Failed to sync entry " .. entry_id .. " status, keeping in queue")
-            end
-        end
+    -- Track the subprocess for proper cleanup
+    if pid then
+        self.miniflux_plugin:trackSubprocess(pid)
+        Debugger.info("Manual queue processing subprocess started with PID: " .. tostring(pid))
     end
     
-    -- Save remaining failed entries back to queue
-    Debugger.debug("Saving " .. (#failed_entries and "0" or "unknown") .. " failed entries back to queue")
-    local failed_count = 0
-    for _ in pairs(failed_entries) do failed_count = failed_count + 1 end
-    Debugger.debug("Actually saving " .. failed_count .. " failed entries back to queue")
-    
-    local save_success = self:saveQueue(failed_entries)
-    Debugger.debug("Queue save result: " .. tostring(save_success))
-    
-    if processed_count > 0 then
-        logger.info("Successfully processed " .. processed_count .. "/" .. queue_size .. " queued status changes")
-        Debugger.info("Processed " .. processed_count .. "/" .. queue_size .. " entries, " .. failed_count .. " failed")
-        if processed_count == queue_size then
-            Notification:success(_("All status changes synced successfully"))
-        else
-            Notification:info(_("Synced ") .. processed_count .. "/" .. queue_size .. _(" status changes"))
-        end
-    end
-    
-    Debugger.exit("processStatusQueue", "processed=" .. processed_count .. ", failed=" .. failed_count)
-    return save_success
+    Debugger.exit("processStatusQueue", "subprocess_pid=" .. tostring(pid))
+    return pid ~= nil
 end
 
 ---Try to update entry status via API (helper for queue processing)
@@ -641,22 +584,26 @@ end
 -- PRIVATE HELPER METHODS
 -- =============================================================================
 
----Update entry status in background subprocess
+---Queue entry status change (simplified - no subprocess)
 ---@param entry_id number Entry ID to update
 ---@param new_status string New status ("read" or "unread")
----@return number|nil pid Process ID if spawned, nil if disabled
+---@return boolean success True if queued successfully
 function EntryService:spawnUpdateStatus(entry_id, new_status)
+    Debugger.enter("spawnUpdateStatus", "entry_id=" .. entry_id .. ", new_status=" .. new_status)
+    
     -- Check if auto-mark feature is enabled
     if not self.settings.mark_as_read_on_open then
-        return nil
+        Debugger.exit("spawnUpdateStatus", "auto-mark disabled")
+        return false
     end
 
     -- Validate entry ID first
     if not EntryEntity.isValidId(entry_id) then
-        return nil
+        Debugger.exit("spawnUpdateStatus", "invalid entry ID")
+        return false
     end
 
-    -- Load current metadata to get original status for auto-healing
+    -- Load current metadata to get original status
     local local_metadata = EntryEntity.loadMetadata(entry_id)
     local original_status = local_metadata and local_metadata.status or "unread"
 
@@ -665,76 +612,214 @@ function EntryService:spawnUpdateStatus(entry_id, new_status)
         EntryEntity.isEntryRead(local_metadata.status) == EntryEntity.isEntryRead(new_status)
 
     if is_already_target_status then
-        return nil
+        Debugger.exit("spawnUpdateStatus", "already target status")
+        return false
     end
 
-    -- Check connectivity before making API call
+    -- Smart queue logic: try direct API call if online, queue only if failed or offline
     local NetworkMgr = require("ui/network/manager")
-    if not NetworkMgr:isConnected() then
-        -- Main thread - safe to queue immediately when offline
-        self:enqueueStatusChange(entry_id, {
+    local success = false
+    
+    if NetworkMgr:isConnected() then
+        Debugger.info("Online detected, attempting direct API call for entry " .. entry_id)
+        -- Try direct API call first when online
+        success = self:tryUpdateEntryStatus(entry_id, new_status)
+        
+        if success then
+            Debugger.info("Direct API call succeeded for entry " .. entry_id .. " to " .. new_status)
+            -- No need to queue - operation completed successfully
+        else
+            Debugger.warn("Direct API call failed for entry " .. entry_id .. ", falling back to queue")
+            -- API failed, queue for retry
+            success = self:enqueueStatusChange(entry_id, {
+                new_status = new_status,
+                original_status = original_status
+            })
+            
+            if success then
+                -- Optimistic update even though API failed (queue will retry)
+                EntryEntity.updateEntryStatus(entry_id, new_status)
+                Debugger.info("Queued entry " .. entry_id .. " for retry after API failure")
+                
+                -- Process the queue immediately in background to retry the failed operation
+                local pid = self:processStatusQueueInSubprocess()
+                if pid then
+                    self.miniflux_plugin:trackSubprocess(pid)
+                    Debugger.info("Started background retry subprocess with PID: " .. tostring(pid))
+                end
+            end
+        end
+    else
+        Debugger.info("Offline detected, queuing entry " .. entry_id .. " for later sync")
+        -- Offline, always queue
+        success = self:enqueueStatusChange(entry_id, {
             new_status = new_status,
             original_status = original_status
         })
-        logger.info("Queued status change for offline processing: entry " .. entry_id)
-        return nil -- Skip subprocess when offline
+        
+        if success then
+            -- Optimistic update for offline operation
+            EntryEntity.updateEntryStatus(entry_id, new_status)
+            Debugger.info("Queued and optimistically updated entry " .. entry_id .. " to " .. new_status .. " (offline)")
+        end
     end
 
-    -- Step 1: Queue the operation first (handles all failure scenarios)
-    self:enqueueStatusChange(entry_id, {
-        new_status = new_status,
-        original_status = original_status
-    })
+    Debugger.exit("spawnUpdateStatus", "success=" .. tostring(success))
+    return success
+end
 
-    -- Step 2: Optimistic update - immediately update local metadata
-    local update_success = EntryEntity.updateEntryStatus(entry_id, new_status)
+---Process entire status queue in a subprocess (new architecture)
+---@return number|nil pid Process ID if spawned, nil if no queue
+function EntryService:processStatusQueueInSubprocess()
+    Debugger.enter("processStatusQueueInSubprocess")
     
-    -- NOTE: We deliberately do NOT invalidate caches here because:
-    -- 1. This is fire-and-forget background operation - user doesn't expect immediate UI updates
-    -- 2. API call happens in subprocess and could fail, causing auto-healing to revert local metadata
-    -- 3. If we invalidate cache but API fails, cache shows wrong counts until next natural refresh
-    -- 4. Cache will refresh naturally when user navigates later
-    -- For immediate user-triggered operations, use changeEntryStatus() which invalidates after API success
-
-    -- Step 2: Background API call with auto-healing
+    -- Quick check if queue exists before spawning subprocess
+    local queue = self:loadQueue()
+    local queue_size = 0
+    for _ in pairs(queue) do queue_size = queue_size + 1 end
+    
+    if queue_size == 0 then
+        Debugger.exit("processStatusQueueInSubprocess", "empty queue")
+        return nil
+    end
+    
+    Debugger.info("Spawning subprocess to process " .. queue_size .. " queued entries")
+    
     local FFIUtil = require("ffi/util")
-
+    
     -- Extract settings data for subprocess (separate memory space)
     local server_address = self.settings.server_address
     local api_token = self.settings.api_token
-
+    
     local pid = FFIUtil.runInSubProcess(function()
-        -- Create a minimal settings object for the subprocess
+        -- Import required modules in subprocess
+        local EntryEntity = require("entities/entry_entity")
+        local APIClient = require("api/api_client")
+        local MinifluxAPI = require("api/miniflux_api")
+        local Files = require("utils/files")
+        local Debugger = require("utils/debugger")
+        local logger = require("logger")
+        
+        Debugger.info("Subprocess started for queue processing")
+        
+        -- Create settings object for subprocess
         local subprocess_settings = {
             server_address = server_address,
             api_token = api_token
         }
-
-        -- Import and recreate our API clients (they have separate memory space)
-        local APIClient = require("api/api_client")
-        local MinifluxAPI = require("api/miniflux_api")
-
-        -- Create API client instances inside subprocess
+        
+        -- Create API client instances
         local api_client = APIClient:new({ settings = subprocess_settings })
         local miniflux_api = MinifluxAPI:new({ api_client = api_client })
-
-        -- Use our proper API layer with built-in timeout handling
-        local result, err = miniflux_api:updateEntries(entry_id, {
-            body = { status = new_status }
-            -- No dialogs config - silent background operation
-        })
-
-        if err then
-            -- Auto-healing: If API call failed, revert local metadata
-            local EntryEntity = require("entities/entry_entity")
-            local revert_success = EntryEntity.updateEntryStatus(entry_id, original_status)
+        
+        -- Queue management functions (duplicated in subprocess)
+        local function getQueueFilePath()
+            local miniflux_dir = EntryEntity.getDownloadDir()
+            return miniflux_dir .. "status_queue.lua"
         end
-
-        -- Process exits automatically - no return value needed for fire-and-forget
-        -- Note: Entry remains queued and will be processed by queue processor on next network event
-        -- Queue processor will check actual status and only sync if still needed
+        
+        local function loadQueue()
+            local queue_file = getQueueFilePath()
+            local lfs = require("libs/libkoreader-lfs")
+            
+            if not lfs.attributes(queue_file, "mode") then
+                return {}
+            end
+            
+            local success, queue_data = pcall(dofile, queue_file)
+            if success and type(queue_data) == "table" then
+                return queue_data
+            else
+                Debugger.warn("Subprocess failed to load queue: " .. tostring(queue_data))
+                return {}
+            end
+        end
+        
+        local function saveQueue(queue)
+            local queue_file = getQueueFilePath()
+            local miniflux_dir = queue_file:match("(.+)/[^/]+$")
+            
+            -- Ensure directory exists
+            local success, err = Files.createDirectory(miniflux_dir)
+            if not success then
+                Debugger.error("Subprocess failed to create directory: " .. tostring(err))
+                return false
+            end
+            
+            -- Convert queue to Lua code
+            local queue_content = "return {\n"
+            for entry_id, opts in pairs(queue) do
+                queue_content = queue_content .. string.format(
+                    "  [%d] = {\n    new_status = %q,\n    original_status = %q,\n    timestamp = %d\n  },\n",
+                    entry_id, opts.new_status, opts.original_status, opts.timestamp
+                )
+            end
+            queue_content = queue_content .. "}\n"
+            
+            -- Write to file
+            local write_success, write_err = Files.writeFile(queue_file, queue_content)
+            if not write_success then
+                Debugger.error("Subprocess failed to save queue: " .. tostring(write_err))
+                return false
+            end
+            
+            return true
+        end
+        
+        -- Load and process queue
+        local queue = loadQueue()
+        local queue_size = 0
+        for _ in pairs(queue) do queue_size = queue_size + 1 end
+        
+        Debugger.info("Subprocess loaded queue with " .. queue_size .. " entries")
+        
+        local processed_count = 0
+        local failed_entries = {}
+        
+        -- Process each queued entry
+        for entry_id, opts in pairs(queue) do
+            Debugger.debug("Subprocess processing entry " .. entry_id .. ": " .. opts.original_status .. " -> " .. opts.new_status)
+            
+            -- Smart check: verify if sync is still needed
+            local local_metadata = EntryEntity.loadMetadata(entry_id)
+            local current_status = local_metadata and local_metadata.status or "unread"
+            local is_already_synced = EntryEntity.isEntryRead(current_status) == EntryEntity.isEntryRead(opts.new_status)
+            
+            if is_already_synced then
+                -- Entry already in desired state, remove from queue
+                processed_count = processed_count + 1
+                Debugger.info("Subprocess: Entry " .. entry_id .. " already synced, removing from queue")
+            else
+                -- Try API call
+                local result, err = miniflux_api:updateEntries(entry_id, {
+                    body = { status = opts.new_status }
+                })
+                
+                if not err then
+                    -- Success: update local metadata and count as processed
+                    EntryEntity.updateEntryStatus(entry_id, opts.new_status)
+                    processed_count = processed_count + 1
+                    Debugger.info("Subprocess: Successfully synced entry " .. entry_id .. " to " .. opts.new_status)
+                else
+                    -- Failed: keep in queue for retry
+                    failed_entries[entry_id] = opts
+                    Debugger.warn("Subprocess: Failed to sync entry " .. entry_id .. ", keeping in queue")
+                end
+            end
+        end
+        
+        -- Save cleaned queue (only failed entries remain)
+        local save_success = saveQueue(failed_entries)
+        
+        local failed_count = 0
+        for _ in pairs(failed_entries) do failed_count = failed_count + 1 end
+        
+        Debugger.info("Subprocess completed: processed=" .. processed_count .. ", failed=" .. failed_count .. ", save_success=" .. tostring(save_success))
+        
+        -- Subprocess exits automatically
     end)
-
+    
+    Debugger.exit("processStatusQueueInSubprocess", "pid=" .. tostring(pid))
     return pid
 end
 

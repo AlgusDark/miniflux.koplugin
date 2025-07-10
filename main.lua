@@ -6,6 +6,8 @@ This main file acts as a coordinator, delegating to specialized modules.
 --]]
 
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
+local FFIUtil = require("ffi/util")
+local UIManager = require("ui/uimanager")
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
 local Dispatcher = require("dispatcher")
@@ -38,6 +40,10 @@ local Miniflux = WidgetContainer:extend({
     name = "miniflux",
     is_doc_only = false,
     settings = nil,
+    -- Subprocess management
+    subprocesses_pids = {},
+    subprocesses_collector = nil,
+    subprocesses_collect_interval = 10, -- check every 10 seconds
 })
 
 ---Initialize the plugin by setting up all components
@@ -238,6 +244,73 @@ function Miniflux:getBrowserContext()
 end
 
 -- =============================================================================
+-- SUBPROCESS MANAGEMENT
+-- =============================================================================
+
+---Track a new subprocess PID for zombie cleanup
+---@param pid number Process ID to track
+function Miniflux:trackSubprocess(pid)
+    if not pid then return end
+    
+    logger.dbg("Miniflux: Tracking subprocess PID: " .. tostring(pid))
+    UIManager:preventStandby()
+    table.insert(self.subprocesses_pids, pid)
+    
+    -- Start zombie collector if not already running
+    if not self.subprocesses_collector then
+        self.subprocesses_collector = true
+        UIManager:scheduleIn(self.subprocesses_collect_interval, function()
+            self:collectSubprocesses()
+        end)
+    end
+end
+
+---Collect finished subprocesses to prevent zombies
+function Miniflux:collectSubprocesses()
+    self.subprocesses_collector = nil
+    
+    if #self.subprocesses_pids > 0 then
+        -- Check each subprocess and remove completed ones
+        for i = #self.subprocesses_pids, 1, -1 do
+            local pid = self.subprocesses_pids[i]
+            if FFIUtil.isSubProcessDone(pid) then
+                logger.dbg("Miniflux: Subprocess " .. tostring(pid) .. " completed")
+                table.remove(self.subprocesses_pids, i)
+                UIManager:allowStandby()
+            end
+        end
+        
+        -- If subprocesses still running, schedule next collection
+        if #self.subprocesses_pids > 0 then
+            logger.dbg("Miniflux: " .. #self.subprocesses_pids .. " subprocesses still running")
+            self.subprocesses_collector = true
+            UIManager:scheduleIn(self.subprocesses_collect_interval, function()
+                self:collectSubprocesses()
+            end)
+        else
+            logger.dbg("Miniflux: All subprocesses completed")
+        end
+    end
+end
+
+---Terminate all background subprocesses
+function Miniflux:terminateBackgroundJobs()
+    if #self.subprocesses_pids > 0 then
+        logger.dbg("Miniflux: Terminating " .. #self.subprocesses_pids .. " background subprocesses")
+        for i = 1, #self.subprocesses_pids do
+            FFIUtil.terminateSubProcess(self.subprocesses_pids[i])
+        end
+        -- Processes will be cleaned up by next collectSubprocesses() call
+    end
+end
+
+---Check if background jobs are running
+---@return boolean true if subprocesses are running
+function Miniflux:hasBackgroundJobs()
+    return #self.subprocesses_pids > 0
+end
+
+-- =============================================================================
 -- NETWORK EVENT HANDLERS
 -- =============================================================================
 
@@ -247,20 +320,45 @@ function Miniflux:onNetworkConnected()
     
     -- Only process if EntryService is available (plugin initialized)
     if self.entry_service then
-        self.entry_service:processStatusQueue()
+        -- Use new subprocess-based queue processor (no user confirmation)
+        local pid = self.entry_service:processStatusQueueInSubprocess()
+        if pid then
+            -- Track the subprocess for proper cleanup
+            self:trackSubprocess(pid)
+            logger.dbg("Miniflux: Queue processing subprocess started with PID: " .. tostring(pid))
+        else
+            logger.dbg("Miniflux: No queue entries to process")
+        end
     end
 end
 
----Handle device suspend event - any active operations are already queued
+---Handle device suspend event - terminate background jobs to save battery
 function Miniflux:onSuspend()
-    logger.dbg("Miniflux: Device suspending - offline queue will handle any interrupted operations")
-    -- Active subprocess operations are already queued and will be processed on next network connection
+    logger.dbg("Miniflux: Device suspending - terminating background jobs")
+    self:terminateBackgroundJobs()
+    -- Queue operations will be processed on next network connection
 end
 
----Handle widget close event - ensure plugin cleanup
+---Handle plugin close event - ensure proper cleanup  
+function Miniflux:onClose()
+    logger.dbg("Miniflux: Plugin onClose - cleaning up background jobs")
+    self:terminateBackgroundJobs()
+    -- Cancel any scheduled zombie collection
+    if self.subprocesses_collector then
+        UIManager:unschedule(function() self:collectSubprocesses() end)
+        self.subprocesses_collector = nil
+    end
+end
+
+---Handle widget close event - ensure proper cleanup
 function Miniflux:onCloseWidget()
-    logger.dbg("Miniflux: Plugin closing - offline queue will handle any interrupted operations")
-    -- Active subprocess operations are already queued and will be processed on next network connection
+    logger.dbg("Miniflux: Plugin onCloseWidget - cleaning up background jobs")
+    self:terminateBackgroundJobs()
+    -- Cancel any scheduled zombie collection
+    if self.subprocesses_collector then
+        UIManager:unschedule(function() self:collectSubprocesses() end)
+        self.subprocesses_collector = nil
+    end
 end
 
 return Miniflux

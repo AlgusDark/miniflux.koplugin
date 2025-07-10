@@ -174,7 +174,7 @@ function Images.applyProxyUrl(settings, image_url)
     if settings.proxy_image_downloader_enabled and 
        settings.proxy_image_downloader_url and 
        settings.proxy_image_downloader_url ~= "" then
-        return settings.proxy_image_downloader_url .. image_url
+        return settings.proxy_image_downloader_url .. util.urlEncode(image_url)
     end
     
     -- Return original URL if proxy not configured
@@ -212,7 +212,7 @@ function Images.downloadImage(config)
            config.settings.proxy_image_downloader_token and 
            config.settings.proxy_image_downloader_token ~= "" then
             http_config.headers = {
-                ["X-Auth-Token"] = config.settings.proxy_image_downloader_token
+                ["Authorization"] = "Bearer " .. config.settings.proxy_image_downloader_token
             }
         end
     end
