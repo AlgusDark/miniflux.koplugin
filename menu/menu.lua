@@ -29,6 +29,15 @@ function Menu.build(plugin)
                     browser:open()
                 end,
             },
+            {
+                text = _("Sync status changes"),
+                help_text = _("Sync pending read/unread status changes"),
+                callback = function()
+                    if plugin.entry_service then
+                        plugin.entry_service:processStatusQueue()
+                    end
+                end,
+            },
 
             -- === SETTINGS SUBMENU ===
             {

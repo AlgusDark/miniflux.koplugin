@@ -12,6 +12,7 @@ local EntryEntity = require("entities/entry_entity")
 local Navigation = require("services/navigation_service")
 local EntryWorkflow = require("services/entry_workflow")
 local Files = require("utils/files")
+local Debugger = require("utils/debugger")
 
 -- **Entry Service** - Handles complex entry workflows and orchestration.
 --
@@ -59,9 +60,9 @@ end
 ---Get the path to the status queue file
 ---@return string Queue file path
 function EntryService:getQueueFilePath()
-    local DataStorage = require("datastorage")
-    local miniflux_dir = DataStorage:getDataDir() .. "/miniflux"
-    return miniflux_dir .. "/status_queue.lua"
+    -- Use the same directory as entries for consistency
+    local miniflux_dir = EntryEntity.getDownloadDir()
+    return miniflux_dir .. "status_queue.lua"
 end
 
 ---Load the status queue from disk
@@ -69,18 +70,25 @@ end
 function EntryService:loadQueue()
     local queue_file = self:getQueueFilePath()
     
+    Debugger.debug("Loading queue from: " .. queue_file)
+    
     -- Check if queue file exists
     local lfs = require("libs/libkoreader-lfs")
     if not lfs.attributes(queue_file, "mode") then
+        Debugger.debug("Queue file does not exist, returning empty queue")
         return {} -- Empty queue if file doesn't exist
     end
     
     -- Load and execute the Lua file
     local success, queue_data = pcall(dofile, queue_file)
     if success and type(queue_data) == "table" then
+        local count = 0
+        for _ in pairs(queue_data) do count = count + 1 end
+        Debugger.debug("Successfully loaded queue with " .. count .. " entries")
         return queue_data
     else
         logger.warn("Failed to load status queue, starting fresh: " .. tostring(queue_data))
+        Debugger.warn("Failed to load queue file: " .. tostring(queue_data))
         return {}
     end
 end
@@ -91,11 +99,16 @@ end
 function EntryService:saveQueue(queue)
     local queue_file = self:getQueueFilePath()
     
+    local count = 0
+    for _ in pairs(queue) do count = count + 1 end
+    Debugger.debug("Saving queue with " .. count .. " entries to: " .. queue_file)
+    
     -- Ensure miniflux directory exists
     local miniflux_dir = queue_file:match("(.+)/[^/]+$")
     local success, err = Files.createDirectory(miniflux_dir)
     if not success then
         logger.err("Failed to create miniflux directory: " .. tostring(err))
+        Debugger.error("Failed to create miniflux directory: " .. tostring(err))
         return false
     end
     
@@ -106,6 +119,7 @@ function EntryService:saveQueue(queue)
             "  [%d] = {\n    new_status = %q,\n    original_status = %q,\n    timestamp = %d\n  },\n",
             entry_id, opts.new_status, opts.original_status, opts.timestamp
         )
+        Debugger.debug("Saving queue entry " .. entry_id .. ": " .. opts.original_status .. " -> " .. opts.new_status)
     end
     queue_content = queue_content .. "}\n"
     
@@ -113,9 +127,11 @@ function EntryService:saveQueue(queue)
     local write_success, write_err = Files.writeFile(queue_file, queue_content)
     if not write_success then
         logger.err("Failed to save status queue: " .. tostring(write_err))
+        Debugger.error("Failed to save status queue: " .. tostring(write_err))
         return false
     end
     
+    Debugger.debug("Successfully saved queue with " .. count .. " entries")
     return true
 end
 
@@ -124,12 +140,18 @@ end
 ---@param opts table Options {new_status: string, original_status: string}
 ---@return boolean success
 function EntryService:enqueueStatusChange(entry_id, opts)
+    Debugger.enter("enqueueStatusChange", "entry_id=" .. entry_id .. ", " .. opts.original_status .. " -> " .. opts.new_status)
+    
     if not EntryEntity.isValidId(entry_id) then
         logger.warn("Cannot queue invalid entry ID: " .. tostring(entry_id))
+        Debugger.exit("enqueueStatusChange", "invalid entry ID")
         return false
     end
     
     local queue = self:loadQueue()
+    local queue_size_before = 0
+    for _ in pairs(queue) do queue_size_before = queue_size_before + 1 end
+    Debugger.debug("Queue size before enqueue: " .. queue_size_before)
     
     -- Add/update entry in queue (automatic deduplication via entry_id key)
     queue[entry_id] = {
@@ -138,25 +160,83 @@ function EntryService:enqueueStatusChange(entry_id, opts)
         timestamp = os.time()
     }
     
+    local queue_size_after = 0
+    for _ in pairs(queue) do queue_size_after = queue_size_after + 1 end
+    Debugger.debug("Queue size after enqueue: " .. queue_size_after)
+    
     local success = self:saveQueue(queue)
+    Debugger.debug("Queue save result: " .. tostring(success))
+    
     if success then
         logger.info("Queued status change for entry " .. entry_id .. ": " .. opts.original_status .. " -> " .. opts.new_status)
+        Debugger.info("Successfully queued entry " .. entry_id)
     end
     
+    Debugger.exit("enqueueStatusChange", "success=" .. tostring(success))
     return success
 end
 
----Process the status queue when network is available
+---Process the status queue when network is available (with user confirmation)
+---@param auto_confirm? boolean Skip confirmation dialog if true
 ---@return boolean success
-function EntryService:processStatusQueue()
+function EntryService:processStatusQueue(auto_confirm)
+    Debugger.enter("processStatusQueue", "auto_confirm=" .. tostring(auto_confirm))
+    
     local queue = self:loadQueue()
     local queue_size = 0
     for _ in pairs(queue) do queue_size = queue_size + 1 end
     
+    Debugger.info("Queue loaded with " .. queue_size .. " entries")
+    
     if queue_size == 0 then
+        Debugger.exit("processStatusQueue", "empty queue")
         return true -- Nothing to process
     end
     
+    -- Debug: Log all queue entries
+    for entry_id, opts in pairs(queue) do
+        Debugger.debug("Queue entry " .. entry_id .. ": " .. opts.original_status .. " -> " .. opts.new_status .. " (timestamp: " .. (opts.timestamp or "nil") .. ")")
+    end
+    
+    logger.info("Found status queue with " .. queue_size .. " entries")
+    
+    -- Ask user for confirmation unless auto_confirm is true
+    if not auto_confirm then
+        local UIManager = require("ui/uimanager")
+        local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
+        local T = require("ffi/util").template
+        
+        local sync_dialog
+        sync_dialog = ButtonDialogTitle:new({
+            title = T(_("Sync %1 pending status changes?"), queue_size),
+            title_align = "center",
+            buttons = {
+                {
+                    {
+                        text = _("Cancel"),
+                        callback = function()
+                            UIManager:close(sync_dialog)
+                            logger.info("User cancelled status queue sync")
+                        end,
+                    },
+                    {
+                        text = _("Sync Now"),
+                        callback = function()
+                            UIManager:close(sync_dialog)
+                            -- Process queue after dialog closes
+                            UIManager:nextTick(function()
+                                self:processStatusQueue(true) -- auto_confirm = true
+                            end)
+                        end,
+                    },
+                },
+            },
+        })
+        UIManager:show(sync_dialog)
+        return true -- Dialog shown, actual processing happens if user confirms
+    end
+    
+    -- User confirmed or auto_confirm is true, proceed with sync
     logger.info("Processing status queue with " .. queue_size .. " entries")
     
     -- Show notification to user
@@ -167,34 +247,55 @@ function EntryService:processStatusQueue()
     
     -- Process each queued entry
     for entry_id, opts in pairs(queue) do
+        Debugger.debug("Processing queue entry " .. entry_id)
+        
         -- Smart check: verify if sync is still needed by checking local metadata
         local local_metadata = EntryEntity.loadMetadata(entry_id)
         local current_status = local_metadata and local_metadata.status or "unread"
+        
+        Debugger.debug("Entry " .. entry_id .. " - Current status: " .. current_status .. ", Desired: " .. opts.new_status)
+        Debugger.debug("Entry " .. entry_id .. " - Current is_read: " .. tostring(EntryEntity.isEntryRead(current_status)) .. ", Desired is_read: " .. tostring(EntryEntity.isEntryRead(opts.new_status)))
+        
         local is_already_synced = EntryEntity.isEntryRead(current_status) == EntryEntity.isEntryRead(opts.new_status)
+        
+        Debugger.debug("Entry " .. entry_id .. " - is_already_synced: " .. tostring(is_already_synced))
         
         if is_already_synced then
             -- Entry already in desired state, remove from queue
             processed_count = processed_count + 1
+            Debugger.info("Entry " .. entry_id .. " already synced to " .. opts.new_status .. ", removing from queue")
             logger.info("Entry " .. entry_id .. " already synced to " .. opts.new_status .. ", removing from queue")
         else
             -- Still needs sync, try API call
+            Debugger.debug("Entry " .. entry_id .. " needs sync, trying API call")
             local success = self:tryUpdateEntryStatus(entry_id, opts.new_status)
+            Debugger.debug("Entry " .. entry_id .. " API call result: " .. tostring(success))
+            
             if success then
                 processed_count = processed_count + 1
+                Debugger.info("Successfully synced entry " .. entry_id .. " status to " .. opts.new_status)
                 logger.info("Successfully synced entry " .. entry_id .. " status to " .. opts.new_status)
             else
                 -- Keep failed entries in queue for next attempt
                 failed_entries[entry_id] = opts
+                Debugger.warn("Failed to sync entry " .. entry_id .. " status, keeping in queue")
                 logger.warn("Failed to sync entry " .. entry_id .. " status, keeping in queue")
             end
         end
     end
     
     -- Save remaining failed entries back to queue
+    Debugger.debug("Saving " .. (#failed_entries and "0" or "unknown") .. " failed entries back to queue")
+    local failed_count = 0
+    for _ in pairs(failed_entries) do failed_count = failed_count + 1 end
+    Debugger.debug("Actually saving " .. failed_count .. " failed entries back to queue")
+    
     local save_success = self:saveQueue(failed_entries)
+    Debugger.debug("Queue save result: " .. tostring(save_success))
     
     if processed_count > 0 then
         logger.info("Successfully processed " .. processed_count .. "/" .. queue_size .. " queued status changes")
+        Debugger.info("Processed " .. processed_count .. "/" .. queue_size .. " entries, " .. failed_count .. " failed")
         if processed_count == queue_size then
             Notification:success(_("All status changes synced successfully"))
         else
@@ -202,6 +303,7 @@ function EntryService:processStatusQueue()
         end
     end
     
+    Debugger.exit("processStatusQueue", "processed=" .. processed_count .. ", failed=" .. failed_count)
     return save_success
 end
 

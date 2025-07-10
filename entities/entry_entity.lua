@@ -48,6 +48,12 @@ end
 ---@param entry_data table Entry data from API
 ---@return boolean True if has content
 function EntryEntity.hasContent(entry_data)
+    -- For local entries that are already downloaded, content is always available
+    if entry_data.id and EntryEntity.isEntryDownloaded(entry_data.id) then
+        return true
+    end
+    
+    -- For online entries, check content/summary fields
     local content = entry_data.content or entry_data.summary or ""
     return content ~= ""
 end
@@ -566,6 +572,46 @@ function EntryEntity.openMinifluxFolder()
     else
         FileManager:showFiles(download_dir)
     end
+end
+
+---Get all locally downloaded entries by scanning the miniflux directory
+---@return table[] Array of entry metadata objects (same format as API entries)
+function EntryEntity.getLocalEntries()
+    local entries = {}
+    local miniflux_dir = EntryEntity.getDownloadDir()
+    
+    -- Check if miniflux directory exists
+    if not lfs.attributes(miniflux_dir, "mode") then
+        return entries -- Return empty array if directory doesn't exist
+    end
+    
+    -- Scan directory for entry folders
+    for item in lfs.dir(miniflux_dir) do
+        -- Skip . and .. entries, only process numeric folders (entry IDs)
+        if item:match("^%d+$") then
+            local entry_id = tonumber(item)
+            
+            -- Check if entry.html exists in this folder
+            local html_file = EntryEntity.getEntryHtmlPath(entry_id)
+            if lfs.attributes(html_file, "mode") == "file" then
+                -- Load metadata for this entry
+                local metadata = EntryEntity.loadMetadata(entry_id)
+                if metadata then
+                    table.insert(entries, metadata)
+                end
+            end
+        end
+    end
+    
+    -- Sort entries by published_at descending (newest first)
+    -- Use empty string as fallback for missing published_at to ensure consistent sorting
+    table.sort(entries, function(a, b)
+        local a_date = a.published_at or ""
+        local b_date = b.published_at or ""
+        return a_date > b_date
+    end)
+    
+    return entries
 end
 
 return EntryEntity

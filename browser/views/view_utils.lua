@@ -11,16 +11,21 @@ local _ = require("gettext")
 local ViewUtils = {}
 
 ---Build subtitle for content views
----@param config {count: number, hide_read?: boolean, is_unread_only?: boolean, item_type?: string}
+---@param config {count: number, hide_read?: boolean, is_unread_only?: boolean, is_local_only?: boolean, item_type?: string}
 ---@return string Formatted subtitle
 function ViewUtils.buildSubtitle(config)
     local count = config.count
     local hide_read = config.hide_read
     local is_unread_only = config.is_unread_only
+    local is_local_only = config.is_local_only
     local item_type = config.item_type
 
     if is_unread_only then
         return "⊘ " .. count .. " " .. _("unread entries")
+    end
+
+    if is_local_only then
+        return "⌂ " .. count .. " " .. _("local entries")
     end
 
     local icon = hide_read and "⊘ " or "◯ "

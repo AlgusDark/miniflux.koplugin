@@ -70,13 +70,15 @@ function MinifluxBrowser:onLeftButtonTap()
     local UIManager = require("ui/uimanager")
     local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
 
-    -- Check if we're in an unread-only view (status toggle doesn't make sense here)
+    -- Check if we're in a view that doesn't need filtering (unread or local entries)
     local current_path = self.paths and #self.paths > 0 and self.paths[#self.paths]
     local is_unread_view = current_path and current_path.to == "unread_entries"
+    local is_local_view = current_path and current_path.to == "local_entries"
+    local should_hide_filter = is_unread_view or is_local_view
 
     local buttons = {}
 
-    if not is_unread_view then
+    if not should_hide_filter then
         -- Only show status toggle for non-unread views
         local hide_read_entries = self.settings.hide_read_entries
         local toggle_text = hide_read_entries and _("Show all entries") or _("Show unread entries")
@@ -195,6 +197,9 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
                 onSelectCategories = function()
                     self:goForward({ from = "main", to = "categories" })
                 end,
+                onSelectLocal = function()
+                    self:goForward({ from = "main", to = "local_entries" })
+                end,
             })
         end,
         feeds = function()
@@ -260,6 +265,16 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
                 end
             })
         end,
+        local_entries = function()
+            local LocalEntriesView = require("browser/views/local_entries_view")
+            return LocalEntriesView.show({
+                settings = self.settings,
+                page_state = nav_config.page_state,
+                onSelectItem = function(entry_data)
+                    self:openItem(entry_data, nil) -- No context for local entries
+                end
+            })
+        end,
     }
 end
 
@@ -305,13 +320,19 @@ function MinifluxBrowser:getSelectionActions()
     local actions = {}
 
     if item_type == "entry" then
-        -- For entries: show download, mark as unread, and mark as read actions
-        table.insert(actions, {
-            text = _("Download Selected"),
-            callback = function(selected_items)
-                self:downloadSelectedEntries(selected_items)
-            end,
-        })
+        -- Check if we're in local entries view (entries already downloaded)
+        local current_path = self.paths and #self.paths > 0 and self.paths[#self.paths]
+        local is_local_view = current_path and current_path.to == "local_entries"
+        
+        -- For entries: show download (unless in local view), mark as unread, and mark as read actions
+        if not is_local_view then
+            table.insert(actions, {
+                text = _("Download Selected"),
+                callback = function(selected_items)
+                    self:downloadSelectedEntries(selected_items)
+                end,
+            })
+        end
         table.insert(actions, {
             text = _("Mark as Unread"),
             callback = function(selected_items)
