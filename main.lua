@@ -22,6 +22,7 @@ local EntryService = require("services/entry_service")
 local FeedService = require("services/feed_service")
 local CategoryService = require("services/category_service")
 local EntryEntity = require("entities/entry_entity")
+local KeyHandlerService = require("services/key_handler_service")
 
 -- Static browser context shared across all plugin instances
 local _static_browser_context = nil
@@ -36,6 +37,7 @@ local _static_browser_context = nil
 ---@field entry_service EntryService Entry service instance
 ---@field feed_service FeedService Feed service instance
 ---@field category_service CategoryService Category service instance
+---@field key_handler_service KeyHandlerService Key handler service instance
 local Miniflux = WidgetContainer:extend({
     name = "miniflux",
     is_doc_only = false,
@@ -105,6 +107,15 @@ function Miniflux:init()
         feed_repository = feed_repository,
         settings = self.settings
     })
+
+    -- Initialize key handler service (only in ReaderUI context)
+    if self.ui and self.ui.document then
+        self.key_handler_service = KeyHandlerService:new({
+            miniflux_plugin = self,
+            entry_service = self.entry_service,
+            navigation_service = require("services/navigation_service")
+        })
+    end
 
     -- Override ReaderStatus EndOfBook behavior for miniflux entries
     self:overrideEndOfBookBehavior()
