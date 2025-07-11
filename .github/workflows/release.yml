@@ -23,7 +23,12 @@ jobs:
         version: 3.x
       
     - name: Build release artifact
-      run: task build
+      run: |
+        task build
+        echo "=== Checking build output ==="
+        ls -la
+        ls -la dist/ || echo "dist directory not found"
+        ls -la dist/miniflux.koplugin/ || echo "miniflux.koplugin directory not found"
     
     - name: Get version from _meta.lua
       id: get_version
@@ -35,7 +40,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: miniflux-koplugin-v${{ steps.get_version.outputs.version }}
-        path: dist/
+        path: dist/miniflux.koplugin/
         retention-days: 90
         
     - name: Create Release (main branch only)
