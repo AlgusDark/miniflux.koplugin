@@ -23,6 +23,7 @@ local FeedService = require("services/feed_service")
 local CategoryService = require("services/category_service")
 local EntryEntity = require("entities/entry_entity")
 local KeyHandlerService = require("services/key_handler_service")
+local ReaderLinkService = require("services/readerlink_service")
 
 -- Static browser context shared across all plugin instances
 local _static_browser_context = nil
@@ -38,6 +39,7 @@ local _static_browser_context = nil
 ---@field feed_service FeedService Feed service instance
 ---@field category_service CategoryService Category service instance
 ---@field key_handler_service KeyHandlerService Key handler service instance
+---@field readerlink_service ReaderLinkService ReaderLink enhancement service instance
 local Miniflux = WidgetContainer:extend({
     name = "miniflux",
     is_doc_only = false,
@@ -115,6 +117,17 @@ function Miniflux:init()
             entry_service = self.entry_service,
             navigation_service = require("services/navigation_service")
         })
+    end
+
+    -- Initialize ReaderLink enhancement service (only in ReaderUI context)
+    if self.ui and self.ui.link then
+        self.readerlink_service = ReaderLinkService:new({
+            miniflux_plugin = self
+        })
+        -- Set cross-service reference for image viewer integration
+        if self.key_handler_service then
+            self.readerlink_service.key_handler_service = self.key_handler_service
+        end
     end
 
     -- Override ReaderStatus EndOfBook behavior for miniflux entries
@@ -369,6 +382,14 @@ function Miniflux:onCloseWidget()
     if self.subprocesses_collector then
         UIManager:unschedule(function() self:collectSubprocesses() end)
         self.subprocesses_collector = nil
+    end
+    -- Cleanup key handler service touch zones
+    if self.key_handler_service then
+        self.key_handler_service:cleanup()
+    end
+    -- Cleanup ReaderLink service
+    if self.readerlink_service then
+        self.readerlink_service:cleanup()
     end
 end
 

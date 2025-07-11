@@ -23,11 +23,13 @@ function KeyHandlerService:new(params)
     local instance = {
         miniflux_plugin = params.miniflux_plugin,
         entry_service = params.entry_service,
-        navigation_service = params.navigation_service
+        navigation_service = params.navigation_service,
+        touch_zones_registered = false  -- Track registration state
     }
     setmetatable(instance, { __index = self })
     
-    -- Set up touch zones for image detection
+    -- Conditionally set up touch zones only for miniflux entries
+    -- This prevents global override of ReaderUI for non-miniflux content
     if Device:isTouchDevice() and instance.miniflux_plugin.ui then
         instance:setupImageTouchZones()
     end
@@ -55,11 +57,29 @@ end
 ---The overrides work by preventing the overridden zones from receiving the tap gesture
 ---if our handler returns true (indicating we handled the tap).
 ---
+---Conditional Registration:
+---Touch zones are only registered when viewing miniflux entries to avoid global
+---interference with ReaderUI for regular books. This follows KOReader best practices.
+---
 ---@return nil
 function KeyHandlerService:setupImageTouchZones()
+    -- Only register touch zones when viewing miniflux entries
+    -- This prevents global override of ReaderUI for non-miniflux content
+    if not self:isMinifluxEntry() then
+        logger.dbg("KeyHandlerService: Skipping touch zone registration (not miniflux entry)")
+        return
+    end
+    
+    -- Avoid duplicate registration
+    if self.touch_zones_registered then
+        logger.dbg("KeyHandlerService: Touch zones already registered")
+        return
+    end
+    
     logger.dbg("KeyHandlerService: Setting up image touch zones with menu override")
     
-    self.miniflux_plugin.ui:registerTouchZones({
+    -- Store zone definition for potential deregistration
+    self.touch_zones = {
         {
             id = "miniflux_tap_image",
             ges = "tap",
@@ -79,7 +99,11 @@ function KeyHandlerService:setupImageTouchZones()
             },
             handler = function(ges) return self:onTapImage(ges) end,
         },
-    })
+    }
+    
+    self.miniflux_plugin.ui:registerTouchZones(self.touch_zones)
+    self.touch_zones_registered = true
+    logger.dbg("KeyHandlerService: Touch zones registered successfully")
 end
 
 ---Handle image tap events
@@ -265,6 +289,18 @@ function KeyHandlerService:enhanceDialogWithKeys(dialog, entry_info)
     
     logger.dbg("KeyHandlerService: Enhanced dialog with key handlers")
     return dialog
+end
+
+---Cleanup touch zones when closing or switching documents
+---This method can be called to unregister touch zones when they're no longer needed
+---@return nil
+function KeyHandlerService:cleanup()
+    if self.touch_zones_registered and self.touch_zones then
+        logger.dbg("KeyHandlerService: Cleaning up touch zones")
+        self.miniflux_plugin.ui:unRegisterTouchZones(self.touch_zones)
+        self.touch_zones_registered = false
+        self.touch_zones = nil
+    end
 end
 
 return KeyHandlerService
