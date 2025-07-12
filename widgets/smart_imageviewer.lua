@@ -2,11 +2,10 @@
 **Smart ImageViewer for Miniflux Plugin**
 
 Minimal implementation extending ImageViewer with:
-- 4-direction rotation support (0°, 90°, 180°, 270°)
-- Auto-rotation on device orientation changes
-- Enhanced rotation button cycling
+- Auto-rotation on device orientation changes (toggles rotation like manual button)
+- Page turn buttons close the viewer instead of zooming
 
-This is a minimal viable implementation focusing on core functionality.
+Uses ImageViewer's built-in rotation logic for simplicity and reliability.
 --]]
 
 local ImageViewer = require("ui/widget/imageviewer")
@@ -14,154 +13,111 @@ local UIManager = require("ui/uimanager")
 local Screen = require("device").screen
 local logger = require("logger")
 local _ = require("gettext")
+local Debugger = require("utils/debugger")
 
 ---@class SmartImageViewer : ImageViewer
-local SmartImageViewer = ImageViewer:extend{
-    rotation_state = 0,  -- 0=0°, 1=90°, 2=180°, 3=270°
-    ui_ref = nil,
-}
-
--- Simple rotation mappings
-local ROTATION_ANGLES = { 0, 90, 180, 270 }
-local ROTATION_NAMES = { "0°", "90°", "180°", "270°" }
+local SmartImageViewer = ImageViewer:extend{}
 
 ---Initialize the SmartImageViewer
 function SmartImageViewer:init()
-    -- Auto-rotate on init if enabled
-    if self.image and G_reader_settings:isTrue("imageviewer_rotate_auto_for_best_fit") then
-        self.rotation_state = self:calculateOptimalRotation()
-        self.rotated = self.rotation_state ~= 0
-    end
+    Debugger.enter("SmartImageViewer:init")
     
-    -- Call parent init
+    -- Call parent init (handles auto-rotation setting)
     ImageViewer.init(self)
     
-    -- Register for device rotation events
-    if self.ui_ref then
-        self:registerForRotationEvents()
-    end
+    -- Override key events after parent init (parent sets key_events dynamically)
+    self:setupKeyEvents()
     
-    -- Override rotation button
-    self:enhanceRotationButton()
+    -- Device rotation will be handled via onSetRotationMode event
+    Debugger.debug("SmartImageViewer: Initialized and ready for rotation events")
+    
+    Debugger.exit("SmartImageViewer:init")
 end
 
----Calculate optimal rotation based on screen and image dimensions
----@return number rotation_state (0-3)
-function SmartImageViewer:calculateOptimalRotation()
-    if not self.image then return 0 end
-    
-    local screen_w, screen_h = Screen:getWidth(), Screen:getHeight()
-    local image_w, image_h = self.image:getWidth(), self.image:getHeight()
-    
-    -- Simple logic: if orientations don't match, rotate
-    local screen_is_landscape = screen_w > screen_h
-    local image_is_landscape = image_w > image_h
-    
-    if screen_is_landscape ~= image_is_landscape then
-        -- Use existing ImageViewer rotation direction logic
-        if screen_w <= screen_h then
-            -- Portrait mode - default counterclockwise (270°)
-            return G_reader_settings:isTrue("imageviewer_rotation_portrait_invert") and 1 or 3
-        else
-            -- Landscape mode - default clockwise (90°)
-            return G_reader_settings:isTrue("imageviewer_rotation_landscape_invert") and 3 or 1
-        end
-    end
-    
-    return 0  -- No rotation needed
+---Setup key events to override default zoom behavior with close actions
+function SmartImageViewer:setupKeyEvents()
+    -- Override the parent's key_events with our close actions
+    self.key_events = {
+        -- Map all page turn keys to close the image viewer (same as end-of-entry dialog)
+        CloseRPgFwd = { {"RPgFwd"}, doc = "close image viewer" },   -- Right page forward
+        CloseLPgFwd = { {"LPgFwd"}, doc = "close image viewer" },   -- Left page forward  
+        CloseRPgBack = { {"RPgBack"}, doc = "close image viewer" }, -- Right page back
+        CloseLPgBack = { {"LPgBack"}, doc = "close image viewer" }, -- Left page back
+        -- Keep original close keys for other buttons
+        Close = { {"Back", "Left"}, doc = "close image viewer" },
+        CloseAlt = { {"Right"}, doc = "close image viewer" },
+    }
+    Debugger.debug("SmartImageViewer: Key events set up to close instead of zoom")
 end
 
----Register for device rotation events
-function SmartImageViewer:registerForRotationEvents()
-    -- Store original handler
-    self.original_rotation_handler = self.ui_ref.onSetRotationMode
-    
-    local viewer = self
-    -- Override with our handler
-    self.ui_ref.onSetRotationMode = function(ui_instance, mode)
-        viewer:onSetRotationMode(mode)
-        -- Call original if it exists
-        if viewer.original_rotation_handler then
-            return viewer.original_rotation_handler(ui_instance, mode)
-        end
-    end
+---Handle key events for closing image viewer
+function SmartImageViewer:onClose()
+    UIManager:close(self)
+    return true
 end
 
----Handle device rotation
+function SmartImageViewer:onCloseAlt()
+    UIManager:close(self)
+    return true
+end
+
+-- Page turn key handlers (override default zoom behavior)
+function SmartImageViewer:onCloseRPgFwd()
+    UIManager:close(self)
+    return true
+end
+
+function SmartImageViewer:onCloseLPgFwd()
+    UIManager:close(self)
+    return true
+end
+
+function SmartImageViewer:onCloseRPgBack()
+    UIManager:close(self)
+    return true
+end
+
+function SmartImageViewer:onCloseLPgBack()
+    UIManager:close(self)
+    return true
+end
+
+-- Device rotation events are automatically received by modal widgets via UIManager event system
+
+---Handle device rotation events from accelerometer
+---This is called automatically by UIManager when device orientation changes
 function SmartImageViewer:onSetRotationMode(mode)
-    local new_rotation = self:calculateOptimalRotation()
+    Debugger.enter("SmartImageViewer:onSetRotationMode", "mode=" .. tostring(mode))
     
-    if new_rotation ~= self.rotation_state then
-        logger.dbg("SmartImageViewer: Auto-rotating from", 
-                   ROTATION_NAMES[self.rotation_state + 1], 
-                   "to", ROTATION_NAMES[new_rotation + 1])
-        
-        self.rotation_state = new_rotation
-        self.rotated = self.rotation_state ~= 0
-        self:update()
-        UIManager:setDirty(self, "full")
-    end
-end
-
----Enhance rotation button to cycle through 4 directions
-function SmartImageViewer:enhanceRotationButton()
-    if not self.button_table then return end
+    local old_screen_mode = Screen:getRotationMode()
+    Debugger.debug("SmartImageViewer: Current screen mode=" .. tostring(old_screen_mode) .. ", incoming mode=" .. tostring(mode))
     
-    -- Find and enhance the rotate button
-    local viewer = self
-    local button = self.button_table:getButtonById("rotate")
-    if button then
-        button.text = _("Rotate")  -- Keep original text for now
-        button.callback = function()
-            viewer:cycleRotation()
+    -- First, let the screen rotation update
+    if mode ~= nil then
+        if mode ~= old_screen_mode then
+            Screen:setRotationMode(mode)
+            Debugger.debug("SmartImageViewer: Screen rotation updated from " .. tostring(old_screen_mode) .. " to " .. tostring(mode))
+        else
+            Debugger.debug("SmartImageViewer: Screen mode unchanged")
         end
     end
-end
-
----Cycle through rotation states
-function SmartImageViewer:cycleRotation()
-    self.rotation_state = (self.rotation_state + 1) % 4
-    self.rotated = self.rotation_state ~= 0
     
-    logger.dbg("SmartImageViewer: Manual rotation to", ROTATION_NAMES[self.rotation_state + 1])
+    -- Do exactly what the manual rotate button does: toggle rotated and update
+    local old_rotated = self.rotated
+    self.rotated = not self.rotated and true or false
     
-    -- Keep button text simple for now - no need to update
+    Debugger.info("SmartImageViewer: AUTO-ROTATION - " .. tostring(old_rotated) .. " → " .. tostring(self.rotated))
     self:update()
+    
+    Debugger.exit("SmartImageViewer:onSetRotationMode", "handled=true")
+    return true  -- Event handled, stop propagation
 end
 
----Calculate rotation angle based on rotation state
----@return number rotation angle for ImageWidget
-function SmartImageViewer:calculateRotationAngle()
-    if not self.rotated or self.rotation_state == 0 then
-        return 0
-    end
-    
-    -- ImageViewer uses inverted angles for 90° and 270°
-    local angles = { 0, 270, 180, 90 }  -- 0°, 90°, 180°, 270°
-    return angles[self.rotation_state + 1]
-end
-
----Override to support 4-direction rotation
-function SmartImageViewer:_new_image_wg()
-    -- Call parent method to handle all the complex logic
-    ImageViewer._new_image_wg(self)
-    
-    -- Only override rotation_angle if we have custom rotation
-    if self.rotated and self.rotation_state ~= 0 then
-        local rotation_angle = self:calculateRotationAngle()
-        if self._image_wg then
-            self._image_wg.rotation_angle = rotation_angle
-        end
-    end
-end
+-- No complex rotation logic needed - just use ImageViewer's built-in rotation
 
 ---Cleanup when closing
 function SmartImageViewer:onCloseWidget()
-    -- Restore original rotation handler
-    if self.ui_ref and self.original_rotation_handler then
-        self.ui_ref.onSetRotationMode = self.original_rotation_handler
-    end
-    
+    -- Call parent cleanup
     ImageViewer.onCloseWidget(self)
 end
 
