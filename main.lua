@@ -28,6 +28,7 @@ local ReaderLinkService = require("services/readerlink_service")
 -- Static browser context shared across all plugin instances
 local _static_browser_context = nil
 
+
 ---@class Miniflux : WidgetContainer
 ---@field name string Plugin name identifier
 ---@field is_doc_only boolean Whether plugin is document-only
@@ -49,6 +50,7 @@ local Miniflux = WidgetContainer:extend({
     subprocesses_collector = nil,
     subprocesses_collect_interval = 10, -- check every 10 seconds
 })
+
 
 ---Initialize the plugin by setting up all components
 ---@return nil
@@ -247,7 +249,11 @@ end
 ---@return nil
 function Miniflux:onReaderReady(doc_settings)
     local file_path = self.ui and self.ui.document and self.ui.document.file
-    self.entry_service:onReaderReady({ file_path = file_path })
+    -- Pass ReaderUI's DocSettings to avoid cache conflicts
+    self.entry_service:onReaderReady({ 
+        file_path = file_path,
+        doc_settings = doc_settings  -- ReaderUI's cached DocSettings instance
+    })
 end
 
 -- =============================================================================
@@ -344,15 +350,8 @@ function Miniflux:onNetworkConnected()
     
     -- Only process if EntryService is available (plugin initialized)
     if self.entry_service then
-        -- Use new subprocess-based queue processor (no user confirmation)
-        local pid = self.entry_service:processStatusQueueInSubprocess()
-        if pid then
-            -- Track the subprocess for proper cleanup
-            self:trackSubprocess(pid)
-            logger.dbg("Miniflux: Queue processing subprocess started with PID: " .. tostring(pid))
-        else
-            logger.dbg("Miniflux: No queue entries to process")
-        end
+        -- Process queue automatically with user confirmation
+        self.entry_service:processStatusQueue(false) -- auto_confirm = false (show dialog)
     end
 end
 

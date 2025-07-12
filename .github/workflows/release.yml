@@ -43,7 +43,7 @@ jobs:
           path: dist/
           retention-days: 90
 
-      - name: Create Release (main branch only)
+      - name: Create Release (main branch)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
@@ -63,6 +63,31 @@ jobs:
           files: dist/miniflux.koplugin.zip
           draft: false
           prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Pre-Release (dev branch)
+        if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}-dev
+          name: Pre-Release v${{ steps.get_version.outputs.version }}-dev
+          body: |
+            Automated pre-release of miniflux.koplugin v${{ steps.get_version.outputs.version }}-dev
+
+            ⚠️ **This is a development pre-release** - Use at your own risk!
+
+            **Changes:**
+            - Built from commit: ${{ github.sha }}
+            - Branch: ${{ github.ref_name }}
+
+            **Installation:**
+            1. Download the artifact zip file
+            2. Extract it to your KOReader plugins directory
+            3. Restart KOReader and enable the plugin
+          files: dist/miniflux.koplugin.zip
+          draft: false
+          prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

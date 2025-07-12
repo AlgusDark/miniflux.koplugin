@@ -148,10 +148,12 @@ function KeyHandlerService:onTapImage(ges)
     return false  -- Pass through to menu activation or page turning
 end
 
----Show image viewer with custom key handlers
+---Show smart image viewer with auto-rotation and custom key handlers
 ---
----Creates a custom ImageViewer that can be closed with physical page turn keys.
----This overrides the default ImageViewer behavior which uses these keys for zooming.
+---Creates a SmartImageViewer that supports:
+--- - 4-direction rotation (0°, 90°, 180°, 270°)
+--- - Auto-rotation on device orientation changes
+--- - Physical page turn keys to close viewer
 ---
 ---Physical Key Mapping:
 ---- RPgFwd (Right Page Forward) - Close image viewer
@@ -165,12 +167,13 @@ end
 ---@param image table Image data from document
 ---@return nil
 function KeyHandlerService:showImageViewer(image)
-    local ImageViewer = require("ui/widget/imageviewer")
+    local SmartImageViewer = require("widgets/smart_imageviewer")
     
-    local imgviewer = ImageViewer:new{
+    local imgviewer = SmartImageViewer:new{
         image = image,
         with_title_bar = false,
         fullscreen = true,
+        ui_ref = self.miniflux_plugin.ui,  -- Pass UI reference for rotation events
         key_events = {
             -- Map all page turn keys to close the image viewer
             -- This overrides the default zoom behavior to provide consistent navigation
@@ -182,7 +185,7 @@ function KeyHandlerService:showImageViewer(image)
     }
     
     UIManager:show(imgviewer)
-    logger.dbg("KeyHandlerService: Showed image viewer with physical key close handlers")
+    logger.dbg("KeyHandlerService: Showed smart image viewer with auto-rotation and key handlers")
 end
 
 ---Check if current document is a miniflux entry

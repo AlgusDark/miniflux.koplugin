@@ -169,12 +169,15 @@ function EntryEntity.saveMetadata(params)
     local DocSettings = require("docsettings")
     local doc_settings = DocSettings:open(html_file)
 
+    -- Use server status for initial metadata save
+    local status_to_use = entry_data.status
+
     -- Prepare all settings
     local settings = {
         miniflux_entry_id = entry_data.id,
         miniflux_title = entry_data.title,
         miniflux_url = entry_data.url,
-        miniflux_status = entry_data.status,
+        miniflux_status = status_to_use,
         miniflux_published_at = entry_data.published_at,
         miniflux_images_included = include_images,
         miniflux_images_count = images_count,
@@ -207,18 +210,38 @@ end
 ---Update local entry status using DocSettings
 ---@param entry_id number Entry ID
 ---@param new_status string New status ("read" or "unread")
+---@param doc_settings? table Optional ReaderUI DocSettings instance to use
 ---@return boolean success
-function EntryEntity.updateEntryStatus(entry_id, new_status)
-    -- Use the new updateMetadata function for consistency
-    local doc_settings, err = EntryEntity.updateMetadata(entry_id, {
-        miniflux_status = new_status
+function EntryEntity.updateEntryStatus(entry_id, new_status, doc_settings)
+    local Debugger = require("utils/debugger")
+    Debugger.warn("updateEntryStatus: entry_id=" .. entry_id .. ", new_status=" .. new_status .. ", doc_settings=" .. (doc_settings and "provided" or "nil"))
+    
+    local success = true
+    local timestamp = os.date("%Y-%m-%d %H:%M:%S", os.time())
+    
+    -- Always update custom metadata (SDR file) - this is our reliable fallback
+    Debugger.warn("updateEntryStatus: Updating custom metadata for entry " .. entry_id)
+    local sdr_result, sdr_err = EntryEntity.updateMetadata(entry_id, {
+        miniflux_status = new_status,
+        miniflux_last_updated = timestamp
     })
-
-    if err then
-        return false
+    
+    if not sdr_result or sdr_err then
+        Debugger.warn("updateEntryStatus: Failed to update custom metadata: " .. tostring(sdr_err))
+        success = false
+    else
+        Debugger.warn("updateEntryStatus: Custom metadata updated successfully")
     end
-
-    local success = doc_settings ~= nil
+    
+    -- Also update ReaderUI DocSettings if available (for immediate UI consistency)
+    if doc_settings then
+        Debugger.warn("updateEntryStatus: Also updating ReaderUI DocSettings for entry " .. entry_id)
+        doc_settings:saveSetting("miniflux_status", new_status)
+        doc_settings:saveSetting("miniflux_last_updated", timestamp)
+        -- Don't flush here - let ReaderUI handle it when document closes
+        Debugger.warn("updateEntryStatus: ReaderUI DocSettings updated successfully")
+    end
+    
     return success
 end
 
@@ -577,6 +600,8 @@ end
 ---Get all locally downloaded entries by scanning the miniflux directory
 ---@return table[] Array of entry metadata objects (same format as API entries)
 function EntryEntity.getLocalEntries()
+    local Debugger = require("utils/debugger")
+    Debugger.warn("GET_LOCAL_ENTRIES: Starting scan...")
     local entries = {}
     local miniflux_dir = EntryEntity.getDownloadDir()
     
@@ -595,9 +620,13 @@ function EntryEntity.getLocalEntries()
             local html_file = EntryEntity.getEntryHtmlPath(entry_id)
             if lfs.attributes(html_file, "mode") == "file" then
                 -- Load metadata for this entry
+                Debugger.warn("GET_LOCAL_ENTRIES: Loading metadata for entry " .. entry_id)
                 local metadata = EntryEntity.loadMetadata(entry_id)
                 if metadata then
+                    Debugger.warn("GET_LOCAL_ENTRIES: Entry " .. entry_id .. " metadata loaded successfully")
                     table.insert(entries, metadata)
+                else
+                    Debugger.warn("GET_LOCAL_ENTRIES: Entry " .. entry_id .. " metadata failed to load")
                 end
             end
         end
@@ -611,6 +640,7 @@ function EntryEntity.getLocalEntries()
         return a_date > b_date
     end)
     
+    Debugger.warn("GET_LOCAL_ENTRIES: Scan complete, returning " .. #entries .. " entries")
     return entries
 end
 
