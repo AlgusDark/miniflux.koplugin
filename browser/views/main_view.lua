@@ -10,6 +10,7 @@ Handles data fetching, menu building, and UI rendering.
 local _ = require("gettext")
 local ViewUtils = require("browser/views/view_utils")
 local EntryEntity = require("entities/entry_entity")
+local Debugger = require("utils/debugger")
 
 local MainView = {}
 
@@ -19,24 +20,33 @@ local MainView = {}
 ---@param config MainViewConfig
 ---@return table|nil View data for browser rendering, or nil on error
 function MainView.show(config)
+    Debugger.enter("MainView.show")
+    
     -- Check network connectivity
     local NetworkMgr = require("ui/network/manager")
     local is_online = NetworkMgr:isConnected()
+    Debugger.debug("Network status: " .. tostring(is_online))
     
     -- Always get local entries count
     local local_entries = EntryEntity.getLocalEntries()
     local local_count = #local_entries
+    Debugger.debug("Local entries count: " .. local_count)
     
     local counts = nil
     if is_online then
-        -- Load online data if connected
+        Debugger.debug("Loading online data...")
+        -- Try to load online data if connected
         local error_msg
         counts, error_msg = MainView.loadData({ repositories = config.repositories })
         if not counts then
-            local Notification = require("utils/notification")
-            Notification:error(_("Failed to load Miniflux: ") .. tostring(error_msg))
-            return nil
+            Debugger.warn("Online data failed, falling back to offline mode: " .. tostring(error_msg))
+            -- Fall back to offline mode instead of showing error
+            is_online = false
+        else
+            Debugger.debug("Online data loaded successfully")
         end
+    else
+        Debugger.debug("Offline mode - skipping online data load")
     end
 
     -- Generate menu items using internal builder
@@ -72,37 +82,48 @@ end
 ---@param config {repositories: MinifluxRepositories}
 ---@return table|nil result, string|nil error
 function MainView.loadData(config)
+    Debugger.enter("MainView.loadData")
     local repositories = config.repositories
 
     local Notification = require("utils/notification")
     local loading_notification = Notification:info(_("Loading..."))
 
     -- Get unread count
+    Debugger.debug("Getting unread count...")
     local unread_count, unread_err = repositories.entry:getUnreadCount()
     if unread_err then
+        Debugger.error("Unread count failed: " .. tostring(unread_err.message))
         loading_notification:close()
         return nil, unread_err.message
     end
+    Debugger.debug("Unread count: " .. tostring(unread_count))
     ---@cast unread_count -nil
 
     -- Get feeds count
+    Debugger.debug("Getting feeds count...")
     local feeds_count, feeds_err = repositories.feed:getCount()
     if feeds_err then
+        Debugger.error("Feeds count failed: " .. tostring(feeds_err.message))
         loading_notification:close()
         return nil, feeds_err.message
     end
+    Debugger.debug("Feeds count: " .. tostring(feeds_count))
     ---@cast feeds_count -nil
 
     -- Get categories count
+    Debugger.debug("Getting categories count...")
     local categories_count, categories_err = repositories.category:getCount()
     if categories_err then
+        Debugger.error("Categories count failed: " .. tostring(categories_err.message))
         loading_notification:close()
         return nil, categories_err.message
     end
+    Debugger.debug("Categories count: " .. tostring(categories_count))
     ---@cast categories_count -nil
 
     loading_notification:close()
 
+    Debugger.exit("MainView.loadData", "success")
     return {
         unread_count = unread_count or 0,
         feeds_count = feeds_count or 0,
@@ -121,7 +142,7 @@ function MainView.buildItems(config)
 
     local items = {}
 
-    if is_online and counts then
+    if is_online then
         -- Online: Show all online options
         table.insert(items, {
             text = _("Unread"),

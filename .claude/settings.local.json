@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(git restore:*)",
+      "Bash(rm:*)",
+      "Bash(sed:*)",
+      "WebFetch(domain:miniflux.app)"
+    ],
+    "deny": []
+  }
+}

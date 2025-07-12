@@ -171,10 +171,8 @@ end
 ---@param entry_data table Entry data from API
 ---@param context? {type: "feed"|"category", id: number} Navigation context (nil = global)
 function MinifluxBrowser:openItem(entry_data, context)
-    -- Set browser context before opening entry
-    self.miniflux_plugin:setBrowserContext({
-        type = context and context.type or "global"
-    })
+    -- Set browser context before opening entry (preserve all context fields)
+    self.miniflux_plugin:setBrowserContext(context or { type = "global" })
 
     self.entry_service:readEntry(entry_data, self)
 end
@@ -267,11 +265,21 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         end,
         local_entries = function()
             local LocalEntriesView = require("browser/views/local_entries_view")
+            local EntryEntity = require("entities/entry_entity")
+            
+            -- Get lightweight navigation entries (5x less memory than full metadata)
+            local nav_entries = EntryEntity.getLocalEntriesForNavigation({settings = self.settings})
+            
             return LocalEntriesView.show({
                 settings = self.settings,
                 page_state = nav_config.page_state,
                 onSelectItem = function(entry_data)
-                    self:openItem(entry_data, nil) -- No context for local entries
+                    -- Create local navigation context with pre-sorted entries
+                    local local_context = {
+                        type = "local",
+                        ordered_entries = nav_entries
+                    }
+                    self:openItem(entry_data, local_context)
                 end
             })
         end,
