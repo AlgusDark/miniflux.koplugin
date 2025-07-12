@@ -24,11 +24,8 @@ function MainView.show(config)
     local is_online = NetworkMgr:isConnected()
     
     -- Always get local entries count
-    local Debugger = require("utils/debugger")
-    Debugger.warn("MAIN_VIEW: Scanning for local entries...")
     local local_entries = EntryEntity.getLocalEntries()
     local local_count = #local_entries
-    Debugger.warn("MAIN_VIEW: Found " .. local_count .. " local entries")
     
     local counts = nil
     if is_online then

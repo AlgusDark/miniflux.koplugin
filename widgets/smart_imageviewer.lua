@@ -9,23 +9,17 @@ Simple and focused - just overrides key events for better navigation.
 
 local ImageViewer = require("ui/widget/imageviewer")
 local UIManager = require("ui/uimanager")
-local Debugger = require("utils/debugger")
 
 ---@class SmartImageViewer : ImageViewer
-local SmartImageViewer = ImageViewer:extend{}
+local SmartImageViewer = ImageViewer:extend({})
 
 ---Initialize the SmartImageViewer
 function SmartImageViewer:init()
-    Debugger.enter("SmartImageViewer:init")
-    
     -- Call parent init
     ImageViewer.init(self)
-    
+
     -- Override key events after parent init (parent sets key_events dynamically)
     self:setupKeyEvents()
-    
-    Debugger.debug("SmartImageViewer: Initialized with custom key events")
-    Debugger.exit("SmartImageViewer:init")
 end
 
 ---Setup key events to override default zoom behavior with close actions
@@ -33,15 +27,14 @@ function SmartImageViewer:setupKeyEvents()
     -- Override the parent's key_events with our close actions
     self.key_events = {
         -- Map all page turn keys to close the image viewer (same as end-of-entry dialog)
-        CloseRPgFwd = { {"RPgFwd"}, doc = "close image viewer" },   -- Right page forward
-        CloseLPgFwd = { {"LPgFwd"}, doc = "close image viewer" },   -- Left page forward  
-        CloseRPgBack = { {"RPgBack"}, doc = "close image viewer" }, -- Right page back
-        CloseLPgBack = { {"LPgBack"}, doc = "close image viewer" }, -- Left page back
+        CloseRPgFwd = { { "RPgFwd" }, doc = "close image viewer" }, -- Right page forward
+        CloseLPgFwd = { { "LPgFwd" }, doc = "close image viewer" }, -- Left page forward
+        CloseRPgBack = { { "RPgBack" }, doc = "close image viewer" }, -- Right page back
+        CloseLPgBack = { { "LPgBack" }, doc = "close image viewer" }, -- Left page back
         -- Keep original close keys for other buttons
-        Close = { {"Back", "Left"}, doc = "close image viewer" },
-        CloseAlt = { {"Right"}, doc = "close image viewer" },
+        Close = { { "Back", "Left" }, doc = "close image viewer" },
+        CloseAlt = { { "Right" }, doc = "close image viewer" },
     }
-    Debugger.debug("SmartImageViewer: Key events set up to close instead of zoom")
 end
 
 ---Handle key events for closing image viewer
@@ -85,3 +78,4 @@ function SmartImageViewer:onCloseWidget()
 end
 
 return SmartImageViewer
+

@@ -7,7 +7,6 @@ It provides physical key support for end-of-book dialogs and image viewer intera
 
 local UIManager = require("ui/uimanager")
 local Device = require("device")
-local logger = require("logger")
 local _ = require("gettext")
 
 ---@class KeyHandlerService
@@ -24,16 +23,16 @@ function KeyHandlerService:new(params)
         miniflux_plugin = params.miniflux_plugin,
         entry_service = params.entry_service,
         navigation_service = params.navigation_service,
-        touch_zones_registered = false  -- Track registration state
+        touch_zones_registered = false -- Track registration state
     }
     setmetatable(instance, { __index = self })
-    
+
     -- Conditionally set up touch zones only for miniflux entries
     -- This prevents global override of ReaderUI for non-miniflux content
     if Device:isTouchDevice() and instance.miniflux_plugin.ui then
         instance:setupImageTouchZones()
     end
-    
+
     return instance
 end
 
@@ -66,31 +65,31 @@ function KeyHandlerService:setupImageTouchZones()
     -- Only register touch zones when viewing miniflux entries
     -- This prevents global override of ReaderUI for non-miniflux content
     if not self:isMinifluxEntry() then
-        logger.dbg("KeyHandlerService: Skipping touch zone registration (not miniflux entry)")
         return
     end
-    
+
     -- Avoid duplicate registration
     if self.touch_zones_registered then
-        logger.dbg("KeyHandlerService: Touch zones already registered")
         return
     end
-    
-    logger.dbg("KeyHandlerService: Setting up image touch zones with menu override")
-    
+
+
+
     -- Store zone definition for potential deregistration
     self.touch_zones = {
         {
             id = "miniflux_tap_image",
             ges = "tap",
             screen_zone = {
-                ratio_x = 0, ratio_y = 0,  -- Cover entire screen
-                ratio_w = 1, ratio_h = 1,
+                ratio_x = 0,
+                ratio_y = 0,              -- Cover entire screen
+                ratio_w = 1,
+                ratio_h = 1,
             },
             overrides = {
                 -- Override menu corner zones to prioritize image detection
                 "tap_top_left_corner",     -- Top-left menu activation
-                "tap_top_right_corner",    -- Top-right menu activation  
+                "tap_top_right_corner",    -- Top-right menu activation
                 "tap_left_bottom_corner",  -- Bottom-left menu activation
                 "tap_right_bottom_corner", -- Bottom-right menu activation
                 -- Override page turning zones as secondary priority
@@ -100,10 +99,9 @@ function KeyHandlerService:setupImageTouchZones()
             handler = function(ges) return self:onTapImage(ges) end,
         },
     }
-    
+
     self.miniflux_plugin.ui:registerTouchZones(self.touch_zones)
     self.touch_zones_registered = true
-    logger.dbg("KeyHandlerService: Touch zones registered successfully")
 end
 
 ---Handle image tap events
@@ -126,26 +124,26 @@ function KeyHandlerService:onTapImage(ges)
     -- Context filter: Only process taps on miniflux entries
     -- This prevents interference with regular reading of other documents
     if not self:isMinifluxEntry() then
-        return false  -- Not our content, let other handlers process
+        return false -- Not our content, let other handlers process
     end
-    
+
     -- Convert screen coordinates to document coordinates
     local tap_pos = self.miniflux_plugin.ui.view:screenToPageTransform(ges.pos)
-    if not tap_pos then 
-        return false  -- Couldn't transform coordinates, let other handlers process
+    if not tap_pos then
+        return false -- Couldn't transform coordinates, let other handlers process
     end
-    
+
     -- Use KOReader's built-in image detection (same method as ReaderHighlight)
     -- Parameters: position, try_image_box=true, try_bb_from_selection=true
     local image = self.miniflux_plugin.ui.document:getImageFromPosition(tap_pos, true, true)
     if image then
         -- Found an image at tap position - show custom viewer with key handlers
         self:showImageViewer(image)
-        return true  -- We handled this tap, block menu/page turn handlers
+        return true -- We handled this tap, block menu/page turn handlers
     end
-    
+
     -- No image found at tap position - let other handlers process the tap
-    return false  -- Pass through to menu activation or page turning
+    return false -- Pass through to menu activation or page turning
 end
 
 ---Show smart image viewer with auto-rotation and custom key handlers
@@ -157,7 +155,7 @@ end
 ---
 ---Physical Key Mapping:
 ---- RPgFwd (Right Page Forward) - Close image viewer
----- LPgFwd (Left Page Forward) - Close image viewer  
+---- LPgFwd (Left Page Forward) - Close image viewer
 ---- RPgBack (Right Page Back) - Close image viewer
 ---- LPgBack (Left Page Back) - Close image viewer
 ---
@@ -168,12 +166,12 @@ end
 ---@return nil
 function KeyHandlerService:showImageViewer(image)
     local SmartImageViewer = require("widgets/smart_imageviewer")
-    
-    local imgviewer = SmartImageViewer:new{
+
+    local imgviewer = SmartImageViewer:new {
         image = image,
         with_title_bar = false,
         fullscreen = true,
-        ui_ref = self.miniflux_plugin.ui,  -- Pass UI reference for rotation events
+        ui_ref = self.miniflux_plugin.ui, -- Pass UI reference for rotation events
         key_events = {
             -- Map all page turn keys to close the image viewer
             -- This overrides the default zoom behavior to provide consistent navigation
@@ -183,9 +181,8 @@ function KeyHandlerService:showImageViewer(image)
             CloseLPgBack = { { "LPgBack" }, event = "Close" }, -- Left page back
         },
     }
-    
+
     UIManager:show(imgviewer)
-    logger.dbg("KeyHandlerService: Showed smart image viewer with auto-rotation and key handlers")
 end
 
 ---Check if current document is a miniflux entry
@@ -194,7 +191,7 @@ function KeyHandlerService:isMinifluxEntry()
     if not self.miniflux_plugin.ui or not self.miniflux_plugin.ui.document or not self.miniflux_plugin.ui.document.file then
         return false
     end
-    
+
     local file_path = self.miniflux_plugin.ui.document.file
     return file_path:match("/miniflux/") and file_path:match("%.html$")
 end
@@ -222,47 +219,47 @@ function KeyHandlerService:enhanceDialogWithKeys(dialog, entry_info)
     if not dialog then
         return dialog
     end
-    
+
     -- Only add key handlers if device has physical keys
     -- Use Device:hasKeys() if available, otherwise check for common e-reader devices
-    local has_keys = (Device.hasKeys and Device:hasKeys()) or 
-                     Device:isKobo() or Device:isKindle() or 
-                     Device:isCervantes() or Device:isRemarkable()
-    
+    local has_keys = (Device.hasKeys and Device:hasKeys()) or
+        Device:isKobo() or Device:isKindle() or
+        Device:isCervantes() or Device:isRemarkable()
+
     if not has_keys then
-        return dialog  -- No physical keys, return dialog unchanged
+        return dialog -- No physical keys, return dialog unchanged
     end
-    
+
     -- Add key event handlers to the existing dialog
     dialog.key_events = dialog.key_events or {}
-    
+
     -- Register key events for entry navigation
     -- Each key event maps a physical key to an event name that triggers a handler function
-    
+
     -- Navigate to previous entry (logical "back" direction)
     dialog.key_events.NavigatePreviousRPgBack = {
-        { "RPgBack" },    -- Right page back button
+        { "RPgBack" }, -- Right page back button
         event = "NavigatePrevious"
     }
     dialog.key_events.NavigatePreviousLPgBack = {
-        { "LPgBack" },    -- Left page back button  
+        { "LPgBack" }, -- Left page back button
         event = "NavigatePrevious"
     }
-    
+
     -- Navigate to next entry (logical "forward" direction)
     dialog.key_events.NavigateNextRPgFwd = {
-        { "RPgFwd" },     -- Right page forward button
+        { "RPgFwd" }, -- Right page forward button
         event = "NavigateNext"
     }
     dialog.key_events.NavigateNextLPgFwd = {
-        { "LPgFwd" },     -- Left page forward button
+        { "LPgFwd" }, -- Left page forward button
         event = "NavigateNext"
     }
-    
+
     -- Store references for navigation
     local key_handler_service = self
     local stored_entry_info = entry_info
-    
+
     -- Add event handlers
     function dialog:onNavigatePrevious()
         UIManager:close(self)
@@ -276,7 +273,7 @@ function KeyHandlerService:enhanceDialogWithKeys(dialog, entry_info)
         })
         return true
     end
-    
+
     function dialog:onNavigateNext()
         UIManager:close(self)
         local Navigation = require("services/navigation_service")
@@ -289,8 +286,7 @@ function KeyHandlerService:enhanceDialogWithKeys(dialog, entry_info)
         })
         return true
     end
-    
-    logger.dbg("KeyHandlerService: Enhanced dialog with key handlers")
+
     return dialog
 end
 
@@ -299,7 +295,6 @@ end
 ---@return nil
 function KeyHandlerService:cleanup()
     if self.touch_zones_registered and self.touch_zones then
-        logger.dbg("KeyHandlerService: Cleaning up touch zones")
         self.miniflux_plugin.ui:unRegisterTouchZones(self.touch_zones)
         self.touch_zones_registered = false
         self.touch_zones = nil

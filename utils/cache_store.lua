@@ -1,6 +1,5 @@
 local DataStorage = require("datastorage")
 local CacheSQLite = require("cachesqlite")
-local logger = require("logger")
 
 -- **Generic Cache Store** - Provider-agnostic caching layer using KOReader's CacheSQLite
 --
@@ -56,7 +55,7 @@ function CacheStore:new(config)
     setmetatable(instance, self)
     self.__index = self
 
-    logger.dbg("CacheStore: Initialized with database:", db_path)
+
 
     return instance
 end
@@ -97,12 +96,10 @@ end
 ---@return boolean success
 function CacheStore:set(key, opts)
     if not key or type(key) ~= "string" or key == "" then
-        logger.err("CacheStore: Invalid cache key provided")
         return false
     end
 
     if not opts or type(opts) ~= "table" then
-        logger.err("CacheStore: Invalid options provided to set()")
         return false
     end
 
@@ -114,12 +111,11 @@ function CacheStore:set(key, opts)
     local success, err = self.cache:insert(key, cache_entry)
 
     if success and err then
-        logger.dbg("CacheStore: Cached data for key:", key, "TTL:", ttl)
         return true
     else
         -- CacheSQLite can fail with large objects due to type conversion errors
         -- This is expected behavior for large entry arrays - cache only small metadata
-        logger.dbg("CacheStore: Cache insert failed for key:", key, "- continuing without cache")
+
         return false -- Not a fatal error - just means no caching for this data
     end
 end
@@ -144,12 +140,11 @@ function CacheStore:get(key, opts)
 
     -- Check if entry is expired
     if self:isExpired(cache_entry) then
-        logger.dbg("CacheStore: Cache entry expired for key:", key)
         self.cache:remove(key) -- Remove expired entry
         return nil, false
     end
 
-    logger.dbg("CacheStore: Cache hit for key:", key)
+
     return cache_entry.data, true
 end
 
@@ -158,14 +153,13 @@ end
 ---@return boolean success
 function CacheStore:remove(key)
     self.cache:remove(key)
-    logger.dbg("CacheStore: Removed cache for key:", key)
+
     return true
 end
 
 ---Clear all cache entries (useful for settings changes)
 function CacheStore:clear()
     self.cache:clear()
-    logger.info("CacheStore: Cleared all cache entries")
 end
 
 ---Get cache statistics from SQLite
@@ -177,7 +171,7 @@ function CacheStore:getStats()
         count = 0 -- CacheSQLite doesn't expose count directly
     }
 
-    logger.dbg("CacheStore: Cache size:", stats.size, "bytes")
+
     return stats
 end
 
