@@ -84,7 +84,6 @@ function Browser:transitionTo(target_mode)
 
     if target_mode == BrowserMode.NORMAL then
         -- Exiting selection mode - clean up all selection state
-        local previous_selection_count = self.selected_items and self:getSelectedCount() or 0
         self.selected_items = nil      -- Reset selection mode (enables early returns in updateItemDimStatus)
         self.last_selected_index = nil -- Reset range selection tracking
         self.title_bar:setRightIcon("exit")
@@ -152,7 +151,6 @@ function Browser:showSelectionActionsDialog()
             end
             table.insert(buttons, row)
         end
-        table.insert(buttons, {}) -- separator
     end
 
     -- Add select/deselect all buttons
@@ -597,8 +595,7 @@ function Browser:doRangeSelection(item)
 
     -- Determine if we should select or deselect based on the target item's current state
     local target_item_id = self:getItemId(item)
-    local should_select = true
-    should_select = not self.selected_items[target_item_id]
+    local should_select = not self.selected_items[target_item_id]
 
     -- Apply selection/deselection to range
     for i = start_index, end_index do

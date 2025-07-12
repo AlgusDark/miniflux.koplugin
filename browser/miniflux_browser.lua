@@ -5,6 +5,7 @@ local FeedRepository = require("repositories/feed_repository")
 local CategoryRepository = require("repositories/category_repository")
 
 local _ = require("gettext")
+local T = require("ffi/util").template
 
 -- Import view modules
 local MainView = require("browser/views/main_view")
@@ -144,7 +145,7 @@ function MinifluxBrowser:refreshCurrentViewData()
         if current_path.context then
             nav_config.context = current_path.context
         end
-        
+
         local view_handlers = self:getRouteHandlers(nav_config)
         local handler = view_handlers[current_path.to]
         if handler then
@@ -153,7 +154,7 @@ function MinifluxBrowser:refreshCurrentViewData()
             if view_data then
                 -- Update view data without changing navigation
                 self.view_data = view_data
-                
+
                 -- Re-render with fresh data
                 self:switchItemTable(
                     view_data.title,
@@ -266,10 +267,10 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         local_entries = function()
             local LocalEntriesView = require("browser/views/local_entries_view")
             local EntryEntity = require("entities/entry_entity")
-            
+
             -- Get lightweight navigation entries (5x less memory than full metadata)
             local nav_entries = EntryEntity.getLocalEntriesForNavigation({settings = self.settings})
-            
+
             return LocalEntriesView.show({
                 settings = self.settings,
                 page_state = nav_config.page_state,
@@ -314,6 +315,41 @@ function MinifluxBrowser:getItemId(item_data)
     return nil
 end
 
+---Analyze selection to determine available actions efficiently (single-pass optimization)
+---@param selected_items table Array of selected item objects
+---@return {has_local: boolean, has_remote: boolean} Analysis results
+function MinifluxBrowser:analyzeSelection(selected_items)
+    local has_local, has_remote = false, false
+    local EntryEntity = require("entities/entry_entity")
+    local lfs = require("libs/libkoreader-lfs")
+
+    for _, item in ipairs(selected_items) do
+        local entry_data = item.entry_data
+        if entry_data then
+            local html_file = EntryEntity.getEntryHtmlPath(entry_data.id)
+            if lfs.attributes(html_file, "mode") == "file" then
+                has_local = true
+            else
+                has_remote = true
+            end
+
+            -- Early exit: once we find both types, no need to continue
+            if has_local and has_remote then
+                break
+            end
+        end
+    end
+
+    return {has_local = has_local, has_remote = has_remote}
+end
+
+---Check if any selected items are locally downloaded entries (legacy compatibility)
+---@param selected_items table Array of selected item objects
+---@return boolean True if at least one entry is locally downloaded
+function MinifluxBrowser:hasLocalEntries(selected_items)
+    return self:analyzeSelection(selected_items).has_local
+end
+
 ---Get selection actions available for RSS entries (implements Browser:getSelectionActions)
 ---@return table[] Array of action objects with text and callback properties
 function MinifluxBrowser:getSelectionActions()
@@ -331,39 +367,175 @@ function MinifluxBrowser:getSelectionActions()
         -- Check if we're in local entries view (entries already downloaded)
         local current_path = self.paths and #self.paths > 0 and self.paths[#self.paths]
         local is_local_view = current_path and current_path.to == "local_entries"
-        
-        -- For entries: show download (unless in local view), mark as unread, and mark as read actions
-        if not is_local_view then
-            table.insert(actions, {
-                text = _("Download Selected"),
-                callback = function(selected_items)
-                    self:downloadSelectedEntries(selected_items)
+
+        -- Build file operation buttons (Download/Delete)
+        local file_ops = {}
+        if is_local_view then
+            -- Local view optimization: ALL entries are local, so always show delete, never download
+            table.insert(file_ops, {
+                text = _("Delete Selected"),
+                callback = function(items)
+                    self:deleteSelectedEntries(items)
                 end,
             })
+        else
+            -- Non-local views: Smart button logic with single-pass analysis
+            local analysis = self:analyzeSelection(selected_items)
+
+            -- Show download only if selection contains non-downloaded entries
+            if analysis.has_remote then
+                table.insert(file_ops, {
+                    text = _("Download Selected"),
+                    callback = function(items)
+                        self:downloadSelectedEntries(items)
+                    end,
+                })
+            end
+
+            -- Show delete only if selection contains downloaded entries
+            if analysis.has_local then
+                table.insert(file_ops, {
+                    text = _("Delete Selected"),
+                    callback = function(items)
+                        self:deleteSelectedEntries(items)
+                    end,
+                })
+            end
         end
+
+        -- Add file operation buttons to actions
+        for _, button in ipairs(file_ops) do
+            table.insert(actions, button)
+        end
+
+        -- Always add Mark actions as a guaranteed pair
         table.insert(actions, {
             text = _("Mark as Unread"),
-            callback = function(selected_items)
-                self:markSelectedAsUnread(selected_items)
+            callback = function(items)
+                self:markSelectedAsUnread(items)
             end,
         })
         table.insert(actions, {
             text = _("Mark as Read"),
-            callback = function(selected_items)
-                self:markSelectedAsRead(selected_items)
+            callback = function(items)
+                self:markSelectedAsRead(items)
             end,
         })
     else
         -- For feeds and categories: only show "Mark as read"
         table.insert(actions, {
             text = _("Mark as Read"),
-            callback = function(selected_items)
-                self:markSelectedAsRead(selected_items)
+            callback = function(items)
+                self:markSelectedAsRead(items)
             end,
         })
     end
 
     return actions
+end
+
+---Override base Browser to provide explicit 2-column layout for better Mark action pairing
+function MinifluxBrowser:showSelectionActionsDialog()
+    local ButtonDialog = require("ui/widget/buttondialog")
+    local UIManager = require("ui/uimanager")
+    local Template = require("ffi/util").template
+    local N_ = require("gettext").ngettext
+
+    local selected_count = self:getSelectedCount()
+    local actions_enabled = selected_count > 0
+
+    -- Build title showing selection count
+    local title
+    if actions_enabled then
+        title = Template(N_("1 item selected", "%1 items selected", selected_count), selected_count)
+    else
+        title = _("No items selected")
+    end
+
+    -- Get available actions from our getSelectionActions method
+    local selection_actions = {}
+    if actions_enabled then
+        local available_actions = self:getSelectionActions()
+
+        for _, action in ipairs(available_actions) do
+            table.insert(selection_actions, {
+                text = action.text,
+                enabled = actions_enabled,
+                callback = function()
+                    UIManager:close(self.selection_dialog)
+                    local selected_items = self:getSelectedItems()
+                    action.callback(selected_items)
+                end,
+            })
+        end
+    end
+
+    -- Build explicit 2-column button layout
+    local buttons = {}
+
+    -- Add selection actions with explicit row control for Mark actions pairing
+    if #selection_actions > 0 then
+        local i = 1
+        while i <= #selection_actions do
+            local row = {}
+
+            -- Special handling for Mark actions - always pair them
+            if selection_actions[i] and selection_actions[i].text:match("Mark as") and
+               selection_actions[i + 1] and selection_actions[i + 1].text:match("Mark as") then
+                -- Found Mark actions pair - add them together
+                table.insert(row, selection_actions[i])
+                table.insert(row, selection_actions[i + 1])
+                i = i + 2
+            else
+                -- Regular action buttons - group in pairs
+                table.insert(row, selection_actions[i])
+                if selection_actions[i + 1] and not selection_actions[i + 1].text:match("Mark as") then
+                    table.insert(row, selection_actions[i + 1])
+                    i = i + 2
+                else
+                    i = i + 1
+                end
+            end
+
+            table.insert(buttons, row)
+        end
+    end
+
+    -- Add select/deselect all buttons
+    table.insert(buttons, {
+        {
+            text = _("Select all"),
+            callback = function()
+                UIManager:close(self.selection_dialog)
+                self:selectAll()
+            end,
+        },
+        {
+            text = _("Deselect all"),
+            callback = function()
+                UIManager:close(self.selection_dialog)
+                self:deselectAll()
+            end,
+        },
+    })
+
+    -- Add exit selection mode button
+    table.insert(buttons, {
+        {
+            text = _("Exit selection mode"),
+            callback = function()
+                UIManager:close(self.selection_dialog)
+                self:transitionTo(BrowserMode.NORMAL)
+            end,
+        },
+    })
+
+    self.selection_dialog = ButtonDialog:new({
+        title = title,
+        title_align = "center",
+        buttons = buttons,
+    })
+    UIManager:show(self.selection_dialog)
 end
 
 -- =============================================================================
@@ -417,7 +589,7 @@ function MinifluxBrowser:markSelectedAsRead(selected_items)
     if success then
         -- Update status in current item_table for immediate visual feedback
         self:updateItemTableStatus(selected_items, "read", item_type)
-        
+
         -- For feed/category operations, refresh data to show updated counts
         if item_type == "feed" or item_type == "category" then
             self:refreshCurrentViewData()
@@ -471,18 +643,18 @@ function MinifluxBrowser:downloadSelectedEntries(selected_items)
     if #selected_items == 0 then
         return
     end
-    
+
     -- Extract entry data from selected items
     local entry_data_list = {}
     for _, item in ipairs(selected_items) do
         table.insert(entry_data_list, item.entry_data)
     end
-    
+
     -- Call batch download service with completion callback
     self.entry_service:downloadEntries(entry_data_list, function(status)
         -- Refresh view data to rebuild menu items with updated download status indicators
         self:refreshCurrentViewData()
-        
+
         -- Only transition to normal mode if download completed successfully
         -- Keep selection mode for cancelled downloads so user can modify and retry
         if status == "completed" then
@@ -490,8 +662,129 @@ function MinifluxBrowser:downloadSelectedEntries(selected_items)
         end
         -- For "cancelled" status, stay in selection mode to preserve user's selection
     end)
-    
+
     -- Don't transition immediately - wait for completion callback
+end
+
+---Delete selected local entries with confirmation dialog
+---@param selected_items table Array of selected entry items
+function MinifluxBrowser:deleteSelectedEntries(selected_items)
+    local Debugger = require("utils/debugger")
+    Debugger.enter("MinifluxBrowser:deleteSelectedEntries")
+    Debugger.debug("Selected items count: " .. #selected_items)
+
+    if #selected_items == 0 then
+        Debugger.warn("No items selected for deletion")
+        return
+    end
+
+    -- Filter to only local entries (entries that exist locally)
+    local local_entries = {}
+    local EntryEntity = require("entities/entry_entity")
+    Debugger.debug("Filtering local entries...")
+
+    for _, item in ipairs(selected_items) do
+        local entry_data = item.entry_data
+        if entry_data then
+            Debugger.debug("Checking entry ID: " .. tostring(entry_data.id))
+            -- Check if entry is locally downloaded by verifying HTML file exists
+            local html_file = EntryEntity.getEntryHtmlPath(entry_data.id)
+            local lfs = require("libs/libkoreader-lfs")
+            if lfs.attributes(html_file, "mode") == "file" then
+                Debugger.debug("Found local entry: " .. tostring(entry_data.id))
+                table.insert(local_entries, entry_data)
+            else
+                Debugger.debug("Entry not local: " .. tostring(entry_data.id))
+            end
+        end
+    end
+
+    Debugger.debug("Local entries count: " .. #local_entries)
+
+    if #local_entries == 0 then
+        Debugger.warn("No local entries found in selection")
+        local Notification = require("utils/notification")
+        Notification:info(_("No local entries selected for deletion"))
+        return
+    end
+
+    -- Show confirmation dialog
+    Debugger.debug("Creating confirmation dialog...")
+    local UIManager = require("ui/uimanager")
+    local ConfirmBox = require("ui/widget/confirmbox")
+
+    Debugger.debug("Building confirmation message...")
+    local message
+    if #local_entries == 1 then
+        message = _("Delete this local entry?\n\nThis will remove the downloaded article and images from your device.")
+        Debugger.debug("Using single entry message")
+    else
+        message = T(_("Delete %1 local entries?\n\nThis will remove the downloaded articles and images from your device."), #local_entries)
+        Debugger.debug("Using multiple entries message with count: " .. #local_entries)
+    end
+
+    Debugger.debug("Creating ConfirmBox widget...")
+    local confirm_dialog = ConfirmBox:new{
+        text = message,
+        ok_text = _("Delete"),
+        ok_callback = function()
+            Debugger.debug("User confirmed deletion")
+            self:performBatchDelete(local_entries)
+        end,
+        cancel_text = _("Cancel"),
+        cancel_callback = function()
+            Debugger.debug("User cancelled deletion")
+        end,
+    }
+
+    Debugger.debug("Showing confirmation dialog...")
+    UIManager:show(confirm_dialog)
+end
+
+---Perform the actual batch deletion of local entries
+---@param local_entries table Array of entry data objects
+function MinifluxBrowser:performBatchDelete(local_entries)
+    local Debugger = require("utils/debugger")
+    Debugger.enter("MinifluxBrowser:performBatchDelete")
+    Debugger.debug("Deleting " .. #local_entries .. " entries")
+
+    local Notification = require("utils/notification")
+    local progress_notification = Notification:info(_("Deleting entries..."))
+
+    local success_count = 0
+
+    -- Delete each entry
+    for i, entry_data in ipairs(local_entries) do
+        Debugger.debug("Deleting entry " .. i .. "/" .. #local_entries .. ": " .. tostring(entry_data.id))
+        local success = self.entry_service:deleteLocalEntry(entry_data.id)
+        if success then
+            success_count = success_count + 1
+            Debugger.debug("Successfully deleted entry: " .. tostring(entry_data.id))
+        else
+            Debugger.error("Failed to delete entry: " .. tostring(entry_data.id))
+        end
+    end
+
+    progress_notification:close()
+
+    -- Show result notification
+    if success_count == #local_entries then
+        if #local_entries == 1 then
+            Notification:info(_("Entry deleted successfully"))
+        else
+            Notification:info(T(_("%1 entries deleted successfully"), success_count))
+        end
+    elseif success_count > 0 then
+        Notification:warning(T(_("%1 of %2 entries deleted successfully"), success_count, #local_entries))
+    else
+        Notification:error(_("Failed to delete entries"))
+    end
+
+    -- Refresh view to update the entries list
+    self:refreshCurrentViewData()
+
+    -- Exit selection mode
+    self:transitionTo(BrowserMode.NORMAL)
 end
 
 ---Get configuration for rebuilding entry items
@@ -522,7 +815,6 @@ function MinifluxBrowser:updateItemTableStatus(selected_items, new_status, item_
     end
 
     if item_type == "entry" then
-        local EntriesView = require("browser/views/entries_view")
         local item_config = self:getEntryItemConfig()
 
         -- Create lookup table for faster searching
