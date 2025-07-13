@@ -69,6 +69,10 @@ function MinifluxBrowser:onLeftButtonTap()
 
     local UIManager = require("ui/uimanager")
     local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
+    local NetworkMgr = require("ui/network/manager")
+
+    -- Check network status every time settings is opened
+    local is_online = NetworkMgr:isOnline()
 
     -- Check if we're in a view that doesn't need filtering (unread or local entries)
     local current_path = self.paths and #self.paths > 0 and self.paths[#self.paths]
@@ -78,8 +82,27 @@ function MinifluxBrowser:onLeftButtonTap()
 
     local buttons = {}
 
-    if not should_hide_filter then
-        -- Only show status toggle for non-unread views
+    -- Add Wi-Fi button when offline
+    if not is_online then
+        table.insert(buttons, {
+            {
+                text = _("Turn Wi-Fi on"),
+                callback = function()
+                    -- Don't close dialog immediately - keep it open if user cancels Wi-Fi prompt
+                    NetworkMgr:runWhenOnline(function()
+                        -- Close settings dialog only after successful connection
+                        UIManager:close(self.config_dialog)
+                        -- Force refresh with cache invalidation after connection
+                        self:refreshWithCacheInvalidation()
+                    end)
+                end,
+            },
+        })
+    end
+
+    -- Only show filter toggle when online and in views that support filtering
+    if is_online and not should_hide_filter then
+        -- Only show status toggle for non-unread views when online
         local hide_read_entries = self.settings.hide_read_entries
         local toggle_text = hide_read_entries and _("Show all entries") or _("Show unread entries")
 
@@ -89,6 +112,19 @@ function MinifluxBrowser:onLeftButtonTap()
                 callback = function()
                     UIManager:close(self.config_dialog)
                     self:toggleHideReadEntries()
+                end,
+            },
+        })
+    end
+
+    -- Show refresh button when online
+    if is_online then
+        table.insert(buttons, {
+            {
+                text = _("Refresh"),
+                callback = function()
+                    UIManager:close(self.config_dialog)
+                    self:refreshWithCacheInvalidation()
                 end,
             },
         })
@@ -135,36 +171,64 @@ end
 function MinifluxBrowser:refreshCurrentViewData()
     -- Get current view info without manipulating navigation stack
     local current_path = self.paths and self.paths[#self.paths]
-    if current_path then
-        -- Get view handlers and refresh data directly
-        local nav_config = {
-            view_name = current_path.to,
-            page_state = self:getCurrentItemNumber(),
-        }
-        if current_path.context then
-            nav_config.context = current_path.context
-        end
 
-        local view_handlers = self:getRouteHandlers(nav_config)
-        local handler = view_handlers[current_path.to]
-        if handler then
-            -- Get fresh view data
-            local view_data = handler()
-            if view_data then
-                -- Update view data without changing navigation
-                self.view_data = view_data
+    -- Handle root view (main view) where paths is empty due to is_root = true
+    local view_name = current_path and current_path.to or "main"
+    local context = current_path and current_path.context or nil
 
-                -- Re-render with fresh data
-                self:switchItemTable(
-                    view_data.title,
-                    view_data.items,
-                    view_data.page_state,
-                    view_data.menu_title,
-                    view_data.subtitle
-                )
-            end
+    -- Get view handlers and refresh data directly
+    local nav_config = {
+        view_name = view_name,
+        page_state = self:getCurrentItemNumber(),
+    }
+    if context then
+        nav_config.context = context
+    end
+
+    local view_handlers = self:getRouteHandlers(nav_config)
+    local handler = view_handlers[view_name]
+    if handler then
+        -- Get fresh view data
+        local view_data = handler()
+        if view_data then
+            -- Update view data without changing navigation
+            self.view_data = view_data
+
+            -- Re-render with fresh data
+            self:switchItemTable(
+                view_data.title,
+                view_data.items,
+                view_data.page_state,
+                view_data.menu_title,
+                view_data.subtitle
+            )
         end
     end
+end
+
+---Refresh current view with global cache invalidation
+function MinifluxBrowser:refreshWithCacheInvalidation()
+    local Notification = require("utils/notification")
+
+    -- Show loading notification
+    local loading_notification = Notification:info(_("Refreshing..."))
+
+    -- Invalidate all repository caches globally
+    -- Entry repository: invalidate count caches (unread counts, etc.)
+    self.repositories.entry.cache:invalidateAll()
+
+    -- Feed repository: invalidate feed list and count caches
+    self.repositories.feed:invalidateCache()
+
+    -- Category repository: invalidate category list and count caches
+    self.repositories.category:invalidateCache()
+
+    -- Refresh current view with fresh data
+    self:refreshCurrentViewData()
+
+    -- Close loading notification and show success
+    loading_notification:close()
+    Notification:success(_("Refreshed with fresh data"))
 end
 
 ---Open an entry with optional navigation context (implements Browser:openItem)
@@ -675,88 +739,60 @@ end
 ---Delete selected local entries with confirmation dialog
 ---@param selected_items table Array of selected entry items
 function MinifluxBrowser:deleteSelectedEntries(selected_items)
-    local Debugger = require("utils/debugger")
-    Debugger.enter("MinifluxBrowser:deleteSelectedEntries")
-    Debugger.debug("Selected items count: " .. #selected_items)
-
     if #selected_items == 0 then
-        Debugger.warn("No items selected for deletion")
         return
     end
 
     -- Filter to only local entries (entries that exist locally)
     local local_entries = {}
     local EntryEntity = require("entities/entry_entity")
-    Debugger.debug("Filtering local entries...")
 
     for i, item in ipairs(selected_items) do
         local entry_data = item.entry_data
         if entry_data then
-            Debugger.debug("Checking entry ID: " .. tostring(entry_data.id))
             -- Check if entry is locally downloaded by verifying HTML file exists
             local html_file = EntryEntity.getEntryHtmlPath(entry_data.id)
             local lfs = require("libs/libkoreader-lfs")
             if lfs.attributes(html_file, "mode") == "file" then
-                Debugger.debug("Found local entry: " .. tostring(entry_data.id))
                 table.insert(local_entries, entry_data)
-            else
-                Debugger.debug("Entry not local: " .. tostring(entry_data.id))
             end
         end
     end
 
-    Debugger.debug("Local entries count: " .. #local_entries)
-
     if #local_entries == 0 then
-        Debugger.warn("No local entries found in selection")
         local Notification = require("utils/notification")
         Notification:info(_("No local entries selected for deletion"))
         return
     end
 
     -- Show confirmation dialog
-    Debugger.debug("Creating confirmation dialog...")
     local UIManager = require("ui/uimanager")
     local ConfirmBox = require("ui/widget/confirmbox")
 
-    Debugger.debug("Building confirmation message...")
     local message
     if #local_entries == 1 then
         message = _("Delete this local entry?\n\nThis will remove the downloaded article and images from your device.")
-        Debugger.debug("Using single entry message")
     else
         message = T(
             _("Delete %1 local entries?\n\nThis will remove the downloaded articles and images from your device."),
             #local_entries
         )
-        Debugger.debug("Using multiple entries message with count: " .. #local_entries)
     end
 
-    Debugger.debug("Creating ConfirmBox widget...")
     local confirm_dialog = ConfirmBox:new({
         text = message,
         ok_text = _("Delete"),
         ok_callback = function()
-            Debugger.debug("User confirmed deletion")
             self:performBatchDelete(local_entries)
         end,
         cancel_text = _("Cancel"),
-        cancel_callback = function()
-            Debugger.debug("User cancelled deletion")
-        end,
     })
-
-    Debugger.debug("Showing confirmation dialog...")
     UIManager:show(confirm_dialog)
 end
 
 ---Perform the actual batch deletion of local entries
 ---@param local_entries table Array of entry data objects
 function MinifluxBrowser:performBatchDelete(local_entries)
-    local Debugger = require("utils/debugger")
-    Debugger.enter("MinifluxBrowser:performBatchDelete")
-    Debugger.debug("Deleting " .. #local_entries .. " entries")
-
     local Notification = require("utils/notification")
     local progress_notification = Notification:info(_("Deleting entries..."))
 
@@ -764,13 +800,9 @@ function MinifluxBrowser:performBatchDelete(local_entries)
 
     -- Delete each entry
     for i, entry_data in ipairs(local_entries) do
-        Debugger.debug("Deleting entry " .. i .. "/" .. #local_entries .. ": " .. tostring(entry_data.id))
         local success = self.entry_service:deleteLocalEntry(entry_data.id)
         if success then
             success_count = success_count + 1
-            Debugger.debug("Successfully deleted entry: " .. tostring(entry_data.id))
-        else
-            Debugger.error("Failed to delete entry: " .. tostring(entry_data.id))
         end
     end
 

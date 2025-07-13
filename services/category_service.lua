@@ -50,18 +50,29 @@ function CategoryService:markAsRead(category_id)
     local result, err = self.category_repository:markAsRead(category_id, {
         dialogs = {
             loading = { text = progress_message },
-            success = { text = success_message },
-            error = { text = error_message }
+            -- Note: No success/error dialogs - we handle both cases gracefully
         }
     })
     
     if err then
-        -- Error dialog already shown by API system
-        return false
+        -- API failed - use queue fallback for offline mode
+        local CategoryQueue = require("utils/category_queue")
+        CategoryQueue.enqueue(category_id, "mark_all_read")
+        
+        -- Show offline message instead of error
+        Notification:info(_("Category marked as read (will sync when online)"))
+        return true -- Still successful from user perspective
     else
-        -- Invalidate both category and feed caches so next navigation shows correct counts
+        -- API success - remove from queue since server is source of truth
+        local CategoryQueue = require("utils/category_queue")
+        CategoryQueue.remove(category_id)
+        
+        -- Invalidate both category and feed caches IMMEDIATELY so counts update
         self.category_repository:invalidateCache()
         self.feed_repository:invalidateCache()
+        
+        -- Show simple success notification (no dialog)
+        Notification:success(success_message)
         return true
     end
 end

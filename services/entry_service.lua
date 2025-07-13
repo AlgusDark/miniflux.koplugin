@@ -215,8 +215,9 @@ end
 
 ---Process the status queue when network is available (with user confirmation)
 ---@param auto_confirm? boolean Skip confirmation dialog if true
+---@param silent? boolean Skip notifications if true
 ---@return boolean success
-function EntryService:processStatusQueue(auto_confirm)
+function EntryService:processStatusQueue(auto_confirm, silent)
     local queue = self:loadQueue()
     local queue_size = 0
     for i in pairs(queue) do queue_size = queue_size + 1 end
@@ -338,17 +339,18 @@ function EntryService:processStatusQueue(auto_confirm)
     -- Save updated queue
     self:saveQueue(queue)
 
-    -- Show completion notification
-    if processed_count > 0 then
-        local message = processed_count .. " entries synced"
-        if failed_count > 0 then
-            message = message .. ", " .. failed_count .. " failed"
+    -- Show completion notification only if not silent
+    if not silent then
+        if processed_count > 0 then
+            local message = processed_count .. " entries synced"
+            if failed_count > 0 then
+                message = message .. ", " .. failed_count .. " failed"
+            end
+            Notification:success(message)
+        elseif failed_count > 0 then
+            Notification:error("Failed to sync " .. failed_count .. " entries")
         end
-        Notification:success(message)
-    elseif failed_count > 0 then
-        Notification:error("Failed to sync " .. failed_count .. " entries")
     end
-
 
     return true
 end

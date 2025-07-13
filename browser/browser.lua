@@ -61,9 +61,11 @@ function Browser:init()
         subtitle_fullwidth = true, -- Allow full width display
 
         left_icon = "appbar.settings",
+        left_icon_size_ratio = 1,
         left_icon_tap_callback = function() self:onLeftButtonTap() end,
         -- left_icon_hold_callback = function() self:onLeftButtonHold() end,
         right_icon = self.current_mode == BrowserMode.SELECTION and "check" or "exit",
+        right_icon_size_ratio = 1,
         right_icon_tap_callback = function() self:onRightButtonTap() end,
         -- right_icon_hold_callback = function() self:onRightButtonHold() end,
     }

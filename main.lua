@@ -20,6 +20,7 @@ local Menu = require("menu/menu")
 local EntryService = require("services/entry_service")
 local FeedService = require("services/feed_service")
 local CategoryService = require("services/category_service")
+local QueueService = require("services/queue_service")
 local EntryEntity = require("entities/entry_entity")
 local KeyHandlerService = require("services/key_handler_service")
 local ReaderLinkService = require("services/readerlink_service")
@@ -38,6 +39,7 @@ local _static_browser_context = nil
 ---@field entry_service EntryService Entry service instance
 ---@field feed_service FeedService Feed service instance
 ---@field category_service CategoryService Category service instance
+---@field queue_service QueueService Unified queue management service instance
 ---@field key_handler_service KeyHandlerService Key handler service instance
 ---@field readerlink_service ReaderLinkService ReaderLink enhancement service instance
 local Miniflux = WidgetContainer:extend({
@@ -107,6 +109,12 @@ function Miniflux:init()
         category_repository = category_repository,
         feed_repository = feed_repository,
         settings = self.settings
+    })
+
+    -- Initialize unified queue service
+    self.queue_service = QueueService:new({
+        entry_service = self.entry_service,
+        miniflux_api = self.miniflux_api
     })
 
     -- Initialize key handler service (only in ReaderUI context)
@@ -332,20 +340,18 @@ end
 -- NETWORK EVENT HANDLERS
 -- =============================================================================
 
----Handle network connected event - process offline status queue
+---Handle network connected event - process all offline queues
 function Miniflux:onNetworkConnected()
-    -- Only process if EntryService is available (plugin initialized)
-    if self.entry_service then
-        -- Check if queue has items before showing dialog
-        local queue = self.entry_service:loadQueue()
-        local queue_size = 0
-        for i in pairs(queue) do queue_size = queue_size + 1 end
+    -- Only process if QueueService is available (plugin initialized)
+    if self.queue_service then
+        -- Check if any queue has items before showing dialog
+        local total_count = self.queue_service:getTotalQueueCount()
         
-        if queue_size > 0 then
+        if total_count > 0 then
             -- Show sync dialog only if there are items to sync
-            self.entry_service:processStatusQueue(false) -- auto_confirm = false (show dialog)
+            self.queue_service:processAllQueues()
         end
-        -- If queue is empty, do nothing (silent)
+        -- If all queues are empty, do nothing (silent)
     end
 end
 
