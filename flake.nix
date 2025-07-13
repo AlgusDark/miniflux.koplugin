@@ -58,14 +58,13 @@
             # Set up project Lua paths
             export LUA_PATH="src/?.lua;src/?/init.lua;./?.lua;./?/init.lua;$LUA_PATH"
             
-            # Ensure git hooks are executable
+            # Set up git hooks automatically
             if [ -d .githooks ]; then
               chmod +x .githooks/*
-            fi
-            
-            # Suggest git hooks setup if not configured
-            if [ "$(git config core.hooksPath)" != ".githooks" ]; then
-              echo "💡 Tip: Run '.githooks/setup.sh' to enable pre-commit hooks"
+              git config --get core.hooksPath >/dev/null || {
+                git config core.hooksPath .githooks
+                echo "🪝 Git hooks enabled automatically"
+              }
             fi
           '';
 
