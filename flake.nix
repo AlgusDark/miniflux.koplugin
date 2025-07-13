@@ -4,18 +4,14 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.11";
     flake-utils.url = "github:numtide/flake-utils";
-    luarocks-nix = {
-      url = "github:nix-community/luarocks-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
-  outputs = { nixpkgs, flake-utils, luarocks-nix, ... }:
+  outputs = { nixpkgs, flake-utils, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
         
-        # Create htmlparser as a proper Nix package using luarocks-nix
+        # Create htmlparser as a simple Nix package (no luarocks-nix needed)
         htmlparser = pkgs.lua51Packages.buildLuarocksPackage {
           pname = "htmlparser";
           version = "0.3.9-1";
@@ -25,8 +21,8 @@
             sha256 = "sha256-iHKqsE6+fZiGyxKqfXsRxtOL9YcqOHHl7KI9Y2bEAZ4=";
           };
           
-          # No additional dependencies needed for htmlparser
-          propagatedBuildInputs = [ ];
+          disabled = pkgs.lua.luaOlder "5.1";
+          propagatedBuildInputs = [ pkgs.lua5_1 ];
         };
         
         # Enhanced Lua environment with proper Nix packages
@@ -41,9 +37,8 @@
             # Lua development with integrated packages
             luaEnv                      # Includes lua5_1 + luacheck + busted + htmlparser
             
-            # Code quality
+            # Code quality (skip lua-language-server to reduce download size)
             stylua
-            lua-language-server
             
             # Build tools (use system git, rsync, zip)
             go-task
@@ -51,9 +46,10 @@
 
           shellHook = ''
             echo "🎯 Miniflux KOReader Plugin Development Environment"
-            echo "📦 Lua 5.1 + luacheck + busted + htmlparser (via Nix)"
-            echo "✨ All packages managed by Nix - fully reproducible!"
+            echo "📦 Lua 5.1 + luacheck + busted + htmlparser + stylua (via Nix)"
+            echo "✨ Lua packages managed by Nix - fully reproducible!"
             echo "🔍 Available commands: task check, task fmt-fix, task build"
+            echo "💡 For LSP support: install lua-language-server in your editor"
             
             # Set up project Lua paths
             export LUA_PATH="src/?.lua;src/?/init.lua;./?.lua;./?/init.lua;$LUA_PATH"
