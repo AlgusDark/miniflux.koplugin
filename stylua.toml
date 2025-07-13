@@ -1,0 +1,14 @@
+# StyLua Configuration
+# Follows Roblox Lua Style Guide with KOReader adaptations
+
+# Basic formatting settings
+column_width = 100
+line_endings = "Unix"
+indent_type = "Spaces"
+indent_width = 4
+quote_style = "AutoPreferSingle"
+call_parentheses = "Always"
+
+# KOReader-specific settings
+collapse_simple_statement = "Never"
+space_after_function_names = false

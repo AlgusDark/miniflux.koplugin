@@ -1,2 +1,25 @@
 dist/
 .claude/
+
+# Nix/direnv
+.direnv/
+result
+result-*
+
+# Lua development
+.luarocks/
+
+# Testing (when added)
+spec/
+*_spec.lua
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

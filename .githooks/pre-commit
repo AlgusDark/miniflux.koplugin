@@ -1,0 +1,44 @@
+#!/bin/bash
+# Pre-commit hook for Miniflux KOReader plugin
+# Runs code quality checks before allowing commits
+
+set -e
+
+echo "🔍 Running pre-commit code quality checks..."
+
+# Check if task command is available
+if ! command -v task &> /dev/null; then
+    echo "❌ Task not found. Please install Task (https://taskfile.dev)"
+    exit 1
+fi
+
+# Check if stylua is available
+if ! command -v stylua &> /dev/null; then
+    echo "❌ StyLua not found. Please install: cargo install stylua"
+    exit 1
+fi
+
+# Check if luacheck is available  
+if ! command -v luacheck &> /dev/null; then
+    echo "❌ Luacheck not found. Please install: luarocks install luacheck"
+    exit 1
+fi
+
+# Run code quality checks
+echo "📝 Checking code formatting..."
+if ! task fmt; then
+    echo ""
+    echo "❌ Code formatting issues found!"
+    echo "💡 Run 'task fmt-fix' to auto-fix formatting issues"
+    exit 1
+fi
+
+echo "🔍 Running static analysis..."
+if ! task lint; then
+    echo ""
+    echo "❌ Linting issues found!"
+    echo "💡 Fix the issues above and try again"
+    exit 1
+fi
+
+echo "✅ All pre-commit checks passed!"
