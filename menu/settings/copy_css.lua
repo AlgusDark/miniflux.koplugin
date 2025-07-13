@@ -2,7 +2,6 @@ local ConfirmBox = require("ui/widget/confirmbox")
 local DataStorage = require("datastorage")
 local UIManager = require("ui/uimanager")
 local lfs = require("libs/libkoreader-lfs")
-local logger = require("logger")
 local Notification = require("utils/notification")
 local _ = require("gettext")
 
@@ -40,7 +39,6 @@ function CopyCss.copyCssToStyletweaks(plugin)
         local success = lfs.mkdir(styletweaks_dir)
         if success then
             styletweaks_created = true
-            logger.dbg("Created styletweaks directory:", styletweaks_dir)
         else
             Notification:error(_("Failed to create styletweaks directory"))
             return
@@ -49,7 +47,6 @@ function CopyCss.copyCssToStyletweaks(plugin)
 
     -- Check if source file exists
     if lfs.attributes(source_css, "mode") ~= "file" then
-        logger.warn("Source CSS file not found:", source_css)
         Notification:error(_("Source CSS file not found"))
         return
     end
@@ -83,7 +80,6 @@ function CopyCss._performCSSCopy(source_css, dest_css)
     -- Copy the CSS file
     local source_file = io.open(source_css, "rb")
     if not source_file then
-        logger.warn("Could not open source CSS file:", source_css)
         Notification:error(_("Could not open source CSS file"))
         return
     end
@@ -91,7 +87,6 @@ function CopyCss._performCSSCopy(source_css, dest_css)
     local dest_file = io.open(dest_css, "wb")
     if not dest_file then
         source_file:close()
-        logger.warn("Could not create destination CSS file:", dest_css)
         Notification:error(_("Could not create destination CSS file"))
         return
     end
@@ -103,7 +98,6 @@ function CopyCss._performCSSCopy(source_css, dest_css)
     source_file:close()
     dest_file:close()
 
-    logger.info("Successfully copied CSS to styletweaks:", dest_css)
     Notification:success(_("miniflux.css successfully copied to styletweaks"))
 end
 

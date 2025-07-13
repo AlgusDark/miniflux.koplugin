@@ -42,6 +42,9 @@ function Navigation.getContextAwareOptions(opts)
         options.feed_id = entry_metadata.feed.id
     elseif context and context.type == "category" and entry_metadata.category then
         options.category_id = entry_metadata.category.id
+    elseif context and context.type == "local" then
+        -- Local context detected - this will be handled in the main navigation function
+        -- Just continue with normal options building for now
     end
     -- For "global" type or nil context, no additional filtering (browse all entries)
 
@@ -90,6 +93,33 @@ function Navigation.navigateToEntry(entry_info, config)
         context = miniflux_plugin:getBrowserContext() or { type = "global" }
     else
         context = { type = "global" }
+    end
+
+    -- Handle local navigation separately (skip API entirely)
+    if context and context.type == "local" then
+        local target_entry_id = Navigation.navigateLocalEntries({
+            current_entry_id = entry_info.entry_id,
+            navigation_options = { direction = direction },
+            context = context
+        })
+        
+        if target_entry_id then
+            -- Get the full entry data for the target entry
+            local EntryEntity = require("entities/entry_entity")
+            local target_entry_data = EntryEntity.loadMetadata(target_entry_id)
+            
+            if target_entry_data then
+                -- Open the local entry using the same method as browser
+                entry_service:readEntry(target_entry_data, miniflux_plugin.browser)
+            else
+                local Notification = require("utils/notification")
+                Notification:error(_("Failed to open target entry"))
+            end
+        else
+            local Notification = require("utils/notification")
+            Notification:info(_("No " .. direction .. " entry available in local files"))
+        end
+        return
     end
 
     -- Build navigation options
@@ -324,6 +354,49 @@ function Navigation.findAdjacentEntryId(current_entry_id, direction)
     end
 
     return target_id
+end
+
+---Navigate within local entries using pre-computed ordered list (optimized for performance)
+---@param config {current_entry_id: number, navigation_options: {direction: string}, context: {type: string, ordered_entries: table[]}}
+---@return number|nil Next entry ID or nil if no adjacent entry found
+function Navigation.navigateLocalEntries(config)
+    local current_entry_id = config.current_entry_id
+    local direction = config.navigation_options.direction
+    local context = config.context
+    
+    -- Get pre-computed ordered entries from context (already sorted by user preferences)
+    local ordered_entries = context.ordered_entries
+    if not ordered_entries or #ordered_entries == 0 then
+        return nil
+    end
+    
+    -- Find current entry position in the ordered list
+    local current_index = nil
+    for i, entry in ipairs(ordered_entries) do
+        if entry.id == current_entry_id then
+            current_index = i
+            break
+        end
+    end
+    
+    if not current_index then
+        return nil -- Current entry not found in local list
+    end
+    
+    -- Calculate target index based on direction
+    local target_index
+    if direction == "next" then
+        target_index = current_index + 1
+    else -- "previous"
+        target_index = current_index - 1
+    end
+    
+    -- Return target entry ID if valid position
+    if target_index >= 1 and target_index <= #ordered_entries then
+        return ordered_entries[target_index].id
+    end
+    
+    return nil -- No adjacent entry available
 end
 
 return Navigation

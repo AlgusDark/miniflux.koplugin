@@ -65,7 +65,7 @@ function CategoriesView.buildItems(config)
 
     local menu_items = {}
 
-    for _, category in ipairs(categories) do
+    for i, category in ipairs(categories) do
         local category_title = category.title or _("Untitled Category")
         local unread_count = category.total_unread or 0
 

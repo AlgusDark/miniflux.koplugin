@@ -160,7 +160,7 @@ function EntriesView.buildItems(config)
         return { { text = message, mandatory = "", action_type = "no_action" } }
     end
 
-    for _, entry in ipairs(entries) do
+    for i, entry in ipairs(entries) do
         local item = EntriesView.buildSingleItem(entry, {
             show_feed_names = show_feed_names,
             onSelectItem = onSelectItem

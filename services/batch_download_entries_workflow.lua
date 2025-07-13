@@ -302,7 +302,7 @@ function BatchDownloadEntriesWorkflow.downloadSingleEntry(entry_data, opts)
 
     -- Count successful images for metadata
     local success_count = 0
-    for _, img in ipairs(images) do
+    for i, img in ipairs(images) do
         if img.downloaded then
             success_count = success_count + 1
         end

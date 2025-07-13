@@ -20,8 +20,8 @@ local LocalEntriesView = {}
 ---@param config LocalEntriesViewConfig
 ---@return table|nil View data for browser rendering, or nil on error
 function LocalEntriesView.show(config)
-    -- Get local entries (no network required)
-    local entries = EntryEntity.getLocalEntries()
+    -- Get local entries with user settings for proper ordering
+    local entries = EntryEntity.getLocalEntries({settings = config.settings})
     
     -- Generate menu items using existing EntriesView logic
     -- Note: Local entries ignore hide_read_entries setting for simplicity
@@ -61,7 +61,7 @@ function LocalEntriesView.buildItems(config)
     end
 
     -- Reuse existing EntriesView.buildSingleItem for consistency
-    for _, entry in ipairs(entries) do
+    for i, entry in ipairs(entries) do
         local item = EntriesView.buildSingleItem(entry, {
             show_feed_names = show_feed_names,
             onSelectItem = onSelectItem

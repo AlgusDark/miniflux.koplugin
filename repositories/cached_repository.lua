@@ -1,6 +1,5 @@
 local CacheStore = require("utils/cache_store")
 local Error = require("utils/error")
-local logger = require("logger")
 
 -- **Cached Repository** - Base class for repositories with caching capabilities
 --
@@ -58,7 +57,7 @@ function CachedRepository:generateCacheKey(method_name, params)
         end
         table.sort(sorted_params)
 
-        for _, param in ipairs(sorted_params) do
+        for i, param in ipairs(sorted_params) do
             table.insert(key_parts, param)
         end
     end
@@ -76,18 +75,15 @@ end
 ---@return any|nil result, Error|nil error
 function CachedRepository:getCached(cache_key, opts)
     if not cache_key or type(cache_key) ~= "string" or cache_key == "" then
-        logger.err("CachedRepository: Invalid cache key provided")
         return nil, Error.new("Invalid cache key")
     end
 
     if not opts or type(opts) ~= "table" or not opts.api_call then
-        logger.err("CachedRepository: Invalid options provided to getCached()")
         return nil, Error.new("Invalid options - api_call required")
     end
 
     -- Check if caching is enabled
     if not self.settings.api_cache_enabled then
-        logger.dbg("CachedRepository: Cache disabled, calling API directly")
         return opts.api_call()
     end
 
@@ -96,12 +92,11 @@ function CachedRepository:getCached(cache_key, opts)
     -- Try cache first
     local cached_data, is_valid = self.cache_store:get(cache_key, { ttl = ttl })
     if is_valid and cached_data then
-        logger.dbg("CachedRepository: Cache hit for key:", cache_key)
         return cached_data.result, cached_data.error
     end
 
     -- Cache miss - call API
-    logger.dbg("CachedRepository: Cache miss for key:", cache_key)
+
     local result, error = opts.api_call()
 
     -- Cache the result (even if it's an error, to avoid repeated failed calls)
@@ -127,7 +122,7 @@ function CachedRepository:invalidate(cache_key)
         return true -- Nothing to invalidate
     end
 
-    logger.dbg("CachedRepository: Invalidating cache for key:", cache_key)
+
     return self.cache_store:remove(cache_key)
 end
 
@@ -138,7 +133,6 @@ function CachedRepository:invalidateAll()
         return true -- Nothing to invalidate, but that's success
     end
 
-    logger.info("CachedRepository: Invalidating all cache for prefix:", self.cache_prefix)
 
     -- For now, clear everything (could be optimized to only clear prefixed keys)
     self.cache_store:clear()

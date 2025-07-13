@@ -9,7 +9,6 @@ local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local FFIUtil = require("ffi/util")
 local UIManager = require("ui/uimanager")
 local lfs = require("libs/libkoreader-lfs")
-local logger = require("logger")
 local Dispatcher = require("dispatcher")
 local _ = require("gettext")
 
@@ -21,10 +20,14 @@ local Menu = require("menu/menu")
 local EntryService = require("services/entry_service")
 local FeedService = require("services/feed_service")
 local CategoryService = require("services/category_service")
+local QueueService = require("services/queue_service")
 local EntryEntity = require("entities/entry_entity")
+local KeyHandlerService = require("services/key_handler_service")
+local ReaderLinkService = require("services/readerlink_service")
 
 -- Static browser context shared across all plugin instances
 local _static_browser_context = nil
+
 
 ---@class Miniflux : WidgetContainer
 ---@field name string Plugin name identifier
@@ -36,6 +39,9 @@ local _static_browser_context = nil
 ---@field entry_service EntryService Entry service instance
 ---@field feed_service FeedService Feed service instance
 ---@field category_service CategoryService Category service instance
+---@field queue_service QueueService Unified queue management service instance
+---@field key_handler_service KeyHandlerService Key handler service instance
+---@field readerlink_service ReaderLinkService ReaderLink enhancement service instance
 local Miniflux = WidgetContainer:extend({
     name = "miniflux",
     is_doc_only = false,
@@ -46,15 +52,14 @@ local Miniflux = WidgetContainer:extend({
     subprocesses_collect_interval = 10, -- check every 10 seconds
 })
 
+
 ---Initialize the plugin by setting up all components
 ---@return nil
 function Miniflux:init()
-    logger.info("Initializing Miniflux plugin")
 
     -- Initialize download directory
     local download_dir = self:initializeDownloadDirectory()
     if not download_dir then
-        logger.err("Failed to initialize download directory")
         return
     end
     self.download_dir = download_dir
@@ -106,13 +111,38 @@ function Miniflux:init()
         settings = self.settings
     })
 
+    -- Initialize unified queue service
+    self.queue_service = QueueService:new({
+        entry_service = self.entry_service,
+        miniflux_api = self.miniflux_api
+    })
+
+    -- Initialize key handler service (only in ReaderUI context)
+    if self.ui and self.ui.document then
+        self.key_handler_service = KeyHandlerService:new({
+            miniflux_plugin = self,
+            entry_service = self.entry_service,
+            navigation_service = require("services/navigation_service")
+        })
+    end
+
+    -- Initialize ReaderLink enhancement service (only in ReaderUI context)
+    if self.ui and self.ui.link then
+        self.readerlink_service = ReaderLinkService:new({
+            miniflux_plugin = self
+        })
+        -- Set cross-service reference for image viewer integration
+        if self.key_handler_service then
+            self.readerlink_service.key_handler_service = self.key_handler_service
+        end
+    end
+
     -- Override ReaderStatus EndOfBook behavior for miniflux entries
     self:overrideEndOfBookBehavior()
 
     -- Register with KOReader menu system
     self.ui.menu:registerToMainMenu(self)
 
-    logger.info("Miniflux plugin initialization complete")
 end
 
 ---Initialize the download directory for entries
@@ -122,10 +152,8 @@ function Miniflux:initializeDownloadDirectory()
 
     -- Create the directory if it doesn't exist
     if not lfs.attributes(download_dir, "mode") then
-        logger.dbg("Miniflux: Creating download directory:", download_dir)
         local success = lfs.mkdir(download_dir)
         if not success then
-            logger.err("Failed to create download directory:", download_dir)
             return nil
         end
     end
@@ -179,7 +207,6 @@ end
 ---@return nil
 function Miniflux:overrideEndOfBookBehavior()
     if not self.ui or not self.ui.status then
-        logger.warn("Cannot override EndOfBook behavior - ReaderStatus not available")
         return
     end
 
@@ -223,7 +250,11 @@ end
 ---@return nil
 function Miniflux:onReaderReady(doc_settings)
     local file_path = self.ui and self.ui.document and self.ui.document.file
-    self.entry_service:onReaderReady({ file_path = file_path })
+    -- Pass ReaderUI's DocSettings to avoid cache conflicts
+    self.entry_service:onReaderReady({ 
+        file_path = file_path,
+        doc_settings = doc_settings  -- ReaderUI's cached DocSettings instance
+    })
 end
 
 -- =============================================================================
@@ -252,7 +283,6 @@ end
 function Miniflux:trackSubprocess(pid)
     if not pid then return end
     
-    logger.dbg("Miniflux: Tracking subprocess PID: " .. tostring(pid))
     UIManager:preventStandby()
     table.insert(self.subprocesses_pids, pid)
     
@@ -274,7 +304,6 @@ function Miniflux:collectSubprocesses()
         for i = #self.subprocesses_pids, 1, -1 do
             local pid = self.subprocesses_pids[i]
             if FFIUtil.isSubProcessDone(pid) then
-                logger.dbg("Miniflux: Subprocess " .. tostring(pid) .. " completed")
                 table.remove(self.subprocesses_pids, i)
                 UIManager:allowStandby()
             end
@@ -282,13 +311,11 @@ function Miniflux:collectSubprocesses()
         
         -- If subprocesses still running, schedule next collection
         if #self.subprocesses_pids > 0 then
-            logger.dbg("Miniflux: " .. #self.subprocesses_pids .. " subprocesses still running")
             self.subprocesses_collector = true
             UIManager:scheduleIn(self.subprocesses_collect_interval, function()
                 self:collectSubprocesses()
             end)
         else
-            logger.dbg("Miniflux: All subprocesses completed")
         end
     end
 end
@@ -296,7 +323,6 @@ end
 ---Terminate all background subprocesses
 function Miniflux:terminateBackgroundJobs()
     if #self.subprocesses_pids > 0 then
-        logger.dbg("Miniflux: Terminating " .. #self.subprocesses_pids .. " background subprocesses")
         for i = 1, #self.subprocesses_pids do
             FFIUtil.terminateSubProcess(self.subprocesses_pids[i])
         end
@@ -314,34 +340,29 @@ end
 -- NETWORK EVENT HANDLERS
 -- =============================================================================
 
----Handle network connected event - process offline status queue
+---Handle network connected event - process all offline queues
 function Miniflux:onNetworkConnected()
-    logger.dbg("Miniflux: Network connected - processing status queue")
-    
-    -- Only process if EntryService is available (plugin initialized)
-    if self.entry_service then
-        -- Use new subprocess-based queue processor (no user confirmation)
-        local pid = self.entry_service:processStatusQueueInSubprocess()
-        if pid then
-            -- Track the subprocess for proper cleanup
-            self:trackSubprocess(pid)
-            logger.dbg("Miniflux: Queue processing subprocess started with PID: " .. tostring(pid))
-        else
-            logger.dbg("Miniflux: No queue entries to process")
+    -- Only process if QueueService is available (plugin initialized)
+    if self.queue_service then
+        -- Check if any queue has items before showing dialog
+        local total_count = self.queue_service:getTotalQueueCount()
+        
+        if total_count > 0 then
+            -- Show sync dialog only if there are items to sync
+            self.queue_service:processAllQueues()
         end
+        -- If all queues are empty, do nothing (silent)
     end
 end
 
 ---Handle device suspend event - terminate background jobs to save battery
 function Miniflux:onSuspend()
-    logger.dbg("Miniflux: Device suspending - terminating background jobs")
     self:terminateBackgroundJobs()
     -- Queue operations will be processed on next network connection
 end
 
 ---Handle plugin close event - ensure proper cleanup  
 function Miniflux:onClose()
-    logger.dbg("Miniflux: Plugin onClose - cleaning up background jobs")
     self:terminateBackgroundJobs()
     -- Cancel any scheduled zombie collection
     if self.subprocesses_collector then
@@ -352,12 +373,19 @@ end
 
 ---Handle widget close event - ensure proper cleanup
 function Miniflux:onCloseWidget()
-    logger.dbg("Miniflux: Plugin onCloseWidget - cleaning up background jobs")
     self:terminateBackgroundJobs()
     -- Cancel any scheduled zombie collection
     if self.subprocesses_collector then
         UIManager:unschedule(function() self:collectSubprocesses() end)
         self.subprocesses_collector = nil
+    end
+    -- Cleanup key handler service touch zones
+    if self.key_handler_service then
+        self.key_handler_service:cleanup()
+    end
+    -- Cleanup ReaderLink service
+    if self.readerlink_service then
+        self.readerlink_service:cleanup()
     end
 end
 

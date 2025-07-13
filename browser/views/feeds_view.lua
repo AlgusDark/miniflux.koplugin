@@ -67,7 +67,7 @@ function FeedsView.buildItems(config)
 
     local menu_items = {}
 
-    for _, feed in ipairs(feeds) do
+    for i, feed in ipairs(feeds) do
         local feed_title = feed.title or _("Untitled Feed")
         local feed_id_str = tostring(feed.id or 0)
 

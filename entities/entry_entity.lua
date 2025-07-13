@@ -52,7 +52,7 @@ function EntryEntity.hasContent(entry_data)
     if entry_data.id and EntryEntity.isEntryDownloaded(entry_data.id) then
         return true
     end
-    
+
     -- For online entries, check content/summary fields
     local content = entry_data.content or entry_data.summary or ""
     return content ~= ""
@@ -169,12 +169,15 @@ function EntryEntity.saveMetadata(params)
     local DocSettings = require("docsettings")
     local doc_settings = DocSettings:open(html_file)
 
+    -- Use server status for initial metadata save
+    local status_to_use = entry_data.status
+
     -- Prepare all settings
     local settings = {
         miniflux_entry_id = entry_data.id,
         miniflux_title = entry_data.title,
         miniflux_url = entry_data.url,
-        miniflux_status = entry_data.status,
+        miniflux_status = status_to_use,
         miniflux_published_at = entry_data.published_at,
         miniflux_images_included = include_images,
         miniflux_images_count = images_count,
@@ -207,18 +210,30 @@ end
 ---Update local entry status using DocSettings
 ---@param entry_id number Entry ID
 ---@param new_status string New status ("read" or "unread")
+---@param doc_settings? table Optional ReaderUI DocSettings instance to use
 ---@return boolean success
-function EntryEntity.updateEntryStatus(entry_id, new_status)
-    -- Use the new updateMetadata function for consistency
-    local doc_settings, err = EntryEntity.updateMetadata(entry_id, {
-        miniflux_status = new_status
+function EntryEntity.updateEntryStatus(entry_id, new_status, doc_settings)
+    local success = true
+    local timestamp = os.date("%Y-%m-%d %H:%M:%S", os.time())
+
+    -- Always update custom metadata (SDR file) - this is our reliable fallback
+    local sdr_result, sdr_err = EntryEntity.updateMetadata(entry_id, {
+        miniflux_status = new_status,
+        miniflux_last_updated = timestamp,
     })
 
-    if err then
-        return false
+    if not sdr_result or sdr_err then
+        success = false
+    else
     end
 
-    local success = doc_settings ~= nil
+    -- Also update ReaderUI DocSettings if available (for immediate UI consistency)
+    if doc_settings then
+        doc_settings:saveSetting("miniflux_status", new_status)
+        doc_settings:saveSetting("miniflux_last_updated", timestamp)
+        -- Don't flush here - let ReaderUI handle it when document closes
+    end
+
     return success
 end
 
@@ -252,15 +267,21 @@ function EntryEntity.loadMetadata(entry_id)
 
     -- Batch read all settings into a local table for efficiency
     local settings_keys = {
-        "miniflux_title", "miniflux_url", "miniflux_status",
-        "miniflux_published_at", "miniflux_feed_id", "miniflux_feed_title",
-        "miniflux_category_id", "miniflux_category_title",
-        "miniflux_images_included", "miniflux_images_count",
-        "miniflux_last_updated"
+        "miniflux_title",
+        "miniflux_url",
+        "miniflux_status",
+        "miniflux_published_at",
+        "miniflux_feed_id",
+        "miniflux_feed_title",
+        "miniflux_category_id",
+        "miniflux_category_title",
+        "miniflux_images_included",
+        "miniflux_images_count",
+        "miniflux_last_updated",
     }
 
     local settings = {}
-    for _, key in ipairs(settings_keys) do
+    for i, key in ipairs(settings_keys) do
         settings[key] = doc_settings:readSetting(key)
     end
 
@@ -348,38 +369,39 @@ function EntryEntity.showCancellationDialog(context)
             buttons = {
                 {
                     text = _("Cancel entry creation"),
-                    choice = "cancel_entry"
+                    choice = "cancel_entry",
                 },
                 {
                     text = _("Continue without images"),
-                    choice = "continue_without_images"
+                    choice = "continue_without_images",
                 },
                 {
                     text = _("Resume downloading"),
-                    choice = "resume_downloading"
+                    choice = "resume_downloading",
                 },
-            }
+            },
         }
     else -- "after_images"
         dialog_config = {
             title = _(
-                "Entry creation was interrupted.\nImages have been downloaded successfully.\n\nWhat would you like to do?"),
+                "Entry creation was interrupted.\nImages have been downloaded successfully.\n\nWhat would you like to do?"
+            ),
             buttons = {
                 {
                     text = _("Cancel entry creation"),
-                    choice = "cancel_entry"
+                    choice = "cancel_entry",
                 },
                 {
                     text = _("Continue with entry creation"),
-                    choice = "continue_creation"
+                    choice = "continue_creation",
                 },
-            }
+            },
         }
     end
 
     -- Build button table for ButtonDialog
     local dialog_buttons = { {} }
-    for _, btn in ipairs(dialog_config.buttons) do
+    for i, btn in ipairs(dialog_config.buttons) do
         table.insert(dialog_buttons[1], {
             text = btn.text,
             callback = function()
@@ -390,7 +412,7 @@ function EntryEntity.showCancellationDialog(context)
     end
 
     -- Create dialog with context-specific configuration
-    choice_dialog = ButtonDialog:new {
+    choice_dialog = ButtonDialog:new({
         title = dialog_config.title,
         title_align = "center",
         dismissable = false,
@@ -399,7 +421,7 @@ function EntryEntity.showCancellationDialog(context)
         -- tap_close_callback = function()
         --     user_choice = "cancel_entry"
         -- end,
-    }
+    })
 
     UIManager:show(choice_dialog)
 
@@ -431,27 +453,31 @@ function EntryEntity.showBatchCancellationDialog(context, batch_state)
     if context == "during_entry_images" then
         -- User cancelled during image download for a specific entry
         local title = total_entries == 1
-            and T(_("Image download was cancelled for:\n%1\n\nWhat would you like to do?"), current_entry_title)
-            or T(_("Image download was cancelled for entry %1/%2:\n%3\n\nWhat would you like to do?"),
-                current_entry_index, total_entries, current_entry_title)
+                and T(_("Image download was cancelled for:\n%1\n\nWhat would you like to do?"), current_entry_title)
+            or T(
+                _("Image download was cancelled for entry %1/%2:\n%3\n\nWhat would you like to do?"),
+                current_entry_index,
+                total_entries,
+                current_entry_title
+            )
 
         local buttons = {
             {
                 text = _("Cancel entry creation"),
-                choice = "cancel_current_entry"
+                choice = "cancel_current_entry",
             },
             {
                 text = _("Cancel all entries creation"),
-                choice = "cancel_all_entries"
+                choice = "cancel_all_entries",
             },
             {
                 text = _("Continue without images"),
-                choice = "skip_images_current"
+                choice = "skip_images_current",
             },
             {
                 text = _("Resume downloading"),
-                choice = "resume_downloading"
-            }
+                choice = "resume_downloading",
+            },
         }
 
         -- Add stateful image option based on current batch state
@@ -459,64 +485,66 @@ function EntryEntity.showBatchCancellationDialog(context, batch_state)
             -- User previously chose to skip images for all, now offer to include them
             table.insert(buttons, 3, {
                 text = _("Include images for all entries"),
-                choice = "include_images_all"
+                choice = "include_images_all",
             })
         else
             -- User hasn't disabled images globally, offer to skip for all remaining
             table.insert(buttons, 3, {
                 text = _("Skip images for all entries"),
-                choice = "skip_images_all"
+                choice = "skip_images_all",
             })
         end
 
         dialog_config = {
             title = title,
-            buttons = buttons
+            buttons = buttons,
         }
     else -- "during_batch"
         -- User cancelled during batch progress (between entries)
-        local title = total_entries == 1
-            and T(_("Batch download was cancelled.\n\nWhat would you like to do?"))
-            or T(_("Batch download was cancelled.\nProgress: %1/%2 entries completed.\n\nWhat would you like to do?"),
-                current_entry_index - 1, total_entries)
+        local title = total_entries == 1 and T(_("Batch download was cancelled.\n\nWhat would you like to do?"))
+            or T(
+                _("Batch download was cancelled.\nProgress: %1/%2 entries completed.\n\nWhat would you like to do?"),
+                current_entry_index - 1,
+                total_entries
+            )
 
         local buttons = {
             {
                 text = _("Cancel all entries creation"),
-                choice = "cancel_all_entries"
+                choice = "cancel_all_entries",
             },
             {
                 text = _("Resume downloading"),
-                choice = "resume_downloading"
-            }
+                choice = "resume_downloading",
+            },
         }
 
         -- Add stateful image option for remaining entries
         if skip_images_for_all then
             table.insert(buttons, 2, {
                 text = _("Include images for remaining entries"),
-                choice = "include_images_all"
+                choice = "include_images_all",
             })
         else
             table.insert(buttons, 2, {
                 text = _("Skip images for remaining entries"),
-                choice = "skip_images_all"
+                choice = "skip_images_all",
             })
         end
 
         dialog_config = {
             title = title,
-            buttons = buttons
+            buttons = buttons,
         }
     end
 
     -- Build button grid for ButtonDialog (2 buttons per row for better layout)
     local dialog_buttons = {}
-    
+
     -- Split buttons into rows of 2 for grid layout
     for i = 1, #dialog_config.buttons, 2 do
         local row = {}
-        
+
         -- Add first button of the row
         table.insert(row, {
             text = dialog_config.buttons[i].text,
@@ -525,7 +553,7 @@ function EntryEntity.showBatchCancellationDialog(context, batch_state)
                 UIManager:close(choice_dialog)
             end,
         })
-        
+
         -- Add second button if it exists
         if dialog_config.buttons[i + 1] then
             table.insert(row, {
@@ -536,17 +564,17 @@ function EntryEntity.showBatchCancellationDialog(context, batch_state)
                 end,
             })
         end
-        
+
         table.insert(dialog_buttons, row)
     end
 
     -- Create dialog with context-specific configuration
-    choice_dialog = ButtonDialog:new {
+    choice_dialog = ButtonDialog:new({
         title = dialog_config.title,
         title_align = "center",
         dismissable = false,
         buttons = dialog_buttons,
-    }
+    })
 
     UIManager:show(choice_dialog)
 
@@ -579,18 +607,18 @@ end
 function EntryEntity.getLocalEntries()
     local entries = {}
     local miniflux_dir = EntryEntity.getDownloadDir()
-    
+
     -- Check if miniflux directory exists
     if not lfs.attributes(miniflux_dir, "mode") then
         return entries -- Return empty array if directory doesn't exist
     end
-    
+
     -- Scan directory for entry folders
     for item in lfs.dir(miniflux_dir) do
         -- Skip . and .. entries, only process numeric folders (entry IDs)
         if item:match("^%d+$") then
             local entry_id = tonumber(item)
-            
+
             -- Check if entry.html exists in this folder
             local html_file = EntryEntity.getEntryHtmlPath(entry_id)
             if lfs.attributes(html_file, "mode") == "file" then
@@ -598,11 +626,12 @@ function EntryEntity.getLocalEntries()
                 local metadata = EntryEntity.loadMetadata(entry_id)
                 if metadata then
                     table.insert(entries, metadata)
+                else
                 end
             end
         end
     end
-    
+
     -- Sort entries by published_at descending (newest first)
     -- Use empty string as fallback for missing published_at to ensure consistent sorting
     table.sort(entries, function(a, b)
@@ -610,8 +639,106 @@ function EntryEntity.getLocalEntries()
         local b_date = b.published_at or ""
         return a_date > b_date
     end)
-    
+
     return entries
 end
+
+---Get lightweight local entries metadata optimized for navigation only
+---Loads minimal data (id, published_at, title) for fast navigation context
+---@param opts {settings?: MinifluxSettings} Options containing user settings for order and direction
+---@return table[] Array of minimal entry metadata for navigation
+function EntryEntity.getLocalEntriesForNavigation(opts)
+    local entries = {}
+    local miniflux_dir = EntryEntity.getDownloadDir()
+
+    -- Check if miniflux directory exists
+    if not lfs.attributes(miniflux_dir, "mode") then
+        return entries -- Return empty array if directory doesn't exist
+    end
+
+    local DocSettings = require("docsettings")
+
+    -- Scan directory for entry folders
+    for item in lfs.dir(miniflux_dir) do
+        -- Skip . and .. entries, only process numeric folders (entry IDs)
+        if item:match("^%d+$") then
+            local entry_id = tonumber(item)
+            local html_file = EntryEntity.getEntryHtmlPath(entry_id)
+            
+            if lfs.attributes(html_file, "mode") == "file" then
+                if DocSettings:hasSidecarFile(html_file) then
+                    local doc_settings = DocSettings:open(html_file)
+                    
+                    -- Load ONLY minimal data needed for navigation (5x less memory)
+                    local nav_entry = {
+                        id = entry_id,
+                        published_at = doc_settings:readSetting("miniflux_published_at"),
+                        title = doc_settings:readSetting("miniflux_title")
+                    }
+                    
+                    table.insert(entries, nav_entry)
+                end
+            end
+        end
+    end
+
+    -- Extract sort criteria from settings and apply sorting
+    local sort_opts = nil
+    if opts and opts.settings then
+        sort_opts = {
+            order = opts.settings.order,
+            direction = opts.settings.direction
+        }
+    end
+    
+    -- Sort entries in-place and return sorted array
+    return EntryEntity.sortEntries(entries, sort_opts)
+end
+
+---Sort entries array in-place for optimal performance
+---@param entries table[] Array of entry metadata to sort (mutated in-place)
+---@param opts {order?: string, direction?: string}|nil Sort options with defaults
+---@return table[] The same array reference, now sorted (for chaining convenience)
+local function sortEntries(entries, opts)
+    if not entries or #entries == 0 then
+        return entries
+    end
+    
+    -- Apply defaults for sort criteria
+    local order = (opts and opts.order) or "published_at"
+    local direction = (opts and opts.direction) or "desc"
+
+    table.sort(entries, function(a, b)
+        local a_val, b_val
+
+        -- Extract comparison values based on order setting
+        if order == "published_at" then
+            a_val = a.published_at or ""
+            b_val = b.published_at or ""
+        elseif order == "id" then
+            a_val = a.id or 0
+            b_val = b.id or 0
+        elseif order == "title" then
+            a_val = (a.title or ""):lower()  -- Case-insensitive title sort
+            b_val = (b.title or ""):lower()
+        else
+            -- Default to published_at for unknown order values
+            a_val = a.published_at or ""
+            b_val = b.published_at or ""
+        end
+
+        -- Apply direction
+        if direction == "asc" then
+            return a_val < b_val
+        else
+            return a_val > b_val
+        end
+    end)
+    
+    return entries  -- Return same array reference for chaining
+end
+
+-- Make sortEntries available as module function
+EntryEntity.sortEntries = sortEntries
 
 return EntryEntity

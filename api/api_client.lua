@@ -4,7 +4,6 @@ local ltn12 = require("ltn12")
 local socket = require("socket")
 local socketutil = require("socketutil")
 local _ = require("gettext")
-local logger = require("logger")
 local Files = require("utils/files")
 local util = require("util")
 local Notification = require("utils/notification")
@@ -140,7 +139,7 @@ function APIClient:makeRequest(method, endpoint, config)
         for key, value in pairs(config.query) do
             if type(value) == "table" then
                 -- Handle array values (like status filters)
-                for _, v in ipairs(value) do
+                for i, v in ipairs(value) do
                     addQueryParam(query_parts, key, v)
                 end
             else
@@ -170,7 +169,6 @@ function APIClient:makeRequest(method, endpoint, config)
         headers["Content-Length"] = tostring(#request_body)
     end
 
-    logger.dbg("MinifluxAPI:makeRequest:", method, url)
 
     socketutil:set_timeout(socketutil.LARGE_BLOCK_TIMEOUT, socketutil.LARGE_TOTAL_TIMEOUT)
     local code, resp_headers, status = socket.skip(1, http.request(request))
@@ -183,7 +181,6 @@ function APIClient:makeRequest(method, endpoint, config)
 
     -- Check for network errors first
     if resp_headers == nil then
-        logger.err("MinifluxAPI: network error", status or code)
         local error_message = _("Network error occurred")
         if dialogs and dialogs.error then
             local error_text = dialogs.error.text or error_message
@@ -206,7 +203,6 @@ function APIClient:makeRequest(method, endpoint, config)
             if success then
                 return data, nil
             else
-                logger.err("MinifluxAPI: invalid JSON response", response_text)
                 local error_message = _("Invalid JSON response from server")
                 if dialogs and dialogs.error then
                     local error_text = dialogs.error.text or error_message
@@ -220,7 +216,6 @@ function APIClient:makeRequest(method, endpoint, config)
     end
 
     -- Handle error responses
-    logger.err("MinifluxAPI: HTTP error", status or code, resp_headers)
     local error_message = buildErrorMessage(code, response_text)
 
     if dialogs and dialogs.error then

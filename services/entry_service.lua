@@ -5,14 +5,12 @@ local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
 local _ = require("gettext")
 local T = require("ffi/util").template
 local Notification = require("utils/notification")
-local logger = require("logger")
 
 -- Import dependencies
 local EntryEntity = require("entities/entry_entity")
 local Navigation = require("services/navigation_service")
 local EntryWorkflow = require("services/entry_workflow")
 local Files = require("utils/files")
-local Debugger = require("utils/debugger")
 
 -- **Entry Service** - Handles complex entry workflows and orchestration.
 --
@@ -48,8 +46,6 @@ function EntryService:new(deps)
     setmetatable(instance, self)
     self.__index = self
 
-
-
     return instance
 end
 
@@ -69,26 +65,21 @@ end
 ---@return table Queue data (entry_id -> {new_status, original_status, timestamp})
 function EntryService:loadQueue()
     local queue_file = self:getQueueFilePath()
-    
-    Debugger.debug("Loading queue from: " .. queue_file)
-    
+
+
     -- Check if queue file exists
     local lfs = require("libs/libkoreader-lfs")
     if not lfs.attributes(queue_file, "mode") then
-        Debugger.debug("Queue file does not exist, returning empty queue")
         return {} -- Empty queue if file doesn't exist
     end
-    
+
     -- Load and execute the Lua file
     local success, queue_data = pcall(dofile, queue_file)
     if success and type(queue_data) == "table" then
         local count = 0
-        for _ in pairs(queue_data) do count = count + 1 end
-        Debugger.debug("Successfully loaded queue with " .. count .. " entries")
+        for i in pairs(queue_data) do count = count + 1 end
         return queue_data
     else
-        logger.warn("Failed to load status queue, starting fresh: " .. tostring(queue_data))
-        Debugger.warn("Failed to load queue file: " .. tostring(queue_data))
         return {}
     end
 end
@@ -98,20 +89,18 @@ end
 ---@return boolean success
 function EntryService:saveQueue(queue)
     local queue_file = self:getQueueFilePath()
-    
+
     local count = 0
-    for _ in pairs(queue) do count = count + 1 end
-    Debugger.debug("Saving queue with " .. count .. " entries to: " .. queue_file)
-    
+    for i in pairs(queue) do count = count + 1 end
+
     -- Ensure miniflux directory exists
     local miniflux_dir = queue_file:match("(.+)/[^/]+$")
     local success, err = Files.createDirectory(miniflux_dir)
     if not success then
-        logger.err("Failed to create miniflux directory: " .. tostring(err))
-        Debugger.error("Failed to create miniflux directory: " .. tostring(err))
+
         return false
     end
-    
+
     -- Convert queue table to Lua code
     local queue_content = "return {\n"
     for entry_id, opts in pairs(queue) do
@@ -119,19 +108,16 @@ function EntryService:saveQueue(queue)
             "  [%d] = {\n    new_status = %q,\n    original_status = %q,\n    timestamp = %d\n  },\n",
             entry_id, opts.new_status, opts.original_status, opts.timestamp
         )
-        Debugger.debug("Saving queue entry " .. entry_id .. ": " .. opts.original_status .. " -> " .. opts.new_status)
     end
     queue_content = queue_content .. "}\n"
-    
+
     -- Write to file
     local write_success, write_err = Files.writeFile(queue_file, queue_content)
     if not write_success then
-        logger.err("Failed to save status queue: " .. tostring(write_err))
-        Debugger.error("Failed to save status queue: " .. tostring(write_err))
+
         return false
     end
-    
-    Debugger.debug("Successfully saved queue with " .. count .. " entries")
+
     return true
 end
 
@@ -140,72 +126,114 @@ end
 ---@param opts table Options {new_status: string, original_status: string}
 ---@return boolean success
 function EntryService:enqueueStatusChange(entry_id, opts)
-    Debugger.enter("enqueueStatusChange", "entry_id=" .. entry_id .. ", " .. opts.original_status .. " -> " .. opts.new_status)
-    
     if not EntryEntity.isValidId(entry_id) then
-        logger.warn("Cannot queue invalid entry ID: " .. tostring(entry_id))
-        Debugger.exit("enqueueStatusChange", "invalid entry ID")
         return false
     end
-    
+
     local queue = self:loadQueue()
     local queue_size_before = 0
-    for _ in pairs(queue) do queue_size_before = queue_size_before + 1 end
-    Debugger.debug("Queue size before enqueue: " .. queue_size_before)
-    
+    for i in pairs(queue) do queue_size_before = queue_size_before + 1 end
+
     -- Add/update entry in queue (automatic deduplication via entry_id key)
     queue[entry_id] = {
         new_status = opts.new_status,
         original_status = opts.original_status,
         timestamp = os.time()
     }
-    
+
     local queue_size_after = 0
-    for _ in pairs(queue) do queue_size_after = queue_size_after + 1 end
-    Debugger.debug("Queue size after enqueue: " .. queue_size_after)
-    
+    for i in pairs(queue) do queue_size_after = queue_size_after + 1 end
+
     local success = self:saveQueue(queue)
-    Debugger.debug("Queue save result: " .. tostring(success))
-    
+
     if success then
-        logger.info("Queued status change for entry " .. entry_id .. ": " .. opts.original_status .. " -> " .. opts.new_status)
-        Debugger.info("Successfully queued entry " .. entry_id)
+    end
+
+
+    return success
+end
+
+---Show confirmation dialog before clearing the status queue
+---@param queue_size number Number of entries in queue
+function EntryService:confirmClearStatusQueue(queue_size)
+    local ConfirmBox = require("ui/widget/confirmbox")
+    
+    local message = T(_("Are you sure you want to delete the sync queue?\n\nYou still have %1 entries that need to sync with the server.\n\nThis action cannot be undone."), queue_size)
+    
+    local confirm_dialog = ConfirmBox:new{
+        text = message,
+        ok_text = _("Delete Queue"),
+        ok_callback = function()
+            local result, err = self:clearStatusQueue()
+            if err then
+                Notification:error(err.message)
+            else
+                Notification:info(_("Sync queue cleared"))
+            end
+        end,
+        cancel_text = _("Cancel"),
+    }
+    
+    UIManager:show(confirm_dialog)
+end
+
+---Remove a specific entry from the status queue (when API succeeds)
+---@param entry_id number Entry ID to remove
+---@return boolean success
+function EntryService:removeFromQueue(entry_id)
+    if not EntryEntity.isValidId(entry_id) then
+        return false
+    end
+
+    local queue = self:loadQueue()
+    
+    -- Check if entry exists in queue
+    if not queue[entry_id] then
+        return true -- Entry not in queue, nothing to do
     end
     
-    Debugger.exit("enqueueStatusChange", "success=" .. tostring(success))
-    return success
+    -- Remove entry from queue
+    queue[entry_id] = nil
+    
+    -- Save updated queue
+    return self:saveQueue(queue)
+end
+
+---Clear the status queue (delete all pending changes)
+---@return boolean|nil result, table|nil error
+function EntryService:clearStatusQueue()
+    local queue_file = self:getQueueFilePath()
+    
+    -- Remove the queue file
+    local success = os.remove(queue_file)
+    if success then
+        return true, nil
+    else
+        return nil, { message = _("Failed to clear sync queue") }
+    end
 end
 
 ---Process the status queue when network is available (with user confirmation)
 ---@param auto_confirm? boolean Skip confirmation dialog if true
+---@param silent? boolean Skip notifications if true
 ---@return boolean success
-function EntryService:processStatusQueue(auto_confirm)
-    Debugger.enter("processStatusQueue", "auto_confirm=" .. tostring(auto_confirm))
-    
+function EntryService:processStatusQueue(auto_confirm, silent)
     local queue = self:loadQueue()
     local queue_size = 0
-    for _ in pairs(queue) do queue_size = queue_size + 1 end
-    
-    Debugger.info("Queue loaded with " .. queue_size .. " entries")
-    
+    for i in pairs(queue) do queue_size = queue_size + 1 end
+
     if queue_size == 0 then
-        Debugger.exit("processStatusQueue", "empty queue")
+        -- Show friendly message only when manually triggered (auto_confirm is nil)
+        if auto_confirm == nil then
+            Notification:info(_("All changes are already synced"))
+        end
         return true -- Nothing to process
     end
-    
-    -- Debug: Log all queue entries
-    for entry_id, opts in pairs(queue) do
-        Debugger.debug("Queue entry " .. entry_id .. ": " .. opts.original_status .. " -> " .. opts.new_status .. " (timestamp: " .. (opts.timestamp or "nil") .. ")")
-    end
-    
-    logger.info("Found status queue with " .. queue_size .. " entries")
-    
+
+
     -- Ask user for confirmation unless auto_confirm is true
     if not auto_confirm then
-        local UIManager = require("ui/uimanager")
-        local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
-        local T = require("ffi/util").template
-        
+
         local sync_dialog
         sync_dialog = ButtonDialogTitle:new({
             title = T(_("Sync %1 pending status changes?"), queue_size),
@@ -213,10 +241,9 @@ function EntryService:processStatusQueue(auto_confirm)
             buttons = {
                 {
                     {
-                        text = _("Cancel"),
+                        text = _("Later"),
                         callback = function()
                             UIManager:close(sync_dialog)
-                            logger.info("User cancelled status queue sync")
                         end,
                     },
                     {
@@ -230,24 +257,102 @@ function EntryService:processStatusQueue(auto_confirm)
                         end,
                     },
                 },
+                {
+                    {
+                        text = _("Delete Queue"),
+                        callback = function()
+                            UIManager:close(sync_dialog)
+                            -- Show confirmation dialog for destructive operation
+                            UIManager:nextTick(function()
+                                self:confirmClearStatusQueue(queue_size)
+                            end)
+                        end,
+                    },
+                },
             },
         })
         UIManager:show(sync_dialog)
         return true -- Dialog shown, actual processing happens if user confirms
     end
+
+    -- User confirmed, process queue with optimized batch API calls (max 2 calls)
+
+    -- Group entries by target status (O(n) operation)
+    local read_entries = {}
+    local unread_entries = {}
     
-    -- User confirmed, use subprocess to process queue
-    logger.info("User confirmed, starting subprocess to process queue")
-    local pid = self:processStatusQueueInSubprocess()
-    
-    -- Track the subprocess for proper cleanup
-    if pid then
-        self.miniflux_plugin:trackSubprocess(pid)
-        Debugger.info("Manual queue processing subprocess started with PID: " .. tostring(pid))
+    for entry_id, opts in pairs(queue) do
+        if opts.new_status == "read" then
+            table.insert(read_entries, entry_id)
+        elseif opts.new_status == "unread" then
+            table.insert(unread_entries, entry_id)
+        end
     end
-    
-    Debugger.exit("processStatusQueue", "subprocess_pid=" .. tostring(pid))
-    return pid ~= nil
+
+    local processed_count = 0
+    local failed_count = 0
+    local read_success = false
+    local unread_success = false
+
+    -- Process read entries in single batch API call
+    if #read_entries > 0 then
+        read_success = self:tryBatchUpdateEntries(read_entries, "read")
+        if read_success then
+            processed_count = processed_count + #read_entries
+        else
+            failed_count = failed_count + #read_entries
+        end
+    else
+        read_success = true -- No read entries to process
+    end
+
+    -- Process unread entries in single batch API call  
+    if #unread_entries > 0 then
+        unread_success = self:tryBatchUpdateEntries(unread_entries, "unread")
+        if unread_success then
+            processed_count = processed_count + #unread_entries
+        else
+            failed_count = failed_count + #unread_entries
+        end
+    else
+        unread_success = true -- No unread entries to process
+    end
+
+    -- Efficient queue cleanup: if both operations succeeded, clear entire queue
+    if read_success and unread_success then
+        -- Both batch operations succeeded (204 status) - clear entire queue
+        queue = {}
+    else
+        -- Some operations failed - remove only successful entries (O(n) operation)
+        if read_success then
+            for i, entry_id in ipairs(read_entries) do
+                queue[entry_id] = nil
+            end
+        end
+        if unread_success then
+            for i, entry_id in ipairs(unread_entries) do
+                queue[entry_id] = nil
+            end
+        end
+    end
+
+    -- Save updated queue
+    self:saveQueue(queue)
+
+    -- Show completion notification only if not silent
+    if not silent then
+        if processed_count > 0 then
+            local message = processed_count .. " entries synced"
+            if failed_count > 0 then
+                message = message .. ", " .. failed_count .. " failed"
+            end
+            Notification:success(message)
+        elseif failed_count > 0 then
+            Notification:error("Failed to sync " .. failed_count .. " entries")
+        end
+    end
+
+    return true
 end
 
 ---Try to update entry status via API (helper for queue processing)
@@ -260,15 +365,71 @@ function EntryService:tryUpdateEntryStatus(entry_id, new_status)
         body = { status = new_status }
         -- No dialogs for background queue processing
     })
-    
+
+
     if not err then
-        -- Update local metadata on success
-        EntryEntity.updateEntryStatus(entry_id, new_status)
+        -- Check if this entry is currently open in ReaderUI for DocSettings sync
+        local doc_settings = nil
+        if ReaderUI.instance and ReaderUI.instance.document then
+            local current_file = ReaderUI.instance.document.file
+            if EntryEntity.isMinifluxEntry(current_file) then
+                local current_entry_id = EntryEntity.extractEntryIdFromPath(current_file)
+                if current_entry_id == entry_id then
+                    doc_settings = ReaderUI.instance.doc_settings
+                end
+            end
+        end
+        
+        EntryEntity.updateEntryStatus(entry_id, new_status, doc_settings)
+        
+        -- Remove from queue since server is now source of truth
+        self:removeFromQueue(entry_id)
         return true
     end
-    
+
     return false
 end
+
+---Try to update multiple entries status via batch API (optimized for queue processing)
+---@param entry_ids table Array of entry IDs
+---@param new_status string New status ("read" or "unread")
+---@return boolean success
+function EntryService:tryBatchUpdateEntries(entry_ids, new_status)
+    if not entry_ids or #entry_ids == 0 then
+        return true -- No entries to process
+    end
+
+    -- Use existing batch API without dialogs for background processing
+    local result, err = self.miniflux_api:updateEntries(entry_ids, {
+        body = { status = new_status }
+        -- No dialogs for background queue processing
+    })
+
+    if not err then
+        -- Check ReaderUI once for efficiency (instead of checking for each entry)
+        local current_entry_id = nil
+        local doc_settings = nil
+        
+        if ReaderUI.instance and ReaderUI.instance.document then
+            local current_file = ReaderUI.instance.document.file
+            if EntryEntity.isMinifluxEntry(current_file) then
+                current_entry_id = EntryEntity.extractEntryIdFromPath(current_file)
+                doc_settings = ReaderUI.instance.doc_settings
+            end
+        end
+
+        -- Update local metadata for all entries on success (Miniflux returns 204 for success)
+        for i, entry_id in ipairs(entry_ids) do
+            -- Pass doc_settings only if this entry is currently open
+            local entry_doc_settings = (entry_id == current_entry_id) and doc_settings or nil
+            EntryEntity.updateEntryStatus(entry_id, new_status, entry_doc_settings)
+        end
+        return true
+    end
+
+    return false
+end
+
 
 ---Read an entry (download if needed and open)
 ---@param entry_data table Raw entry data from API
@@ -300,30 +461,48 @@ function EntryService:markEntriesAsRead(entry_ids)
     -- Show progress notification
     local progress_message = _("Marking ") .. #entry_ids .. _(" entries as read...")
 
-    -- Use batch API call
+    -- Try batch API call first
     local result, err = self.miniflux_api:updateEntries(entry_ids, {
         body = { status = "read" },
         dialogs = {
             loading = { text = progress_message },
-            success = { text = _("Successfully marked ") .. #entry_ids .. _(" entries as read") },
-            error = { text = _("Failed to mark entries as read") }
+            -- Note: Don't show success/error dialogs here - we'll handle fallback ourselves
         }
     })
 
-    if err then
-        return false
-    else
-        -- TODO: Create EntryEntity.updateEntriesStatus(entry_ids, status) for batch local metadata updates
-        -- Currently doing individual updates which could be optimized for large selections
-        for _, entry_id in ipairs(entry_ids) do
+    if not err then
+        -- API success - update local metadata
+        for i, entry_id in ipairs(entry_ids) do
             EntryEntity.updateEntryStatus(entry_id, "read")
+            -- Remove from queue since server is now source of truth
+            self:removeFromQueue(entry_id)
         end
-        
+
+        -- Show success notification
+        Notification:success(_("Successfully marked ") .. #entry_ids .. _(" entries as read"))
+
         -- Invalidate caches so next navigation shows updated counts
         self.feed_repository:invalidateCache()
         self.category_repository:invalidateCache()
-        
+
         return true
+    else
+        -- API failed - use queue fallback with better UX messaging
+        -- Perform optimistic local updates immediately for good UX
+        for i, entry_id in ipairs(entry_ids) do
+            EntryEntity.updateEntryStatus(entry_id, "read")
+            -- Queue each entry for later sync
+            self:enqueueStatusChange(entry_id, {
+                new_status = "read",
+                original_status = "unread" -- Assume opposite for batch operations
+            })
+        end
+
+        -- Show simple offline message
+        local message = _("Marked as read (will sync when online)")
+        Notification:info(message)
+
+        return true -- Still successful from user perspective
     end
 end
 
@@ -338,30 +517,48 @@ function EntryService:markEntriesAsUnread(entry_ids)
     -- Show progress notification
     local progress_message = _("Marking ") .. #entry_ids .. _(" entries as unread...")
 
-    -- Use batch API call
+    -- Try batch API call first
     local result, err = self.miniflux_api:updateEntries(entry_ids, {
         body = { status = "unread" },
         dialogs = {
             loading = { text = progress_message },
-            success = { text = _("Successfully marked ") .. #entry_ids .. _(" entries as unread") },
-            error = { text = _("Failed to mark entries as unread") }
+            -- Note: Don't show success/error dialogs here - we'll handle fallback ourselves
         }
     })
 
-    if err then
-        return false
-    else
-        -- TODO: Create EntryEntity.updateEntriesStatus(entry_ids, status) for batch local metadata updates
-        -- Currently doing individual updates which could be optimized for large selections
-        for _, entry_id in ipairs(entry_ids) do
+    if not err then
+        -- API success - update local metadata
+        for i, entry_id in ipairs(entry_ids) do
             EntryEntity.updateEntryStatus(entry_id, "unread")
+            -- Remove from queue since server is now source of truth
+            self:removeFromQueue(entry_id)
         end
-        
+
+        -- Show success notification
+        Notification:success(_("Successfully marked ") .. #entry_ids .. _(" entries as unread"))
+
         -- Invalidate caches so next navigation shows updated counts
         self.feed_repository:invalidateCache()
         self.category_repository:invalidateCache()
-        
+
         return true
+    else
+        -- API failed - use queue fallback with better UX messaging
+        -- Perform optimistic local updates immediately for good UX
+        for i, entry_id in ipairs(entry_ids) do
+            EntryEntity.updateEntryStatus(entry_id, "unread")
+            -- Queue each entry for later sync
+            self:enqueueStatusChange(entry_id, {
+                new_status = "unread",
+                original_status = "read" -- Assume opposite for batch operations
+            })
+        end
+
+        -- Show simple offline message
+        local message = _("Marked as unread (will sync when online)")
+        Notification:info(message)
+
+        return true -- Still successful from user perspective
     end
 end
 
@@ -371,21 +568,22 @@ end
 ---@return boolean success Always returns true (fire-and-forget operations)
 function EntryService:downloadEntries(entry_data_list, completion_callback)
     local BatchDownloadEntriesWorkflow = require("services/batch_download_entries_workflow")
-    
+
     BatchDownloadEntriesWorkflow.execute({
         entry_data_list = entry_data_list,
         settings = self.settings,
         completion_callback = completion_callback
     })
-    
+
     return true
 end
 
 ---Change entry status with validation and side effects
 ---@param entry_id number Entry ID
 ---@param new_status string New status
+---@param doc_settings? table Optional ReaderUI DocSettings instance to use
 ---@return boolean success
-function EntryService:changeEntryStatus(entry_id, new_status)
+function EntryService:changeEntryStatus(entry_id, new_status, doc_settings)
     if not EntryEntity.isValidId(entry_id) then
         Notification:error(_("Cannot change status: invalid entry ID"))
         return false
@@ -402,21 +600,42 @@ function EntryService:changeEntryStatus(entry_id, new_status)
         dialogs = {
             loading = { text = loading_text },
             success = { text = success_text },
-            error = { text = error_text }
+            -- Note: No error dialog - we handle fallback gracefully
         }
     })
 
     if err then
-        -- Error dialog already shown by API system
-        return false
-    else
-        -- Update local metadata
-        EntryEntity.updateEntryStatus(entry_id, new_status)
+        -- API failed - use queue fallback for offline mode
+        -- Perform optimistic local update for immediate UX
+        EntryEntity.updateEntryStatus(entry_id, new_status, doc_settings)
         
+        -- Queue for later sync (determine original status from current metadata)
+        local metadata = EntryEntity.loadMetadata(entry_id)
+        local original_status = (new_status == "read") and "unread" or "read" -- Assume opposite
+        
+        self:enqueueStatusChange(entry_id, {
+            new_status = new_status,
+            original_status = original_status
+        })
+        
+        -- Show offline message instead of error
+        local message = new_status == "read" 
+            and _("Marked as read (will sync when online)")
+            or _("Marked as unread (will sync when online)")
+        Notification:info(message)
+        
+        return true -- Still successful from user perspective
+    else
+        -- API success - update local metadata using provided DocSettings if available
+        EntryEntity.updateEntryStatus(entry_id, new_status, doc_settings)
+        
+        -- Remove from queue since server is now source of truth
+        self:removeFromQueue(entry_id)
+
         -- Invalidate caches so next navigation shows updated counts
         self.feed_repository:invalidateCache()
         self.category_repository:invalidateCache()
-        
+
         return true
     end
 end
@@ -426,42 +645,38 @@ end
 -- =============================================================================
 
 ---Handle ReaderReady event for miniflux entries
----@param opts {file_path: string} Options containing file path
+---@param opts {file_path: string, doc_settings?: table} Options containing file path and optional DocSettings
 function EntryService:onReaderReady(opts)
     local file_path = opts.file_path
-    self:autoMarkAsRead(file_path)
+    local doc_settings = opts.doc_settings -- ReaderUI's cached DocSettings
+    self:autoMarkAsRead(file_path, doc_settings)
 end
 
 ---Auto-mark miniflux entry as read if enabled
 ---@param file_path string File path to process
-function EntryService:autoMarkAsRead(file_path)
+---@param doc_settings? table Optional ReaderUI DocSettings instance
+function EntryService:autoMarkAsRead(file_path, doc_settings)
     -- Check if auto-mark-as-read is enabled
     if not self.settings.mark_as_read_on_open then
-        logger.info("Auto-mark-as-read is disabled, skipping")
         return
     end
 
     -- Check if current document is a miniflux HTML file
     if not EntryEntity.isMinifluxEntry(file_path) then
-        logger.info("Not a miniflux entry, skipping auto-mark")
         return
     end
 
     -- Extract entry ID from path
     local entry_id = EntryEntity.extractEntryIdFromPath(file_path)
     if not entry_id then
-        logger.warn("Could not extract entry ID from path: " .. tostring(file_path))
         return
     end
 
-    logger.info("Auto-marking miniflux entry " .. entry_id .. " as read (onReaderReady)")
 
-    -- Spawn update status to "read"
-    local pid = self:spawnUpdateStatus(entry_id, "read")
+    -- Spawn update status to "read" with ReaderUI's DocSettings
+    local pid = self:spawnUpdateStatus(entry_id, "read", doc_settings)
     if pid then
-        logger.info("Auto-mark spawned with PID: " .. tostring(pid))
     else
-        logger.info("Auto-mark skipped (feature disabled)")
     end
 end
 
@@ -483,16 +698,19 @@ function EntryService:showEndOfEntryDialog(entry_info)
     -- Use status for business logic
     local entry_status = metadata and metadata.status or "unread"
 
+    -- Get ReaderUI's DocSettings to avoid cache conflicts
+    local doc_settings = self.miniflux_plugin.ui and self.miniflux_plugin.ui.doc_settings
+
     -- Use utility functions for button text and callback
     local mark_button_text = EntryEntity.getStatusButtonText(entry_status)
     local mark_callback
     if EntryEntity.isEntryRead(entry_status) then
         mark_callback = function()
-            self:changeEntryStatus(entry_info.entry_id, "unread")
+            self:changeEntryStatus(entry_info.entry_id, "unread", doc_settings)
         end
     else
         mark_callback = function()
-            self:changeEntryStatus(entry_info.entry_id, "read")
+            self:changeEntryStatus(entry_info.entry_id, "read", doc_settings)
         end
     end
 
@@ -575,6 +793,11 @@ function EntryService:showEndOfEntryDialog(entry_info)
         },
     })
 
+    -- Enhance dialog with key handlers if available
+    if self.miniflux_plugin.key_handler_service then
+        dialog = self.miniflux_plugin.key_handler_service:enhanceDialogWithKeys(dialog, entry_info)
+    end
+
     -- Show dialog and return reference for caller management
     UIManager:show(dialog)
     return dialog
@@ -584,22 +807,19 @@ end
 -- PRIVATE HELPER METHODS
 -- =============================================================================
 
----Queue entry status change (simplified - no subprocess)
+---Spawn update entry status with optimistic update and queue fallback
 ---@param entry_id number Entry ID to update
 ---@param new_status string New status ("read" or "unread")
----@return boolean success True if queued successfully
-function EntryService:spawnUpdateStatus(entry_id, new_status)
-    Debugger.enter("spawnUpdateStatus", "entry_id=" .. entry_id .. ", new_status=" .. new_status)
-    
+---@param doc_settings? table Optional ReaderUI DocSettings instance
+---@return boolean success True if operation initiated successfully
+function EntryService:spawnUpdateStatus(entry_id, new_status, doc_settings)
     -- Check if auto-mark feature is enabled
     if not self.settings.mark_as_read_on_open then
-        Debugger.exit("spawnUpdateStatus", "auto-mark disabled")
         return false
     end
 
     -- Validate entry ID first
     if not EntryEntity.isValidId(entry_id) then
-        Debugger.exit("spawnUpdateStatus", "invalid entry ID")
         return false
     end
 
@@ -612,215 +832,53 @@ function EntryService:spawnUpdateStatus(entry_id, new_status)
         EntryEntity.isEntryRead(local_metadata.status) == EntryEntity.isEntryRead(new_status)
 
     if is_already_target_status then
-        Debugger.exit("spawnUpdateStatus", "already target status")
         return false
     end
 
     -- Smart queue logic: try direct API call if online, queue only if failed or offline
     local NetworkMgr = require("ui/network/manager")
     local success = false
-    
-    if NetworkMgr:isConnected() then
-        Debugger.info("Online detected, attempting direct API call for entry " .. entry_id)
-        -- Try direct API call first when online
+
+    if NetworkMgr:isOnline() then
+        -- Online: Try direct API call first
+
+        -- Step 1: Optimistic update (immediate UX)
+        local optimistic_success = EntryEntity.updateEntryStatus(entry_id, new_status, doc_settings)
+        if not optimistic_success then
+            return false
+        end
+
+        -- Step 2: Try immediate API call
         success = self:tryUpdateEntryStatus(entry_id, new_status)
-        
+
         if success then
-            Debugger.info("Direct API call succeeded for entry " .. entry_id .. " to " .. new_status)
-            -- No need to queue - operation completed successfully
+            return true
         else
-            Debugger.warn("Direct API call failed for entry " .. entry_id .. ", falling back to queue")
-            -- API failed, queue for retry
-            success = self:enqueueStatusChange(entry_id, {
-                new_status = new_status,
-                original_status = original_status
-            })
-            
-            if success then
-                -- Optimistic update even though API failed (queue will retry)
-                EntryEntity.updateEntryStatus(entry_id, new_status)
-                Debugger.info("Queued entry " .. entry_id .. " for retry after API failure")
-                
-                -- Process the queue immediately in background to retry the failed operation
-                local pid = self:processStatusQueueInSubprocess()
-                if pid then
-                    self.miniflux_plugin:trackSubprocess(pid)
-                    Debugger.info("Started background retry subprocess with PID: " .. tostring(pid))
-                end
-            end
+            -- Fall through to queue logic below
         end
     else
-        Debugger.info("Offline detected, queuing entry " .. entry_id .. " for later sync")
-        -- Offline, always queue
-        success = self:enqueueStatusChange(entry_id, {
-            new_status = new_status,
-            original_status = original_status
-        })
-        
-        if success then
-            -- Optimistic update for offline operation
-            EntryEntity.updateEntryStatus(entry_id, new_status)
-            Debugger.info("Queued and optimistically updated entry " .. entry_id .. " to " .. new_status .. " (offline)")
+        -- Offline: Do optimistic update only
+        local optimistic_success = EntryEntity.updateEntryStatus(entry_id, new_status, doc_settings)
+        if not optimistic_success then
+            return false
         end
     end
 
-    Debugger.exit("spawnUpdateStatus", "success=" .. tostring(success))
+    -- Queue for later sync (either because offline or API call failed)
+    local queue_success = self:enqueueStatusChange(entry_id, {
+        new_status = new_status,
+        original_status = original_status
+    })
+
+    if queue_success then
+        success = true
+    else
+        -- Optimistic update still provides immediate UX even if queue fails
+        success = true
+    end
+
+
     return success
-end
-
----Process entire status queue in a subprocess (new architecture)
----@return number|nil pid Process ID if spawned, nil if no queue
-function EntryService:processStatusQueueInSubprocess()
-    Debugger.enter("processStatusQueueInSubprocess")
-    
-    -- Quick check if queue exists before spawning subprocess
-    local queue = self:loadQueue()
-    local queue_size = 0
-    for _ in pairs(queue) do queue_size = queue_size + 1 end
-    
-    if queue_size == 0 then
-        Debugger.exit("processStatusQueueInSubprocess", "empty queue")
-        return nil
-    end
-    
-    Debugger.info("Spawning subprocess to process " .. queue_size .. " queued entries")
-    
-    local FFIUtil = require("ffi/util")
-    
-    -- Extract settings data for subprocess (separate memory space)
-    local server_address = self.settings.server_address
-    local api_token = self.settings.api_token
-    
-    local pid = FFIUtil.runInSubProcess(function()
-        -- Import required modules in subprocess
-        local EntryEntity = require("entities/entry_entity")
-        local APIClient = require("api/api_client")
-        local MinifluxAPI = require("api/miniflux_api")
-        local Files = require("utils/files")
-        local Debugger = require("utils/debugger")
-        local logger = require("logger")
-        
-        Debugger.info("Subprocess started for queue processing")
-        
-        -- Create settings object for subprocess
-        local subprocess_settings = {
-            server_address = server_address,
-            api_token = api_token
-        }
-        
-        -- Create API client instances
-        local api_client = APIClient:new({ settings = subprocess_settings })
-        local miniflux_api = MinifluxAPI:new({ api_client = api_client })
-        
-        -- Queue management functions (duplicated in subprocess)
-        local function getQueueFilePath()
-            local miniflux_dir = EntryEntity.getDownloadDir()
-            return miniflux_dir .. "status_queue.lua"
-        end
-        
-        local function loadQueue()
-            local queue_file = getQueueFilePath()
-            local lfs = require("libs/libkoreader-lfs")
-            
-            if not lfs.attributes(queue_file, "mode") then
-                return {}
-            end
-            
-            local success, queue_data = pcall(dofile, queue_file)
-            if success and type(queue_data) == "table" then
-                return queue_data
-            else
-                Debugger.warn("Subprocess failed to load queue: " .. tostring(queue_data))
-                return {}
-            end
-        end
-        
-        local function saveQueue(queue)
-            local queue_file = getQueueFilePath()
-            local miniflux_dir = queue_file:match("(.+)/[^/]+$")
-            
-            -- Ensure directory exists
-            local success, err = Files.createDirectory(miniflux_dir)
-            if not success then
-                Debugger.error("Subprocess failed to create directory: " .. tostring(err))
-                return false
-            end
-            
-            -- Convert queue to Lua code
-            local queue_content = "return {\n"
-            for entry_id, opts in pairs(queue) do
-                queue_content = queue_content .. string.format(
-                    "  [%d] = {\n    new_status = %q,\n    original_status = %q,\n    timestamp = %d\n  },\n",
-                    entry_id, opts.new_status, opts.original_status, opts.timestamp
-                )
-            end
-            queue_content = queue_content .. "}\n"
-            
-            -- Write to file
-            local write_success, write_err = Files.writeFile(queue_file, queue_content)
-            if not write_success then
-                Debugger.error("Subprocess failed to save queue: " .. tostring(write_err))
-                return false
-            end
-            
-            return true
-        end
-        
-        -- Load and process queue
-        local queue = loadQueue()
-        local queue_size = 0
-        for _ in pairs(queue) do queue_size = queue_size + 1 end
-        
-        Debugger.info("Subprocess loaded queue with " .. queue_size .. " entries")
-        
-        local processed_count = 0
-        local failed_entries = {}
-        
-        -- Process each queued entry
-        for entry_id, opts in pairs(queue) do
-            Debugger.debug("Subprocess processing entry " .. entry_id .. ": " .. opts.original_status .. " -> " .. opts.new_status)
-            
-            -- Smart check: verify if sync is still needed
-            local local_metadata = EntryEntity.loadMetadata(entry_id)
-            local current_status = local_metadata and local_metadata.status or "unread"
-            local is_already_synced = EntryEntity.isEntryRead(current_status) == EntryEntity.isEntryRead(opts.new_status)
-            
-            if is_already_synced then
-                -- Entry already in desired state, remove from queue
-                processed_count = processed_count + 1
-                Debugger.info("Subprocess: Entry " .. entry_id .. " already synced, removing from queue")
-            else
-                -- Try API call
-                local result, err = miniflux_api:updateEntries(entry_id, {
-                    body = { status = opts.new_status }
-                })
-                
-                if not err then
-                    -- Success: update local metadata and count as processed
-                    EntryEntity.updateEntryStatus(entry_id, opts.new_status)
-                    processed_count = processed_count + 1
-                    Debugger.info("Subprocess: Successfully synced entry " .. entry_id .. " to " .. opts.new_status)
-                else
-                    -- Failed: keep in queue for retry
-                    failed_entries[entry_id] = opts
-                    Debugger.warn("Subprocess: Failed to sync entry " .. entry_id .. ", keeping in queue")
-                end
-            end
-        end
-        
-        -- Save cleaned queue (only failed entries remain)
-        local save_success = saveQueue(failed_entries)
-        
-        local failed_count = 0
-        for _ in pairs(failed_entries) do failed_count = failed_count + 1 end
-        
-        Debugger.info("Subprocess completed: processed=" .. processed_count .. ", failed=" .. failed_count .. ", save_success=" .. tostring(save_success))
-        
-        -- Subprocess exits automatically
-    end)
-    
-    Debugger.exit("processStatusQueueInSubprocess", "pid=" .. tostring(pid))
-    return pid
 end
 
 ---Delete a local entry
@@ -846,6 +904,5 @@ function EntryService:deleteLocalEntry(entry_id)
         return false
     end
 end
-
 
 return EntryService

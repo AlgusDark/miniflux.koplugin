@@ -61,9 +61,11 @@ function Browser:init()
         subtitle_fullwidth = true, -- Allow full width display
 
         left_icon = "appbar.settings",
+        left_icon_size_ratio = 1,
         left_icon_tap_callback = function() self:onLeftButtonTap() end,
         -- left_icon_hold_callback = function() self:onLeftButtonHold() end,
         right_icon = self.current_mode == BrowserMode.SELECTION and "check" or "exit",
+        right_icon_size_ratio = 1,
         right_icon_tap_callback = function() self:onRightButtonTap() end,
         -- right_icon_hold_callback = function() self:onRightButtonHold() end,
     }
@@ -84,7 +86,6 @@ function Browser:transitionTo(target_mode)
 
     if target_mode == BrowserMode.NORMAL then
         -- Exiting selection mode - clean up all selection state
-        local previous_selection_count = self.selected_items and self:getSelectedCount() or 0
         self.selected_items = nil      -- Reset selection mode (enables early returns in updateItemDimStatus)
         self.last_selected_index = nil -- Reset range selection tracking
         self.title_bar:setRightIcon("exit")
@@ -125,7 +126,7 @@ function Browser:showSelectionActionsDialog()
     if actions_enabled then
         local available_actions = self:getSelectionActions()
 
-        for _, action in ipairs(available_actions) do
+        for i, action in ipairs(available_actions) do
             table.insert(selection_actions, {
                 text = action.text,
                 enabled = actions_enabled,
@@ -152,7 +153,6 @@ function Browser:showSelectionActionsDialog()
             end
             table.insert(buttons, row)
         end
-        table.insert(buttons, {}) -- separator
     end
 
     -- Add select/deselect all buttons
@@ -218,7 +218,7 @@ function Browser:getSelectedCount()
         return 0
     end
     local count = 0
-    for _ in pairs(self.selected_items) do
+    for i in pairs(self.selected_items) do
         count = count + 1
     end
     return count
@@ -228,7 +228,7 @@ end
 function Browser:getSelectedItemIds()
     local selected = {}
     if self.selected_items then
-        for item_id, _ in pairs(self.selected_items) do
+        for item_id, i in pairs(self.selected_items) do
             table.insert(selected, item_id)
         end
     end
@@ -306,7 +306,7 @@ function Browser:updateItemDimStatus(items)
     -- Process all items passed to this function (caller determines scope)
     -- When called from switchItemTable: processes current page items
     -- When called from refreshCurrentView: processes visible items only
-    for _, item in ipairs(items) do
+    for i, item in ipairs(items) do
         local item_id = self:getItemId(item)
         item.dim = self.selected_items[item_id] and true or nil
     end
@@ -325,7 +325,7 @@ function Browser:clearVisualSelection()
     if self.item_table then
         -- PERFORMANCE OPTIMIZATION: Only clear visual indicators for visible items
         local visible_items = self:getVisibleItems(self.item_table)
-        for _, item in ipairs(visible_items) do
+        for i, item in ipairs(visible_items) do
             item.dim = nil
         end
         self:updateItems(1, true) -- select_number=1, no_recalculate_dimen=true
@@ -597,8 +597,7 @@ function Browser:doRangeSelection(item)
 
     -- Determine if we should select or deselect based on the target item's current state
     local target_item_id = self:getItemId(item)
-    local should_select = true
-    should_select = not self.selected_items[target_item_id]
+    local should_select = not self.selected_items[target_item_id]
 
     -- Apply selection/deselection to range
     for i = start_index, end_index do
@@ -631,7 +630,7 @@ function Browser:selectAllInCurrentView(do_select)
     if do_select == nil then do_select = true end
 
     -- Update selection state for all items (following FileChooser pattern)
-    for _, item in ipairs(self.item_table) do
+    for i, item in ipairs(self.item_table) do
         local item_id = self:getItemId(item)
         if item_id then
             if do_select then

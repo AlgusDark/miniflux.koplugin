@@ -31,11 +31,15 @@ function Menu.build(plugin)
             },
             {
                 text = _("Sync status changes"),
-                help_text = _("Sync pending read/unread status changes"),
+                help_text = _("Sync pending changes (entries, feeds, categories)"),
                 callback = function()
-                    if plugin.entry_service then
-                        -- Use new subprocess-based queue processor with user confirmation
-                        plugin.entry_service:processStatusQueue()
+                    if plugin.queue_service then
+                        -- Use KOReader's standard network handling (same as translate)
+                        local NetworkMgr = require("ui/network/manager")
+                        NetworkMgr:runWhenOnline(function()
+                            -- Show sync dialog after ensuring online connectivity
+                            plugin.queue_service:processAllQueues()
+                        end)
                     end
                 end,
             },
