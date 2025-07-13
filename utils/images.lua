@@ -68,7 +68,7 @@ function Images.discoverImages(content, base_url)
     local img_elements = root:select("img")
 
     if img_elements then
-        for _, img_element in ipairs(img_elements) do
+        for i, img_element in ipairs(img_elements) do
             local attrs = img_element.attributes or {}
             local src = attrs.src
 
@@ -359,7 +359,7 @@ end
 function Images.createDownloadSummary(include_images, images)
     local images_downloaded = 0
     if include_images then
-        for _, img in ipairs(images) do
+        for i, img in ipairs(images) do
             if img.downloaded then
                 images_downloaded = images_downloaded + 1
             end

@@ -77,7 +77,7 @@ function EntryService:loadQueue()
     local success, queue_data = pcall(dofile, queue_file)
     if success and type(queue_data) == "table" then
         local count = 0
-        for _ in pairs(queue_data) do count = count + 1 end
+        for i in pairs(queue_data) do count = count + 1 end
         return queue_data
     else
         return {}
@@ -91,7 +91,7 @@ function EntryService:saveQueue(queue)
     local queue_file = self:getQueueFilePath()
 
     local count = 0
-    for _ in pairs(queue) do count = count + 1 end
+    for i in pairs(queue) do count = count + 1 end
 
     -- Ensure miniflux directory exists
     local miniflux_dir = queue_file:match("(.+)/[^/]+$")
@@ -132,7 +132,7 @@ function EntryService:enqueueStatusChange(entry_id, opts)
 
     local queue = self:loadQueue()
     local queue_size_before = 0
-    for _ in pairs(queue) do queue_size_before = queue_size_before + 1 end
+    for i in pairs(queue) do queue_size_before = queue_size_before + 1 end
 
     -- Add/update entry in queue (automatic deduplication via entry_id key)
     queue[entry_id] = {
@@ -142,7 +142,7 @@ function EntryService:enqueueStatusChange(entry_id, opts)
     }
 
     local queue_size_after = 0
-    for _ in pairs(queue) do queue_size_after = queue_size_after + 1 end
+    for i in pairs(queue) do queue_size_after = queue_size_after + 1 end
 
     local success = self:saveQueue(queue)
 
@@ -153,29 +153,85 @@ function EntryService:enqueueStatusChange(entry_id, opts)
     return success
 end
 
+---Show confirmation dialog before clearing the status queue
+---@param queue_size number Number of entries in queue
+function EntryService:confirmClearStatusQueue(queue_size)
+    local ConfirmBox = require("ui/widget/confirmbox")
+    
+    local message = T(_("Are you sure you want to delete the sync queue?\n\nYou still have %1 entries that need to sync with the server.\n\nThis action cannot be undone."), queue_size)
+    
+    local confirm_dialog = ConfirmBox:new{
+        text = message,
+        ok_text = _("Delete Queue"),
+        ok_callback = function()
+            local result, err = self:clearStatusQueue()
+            if err then
+                Notification:error(err.message)
+            else
+                Notification:info(_("Sync queue cleared"))
+            end
+        end,
+        cancel_text = _("Cancel"),
+    }
+    
+    UIManager:show(confirm_dialog)
+end
+
+---Remove a specific entry from the status queue (when API succeeds)
+---@param entry_id number Entry ID to remove
+---@return boolean success
+function EntryService:removeFromQueue(entry_id)
+    if not EntryEntity.isValidId(entry_id) then
+        return false
+    end
+
+    local queue = self:loadQueue()
+    
+    -- Check if entry exists in queue
+    if not queue[entry_id] then
+        return true -- Entry not in queue, nothing to do
+    end
+    
+    -- Remove entry from queue
+    queue[entry_id] = nil
+    
+    -- Save updated queue
+    return self:saveQueue(queue)
+end
+
+---Clear the status queue (delete all pending changes)
+---@return boolean|nil result, table|nil error
+function EntryService:clearStatusQueue()
+    local queue_file = self:getQueueFilePath()
+    
+    -- Remove the queue file
+    local success = os.remove(queue_file)
+    if success then
+        return true, nil
+    else
+        return nil, { message = _("Failed to clear sync queue") }
+    end
+end
+
 ---Process the status queue when network is available (with user confirmation)
 ---@param auto_confirm? boolean Skip confirmation dialog if true
 ---@return boolean success
 function EntryService:processStatusQueue(auto_confirm)
     local queue = self:loadQueue()
     local queue_size = 0
-    for _ in pairs(queue) do queue_size = queue_size + 1 end
-
+    for i in pairs(queue) do queue_size = queue_size + 1 end
 
     if queue_size == 0 then
+        -- Show friendly message only when manually triggered (auto_confirm is nil)
+        if auto_confirm == nil then
+            Notification:info(_("All changes are already synced"))
+        end
         return true -- Nothing to process
-    end
-
-    -- Debug: Log all queue entries
-    for entry_id, opts in pairs(queue) do
     end
 
 
     -- Ask user for confirmation unless auto_confirm is true
     if not auto_confirm then
-        local UIManager = require("ui/uimanager")
-        local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
-        local T = require("ffi/util").template
 
         local sync_dialog
         sync_dialog = ButtonDialogTitle:new({
@@ -184,7 +240,7 @@ function EntryService:processStatusQueue(auto_confirm)
             buttons = {
                 {
                     {
-                        text = _("Cancel"),
+                        text = _("Later"),
                         callback = function()
                             UIManager:close(sync_dialog)
                         end,
@@ -200,32 +256,86 @@ function EntryService:processStatusQueue(auto_confirm)
                         end,
                     },
                 },
+                {
+                    {
+                        text = _("Delete Queue"),
+                        callback = function()
+                            UIManager:close(sync_dialog)
+                            -- Show confirmation dialog for destructive operation
+                            UIManager:nextTick(function()
+                                self:confirmClearStatusQueue(queue_size)
+                            end)
+                        end,
+                    },
+                },
             },
         })
         UIManager:show(sync_dialog)
         return true -- Dialog shown, actual processing happens if user confirms
     end
 
-    -- User confirmed, process queue synchronously
+    -- User confirmed, process queue with optimized batch API calls (max 2 calls)
 
-    local processed_count = 0
-    local failed_count = 0
-
-    -- Process each queued entry
+    -- Group entries by target status (O(n) operation)
+    local read_entries = {}
+    local unread_entries = {}
+    
     for entry_id, opts in pairs(queue) do
-        local success = self:tryUpdateEntryStatus(entry_id, opts.new_status)
-
-        if success then
-            processed_count = processed_count + 1
-            -- Remove from queue
-            queue[entry_id] = nil
-        else
-            failed_count = failed_count + 1
-            -- Keep in queue for next retry
+        if opts.new_status == "read" then
+            table.insert(read_entries, entry_id)
+        elseif opts.new_status == "unread" then
+            table.insert(unread_entries, entry_id)
         end
     end
 
-    -- Save updated queue (with successful entries removed)
+    local processed_count = 0
+    local failed_count = 0
+    local read_success = false
+    local unread_success = false
+
+    -- Process read entries in single batch API call
+    if #read_entries > 0 then
+        read_success = self:tryBatchUpdateEntries(read_entries, "read")
+        if read_success then
+            processed_count = processed_count + #read_entries
+        else
+            failed_count = failed_count + #read_entries
+        end
+    else
+        read_success = true -- No read entries to process
+    end
+
+    -- Process unread entries in single batch API call  
+    if #unread_entries > 0 then
+        unread_success = self:tryBatchUpdateEntries(unread_entries, "unread")
+        if unread_success then
+            processed_count = processed_count + #unread_entries
+        else
+            failed_count = failed_count + #unread_entries
+        end
+    else
+        unread_success = true -- No unread entries to process
+    end
+
+    -- Efficient queue cleanup: if both operations succeeded, clear entire queue
+    if read_success and unread_success then
+        -- Both batch operations succeeded (204 status) - clear entire queue
+        queue = {}
+    else
+        -- Some operations failed - remove only successful entries (O(n) operation)
+        if read_success then
+            for i, entry_id in ipairs(read_entries) do
+                queue[entry_id] = nil
+            end
+        end
+        if unread_success then
+            for i, entry_id in ipairs(unread_entries) do
+                queue[entry_id] = nil
+            end
+        end
+    end
+
+    -- Save updated queue
     self:saveQueue(queue)
 
     -- Show completion notification
@@ -256,13 +366,68 @@ function EntryService:tryUpdateEntryStatus(entry_id, new_status)
 
 
     if not err then
-        -- Update local metadata on success
-        EntryEntity.updateEntryStatus(entry_id, new_status)
+        -- Check if this entry is currently open in ReaderUI for DocSettings sync
+        local doc_settings = nil
+        if ReaderUI.instance and ReaderUI.instance.document then
+            local current_file = ReaderUI.instance.document.file
+            if EntryEntity.isMinifluxEntry(current_file) then
+                local current_entry_id = EntryEntity.extractEntryIdFromPath(current_file)
+                if current_entry_id == entry_id then
+                    doc_settings = ReaderUI.instance.doc_settings
+                end
+            end
+        end
+        
+        EntryEntity.updateEntryStatus(entry_id, new_status, doc_settings)
+        
+        -- Remove from queue since server is now source of truth
+        self:removeFromQueue(entry_id)
         return true
     end
 
     return false
 end
+
+---Try to update multiple entries status via batch API (optimized for queue processing)
+---@param entry_ids table Array of entry IDs
+---@param new_status string New status ("read" or "unread")
+---@return boolean success
+function EntryService:tryBatchUpdateEntries(entry_ids, new_status)
+    if not entry_ids or #entry_ids == 0 then
+        return true -- No entries to process
+    end
+
+    -- Use existing batch API without dialogs for background processing
+    local result, err = self.miniflux_api:updateEntries(entry_ids, {
+        body = { status = new_status }
+        -- No dialogs for background queue processing
+    })
+
+    if not err then
+        -- Check ReaderUI once for efficiency (instead of checking for each entry)
+        local current_entry_id = nil
+        local doc_settings = nil
+        
+        if ReaderUI.instance and ReaderUI.instance.document then
+            local current_file = ReaderUI.instance.document.file
+            if EntryEntity.isMinifluxEntry(current_file) then
+                current_entry_id = EntryEntity.extractEntryIdFromPath(current_file)
+                doc_settings = ReaderUI.instance.doc_settings
+            end
+        end
+
+        -- Update local metadata for all entries on success (Miniflux returns 204 for success)
+        for i, entry_id in ipairs(entry_ids) do
+            -- Pass doc_settings only if this entry is currently open
+            local entry_doc_settings = (entry_id == current_entry_id) and doc_settings or nil
+            EntryEntity.updateEntryStatus(entry_id, new_status, entry_doc_settings)
+        end
+        return true
+    end
+
+    return false
+end
+
 
 ---Read an entry (download if needed and open)
 ---@param entry_data table Raw entry data from API
@@ -294,30 +459,48 @@ function EntryService:markEntriesAsRead(entry_ids)
     -- Show progress notification
     local progress_message = _("Marking ") .. #entry_ids .. _(" entries as read...")
 
-    -- Use batch API call
+    -- Try batch API call first
     local result, err = self.miniflux_api:updateEntries(entry_ids, {
         body = { status = "read" },
         dialogs = {
             loading = { text = progress_message },
-            success = { text = _("Successfully marked ") .. #entry_ids .. _(" entries as read") },
-            error = { text = _("Failed to mark entries as read") }
+            -- Note: Don't show success/error dialogs here - we'll handle fallback ourselves
         }
     })
 
-    if err then
-        return false
-    else
-        -- TODO: Create EntryEntity.updateEntriesStatus(entry_ids, status) for batch local metadata updates
-        -- Currently doing individual updates which could be optimized for large selections
-        for _, entry_id in ipairs(entry_ids) do
+    if not err then
+        -- API success - update local metadata
+        for i, entry_id in ipairs(entry_ids) do
             EntryEntity.updateEntryStatus(entry_id, "read")
+            -- Remove from queue since server is now source of truth
+            self:removeFromQueue(entry_id)
         end
+
+        -- Show success notification
+        Notification:success(_("Successfully marked ") .. #entry_ids .. _(" entries as read"))
 
         -- Invalidate caches so next navigation shows updated counts
         self.feed_repository:invalidateCache()
         self.category_repository:invalidateCache()
 
         return true
+    else
+        -- API failed - use queue fallback with better UX messaging
+        -- Perform optimistic local updates immediately for good UX
+        for i, entry_id in ipairs(entry_ids) do
+            EntryEntity.updateEntryStatus(entry_id, "read")
+            -- Queue each entry for later sync
+            self:enqueueStatusChange(entry_id, {
+                new_status = "read",
+                original_status = "unread" -- Assume opposite for batch operations
+            })
+        end
+
+        -- Show simple offline message
+        local message = _("Marked as read (will sync when online)")
+        Notification:info(message)
+
+        return true -- Still successful from user perspective
     end
 end
 
@@ -332,30 +515,48 @@ function EntryService:markEntriesAsUnread(entry_ids)
     -- Show progress notification
     local progress_message = _("Marking ") .. #entry_ids .. _(" entries as unread...")
 
-    -- Use batch API call
+    -- Try batch API call first
     local result, err = self.miniflux_api:updateEntries(entry_ids, {
         body = { status = "unread" },
         dialogs = {
             loading = { text = progress_message },
-            success = { text = _("Successfully marked ") .. #entry_ids .. _(" entries as unread") },
-            error = { text = _("Failed to mark entries as unread") }
+            -- Note: Don't show success/error dialogs here - we'll handle fallback ourselves
         }
     })
 
-    if err then
-        return false
-    else
-        -- TODO: Create EntryEntity.updateEntriesStatus(entry_ids, status) for batch local metadata updates
-        -- Currently doing individual updates which could be optimized for large selections
-        for _, entry_id in ipairs(entry_ids) do
+    if not err then
+        -- API success - update local metadata
+        for i, entry_id in ipairs(entry_ids) do
             EntryEntity.updateEntryStatus(entry_id, "unread")
+            -- Remove from queue since server is now source of truth
+            self:removeFromQueue(entry_id)
         end
+
+        -- Show success notification
+        Notification:success(_("Successfully marked ") .. #entry_ids .. _(" entries as unread"))
 
         -- Invalidate caches so next navigation shows updated counts
         self.feed_repository:invalidateCache()
         self.category_repository:invalidateCache()
 
         return true
+    else
+        -- API failed - use queue fallback with better UX messaging
+        -- Perform optimistic local updates immediately for good UX
+        for i, entry_id in ipairs(entry_ids) do
+            EntryEntity.updateEntryStatus(entry_id, "unread")
+            -- Queue each entry for later sync
+            self:enqueueStatusChange(entry_id, {
+                new_status = "unread",
+                original_status = "read" -- Assume opposite for batch operations
+            })
+        end
+
+        -- Show simple offline message
+        local message = _("Marked as unread (will sync when online)")
+        Notification:info(message)
+
+        return true -- Still successful from user perspective
     end
 end
 
@@ -397,16 +598,37 @@ function EntryService:changeEntryStatus(entry_id, new_status, doc_settings)
         dialogs = {
             loading = { text = loading_text },
             success = { text = success_text },
-            error = { text = error_text }
+            -- Note: No error dialog - we handle fallback gracefully
         }
     })
 
     if err then
-        -- Error dialog already shown by API system
-        return false
-    else
-        -- Update local metadata using provided DocSettings if available
+        -- API failed - use queue fallback for offline mode
+        -- Perform optimistic local update for immediate UX
         EntryEntity.updateEntryStatus(entry_id, new_status, doc_settings)
+        
+        -- Queue for later sync (determine original status from current metadata)
+        local metadata = EntryEntity.loadMetadata(entry_id)
+        local original_status = (new_status == "read") and "unread" or "read" -- Assume opposite
+        
+        self:enqueueStatusChange(entry_id, {
+            new_status = new_status,
+            original_status = original_status
+        })
+        
+        -- Show offline message instead of error
+        local message = new_status == "read" 
+            and _("Marked as read (will sync when online)")
+            or _("Marked as unread (will sync when online)")
+        Notification:info(message)
+        
+        return true -- Still successful from user perspective
+    else
+        -- API success - update local metadata using provided DocSettings if available
+        EntryEntity.updateEntryStatus(entry_id, new_status, doc_settings)
+        
+        -- Remove from queue since server is now source of truth
+        self:removeFromQueue(entry_id)
 
         -- Invalidate caches so next navigation shows updated counts
         self.feed_repository:invalidateCache()

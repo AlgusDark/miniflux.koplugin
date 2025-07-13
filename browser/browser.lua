@@ -124,7 +124,7 @@ function Browser:showSelectionActionsDialog()
     if actions_enabled then
         local available_actions = self:getSelectionActions()
 
-        for _, action in ipairs(available_actions) do
+        for i, action in ipairs(available_actions) do
             table.insert(selection_actions, {
                 text = action.text,
                 enabled = actions_enabled,
@@ -216,7 +216,7 @@ function Browser:getSelectedCount()
         return 0
     end
     local count = 0
-    for _ in pairs(self.selected_items) do
+    for i in pairs(self.selected_items) do
         count = count + 1
     end
     return count
@@ -226,7 +226,7 @@ end
 function Browser:getSelectedItemIds()
     local selected = {}
     if self.selected_items then
-        for item_id, _ in pairs(self.selected_items) do
+        for item_id, i in pairs(self.selected_items) do
             table.insert(selected, item_id)
         end
     end
@@ -304,7 +304,7 @@ function Browser:updateItemDimStatus(items)
     -- Process all items passed to this function (caller determines scope)
     -- When called from switchItemTable: processes current page items
     -- When called from refreshCurrentView: processes visible items only
-    for _, item in ipairs(items) do
+    for i, item in ipairs(items) do
         local item_id = self:getItemId(item)
         item.dim = self.selected_items[item_id] and true or nil
     end
@@ -323,7 +323,7 @@ function Browser:clearVisualSelection()
     if self.item_table then
         -- PERFORMANCE OPTIMIZATION: Only clear visual indicators for visible items
         local visible_items = self:getVisibleItems(self.item_table)
-        for _, item in ipairs(visible_items) do
+        for i, item in ipairs(visible_items) do
             item.dim = nil
         end
         self:updateItems(1, true) -- select_number=1, no_recalculate_dimen=true
@@ -628,7 +628,7 @@ function Browser:selectAllInCurrentView(do_select)
     if do_select == nil then do_select = true end
 
     -- Update selection state for all items (following FileChooser pattern)
-    for _, item in ipairs(self.item_table) do
+    for i, item in ipairs(self.item_table) do
         local item_id = self:getItemId(item)
         if item_id then
             if do_select then

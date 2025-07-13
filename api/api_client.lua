@@ -139,7 +139,7 @@ function APIClient:makeRequest(method, endpoint, config)
         for key, value in pairs(config.query) do
             if type(value) == "table" then
                 -- Handle array values (like status filters)
-                for _, v in ipairs(value) do
+                for i, v in ipairs(value) do
                     addQueryParam(query_parts, key, v)
                 end
             else

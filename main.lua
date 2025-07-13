@@ -334,11 +334,18 @@ end
 
 ---Handle network connected event - process offline status queue
 function Miniflux:onNetworkConnected()
-    
     -- Only process if EntryService is available (plugin initialized)
     if self.entry_service then
-        -- Process queue automatically with user confirmation
-        self.entry_service:processStatusQueue(false) -- auto_confirm = false (show dialog)
+        -- Check if queue has items before showing dialog
+        local queue = self.entry_service:loadQueue()
+        local queue_size = 0
+        for i in pairs(queue) do queue_size = queue_size + 1 end
+        
+        if queue_size > 0 then
+            -- Show sync dialog only if there are items to sync
+            self.entry_service:processStatusQueue(false) -- auto_confirm = false (show dialog)
+        end
+        -- If queue is empty, do nothing (silent)
     end
 end
 

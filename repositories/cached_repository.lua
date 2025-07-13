@@ -57,7 +57,7 @@ function CachedRepository:generateCacheKey(method_name, params)
         end
         table.sort(sorted_params)
 
-        for _, param in ipairs(sorted_params) do
+        for i, param in ipairs(sorted_params) do
             table.insert(key_parts, param)
         end
     end

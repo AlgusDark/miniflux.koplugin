@@ -59,7 +59,6 @@ end
 -- MINIFLUX-SPECIFIC FUNCTIONALITY
 -- =============================================================================
 
-
 ---Override settings dialog with Miniflux-specific implementation
 function MinifluxBrowser:onLeftButtonTap()
     if not self.settings then
@@ -123,8 +122,8 @@ function MinifluxBrowser:toggleHideReadEntries()
 
     -- Show notification about the change
     local Notification = require("utils/notification")
-    local status_text = self.settings.hide_read_entries and _("Now showing unread entries only") or
-    _("Now showing all entries")
+    local status_text = self.settings.hide_read_entries and _("Now showing unread entries only")
+        or _("Now showing all entries")
     Notification:info(status_text)
 
     -- Refresh the current view to apply the new filter
@@ -208,7 +207,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
                 page_state = nav_config.page_state,
                 onSelectItem = function(feed_id)
                     self:goForward({ from = "feeds", to = "feed_entries", context = { feed_id = feed_id } })
-                end
+                end,
             })
         end,
         categories = function()
@@ -217,8 +216,12 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
                 settings = self.settings,
                 page_state = nav_config.page_state,
                 onSelectItem = function(category_id)
-                    self:goForward({ from = "categories", to = "category_entries", context = { category_id = category_id } })
-                end
+                    self:goForward({
+                        from = "categories",
+                        to = "category_entries",
+                        context = { category_id = category_id },
+                    })
+                end,
             })
         end,
         feed_entries = function()
@@ -231,10 +234,10 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
                 onSelectItem = function(entry_data)
                     local context = {
                         type = "feed",
-                        id = nav_config.context and nav_config.context.feed_id
+                        id = nav_config.context and nav_config.context.feed_id,
                     }
                     self:openItem(entry_data, context)
-                end
+                end,
             })
         end,
         category_entries = function()
@@ -247,10 +250,10 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
                 onSelectItem = function(entry_data)
                     local context = {
                         type = "category",
-                        id = nav_config.context and nav_config.context.category_id
+                        id = nav_config.context and nav_config.context.category_id,
                     }
                     self:openItem(entry_data, context)
-                end
+                end,
             })
         end,
         unread_entries = function()
@@ -261,7 +264,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
                 page_state = nav_config.page_state,
                 onSelectItem = function(entry_data)
                     self:openItem(entry_data, nil) -- No context for global unread
-                end
+                end,
             })
         end,
         local_entries = function()
@@ -269,7 +272,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
             local EntryEntity = require("entities/entry_entity")
 
             -- Get lightweight navigation entries (5x less memory than full metadata)
-            local nav_entries = EntryEntity.getLocalEntriesForNavigation({settings = self.settings})
+            local nav_entries = EntryEntity.getLocalEntriesForNavigation({ settings = self.settings })
 
             return LocalEntriesView.show({
                 settings = self.settings,
@@ -278,10 +281,10 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
                     -- Create local navigation context with pre-sorted entries
                     local local_context = {
                         type = "local",
-                        ordered_entries = nav_entries
+                        ordered_entries = nav_entries,
                     }
                     self:openItem(entry_data, local_context)
-                end
+                end,
             })
         end,
     }
@@ -323,7 +326,7 @@ function MinifluxBrowser:analyzeSelection(selected_items)
     local EntryEntity = require("entities/entry_entity")
     local lfs = require("libs/libkoreader-lfs")
 
-    for _, item in ipairs(selected_items) do
+    for i, item in ipairs(selected_items) do
         local entry_data = item.entry_data
         if entry_data then
             local html_file = EntryEntity.getEntryHtmlPath(entry_data.id)
@@ -340,7 +343,7 @@ function MinifluxBrowser:analyzeSelection(selected_items)
         end
     end
 
-    return {has_local = has_local, has_remote = has_remote}
+    return { has_local = has_local, has_remote = has_remote }
 end
 
 ---Check if any selected items are locally downloaded entries (legacy compatibility)
@@ -404,7 +407,7 @@ function MinifluxBrowser:getSelectionActions()
         end
 
         -- Add file operation buttons to actions
-        for _, button in ipairs(file_ops) do
+        for i, button in ipairs(file_ops) do
             table.insert(actions, button)
         end
 
@@ -438,7 +441,6 @@ end
 function MinifluxBrowser:showSelectionActionsDialog()
     local ButtonDialog = require("ui/widget/buttondialog")
     local UIManager = require("ui/uimanager")
-    local Template = require("ffi/util").template
     local N_ = require("gettext").ngettext
 
     local selected_count = self:getSelectedCount()
@@ -447,7 +449,7 @@ function MinifluxBrowser:showSelectionActionsDialog()
     -- Build title showing selection count
     local title
     if actions_enabled then
-        title = Template(N_("1 item selected", "%1 items selected", selected_count), selected_count)
+        title = T(N_("1 item selected", "%1 items selected", selected_count), selected_count)
     else
         title = _("No items selected")
     end
@@ -457,7 +459,7 @@ function MinifluxBrowser:showSelectionActionsDialog()
     if actions_enabled then
         local available_actions = self:getSelectionActions()
 
-        for _, action in ipairs(available_actions) do
+        for i, action in ipairs(available_actions) do
             table.insert(selection_actions, {
                 text = action.text,
                 enabled = actions_enabled,
@@ -480,8 +482,12 @@ function MinifluxBrowser:showSelectionActionsDialog()
             local row = {}
 
             -- Special handling for Mark actions - always pair them
-            if selection_actions[i] and selection_actions[i].text:match("Mark as") and
-               selection_actions[i + 1] and selection_actions[i + 1].text:match("Mark as") then
+            if
+                selection_actions[i]
+                and selection_actions[i].text:match("Mark as")
+                and selection_actions[i + 1]
+                and selection_actions[i + 1].text:match("Mark as")
+            then
                 -- Found Mark actions pair - add them together
                 table.insert(row, selection_actions[i])
                 table.insert(row, selection_actions[i + 1])
@@ -560,14 +566,14 @@ function MinifluxBrowser:markSelectedAsRead(selected_items)
     if item_type == "entry" then
         -- Extract entry IDs and use existing EntryService
         local entry_ids = {}
-        for _, item in ipairs(selected_items) do
+        for i, item in ipairs(selected_items) do
             table.insert(entry_ids, item.entry_data.id)
         end
         success = self.entry_service:markEntriesAsRead(entry_ids)
     elseif item_type == "feed" then
         -- TODO: Implement batch notifications - show loading, track success/failed feeds, show summary
         success = false
-        for _, item in ipairs(selected_items) do
+        for i, item in ipairs(selected_items) do
             local feed_id = item.feed_data.id
             local result = self.feed_service:markAsRead(feed_id)
             if result then
@@ -577,7 +583,7 @@ function MinifluxBrowser:markSelectedAsRead(selected_items)
     elseif item_type == "category" then
         -- TODO: Implement batch notifications - show loading, track success/failed categories, show summary
         success = false
-        for _, item in ipairs(selected_items) do
+        for i, item in ipairs(selected_items) do
             local category_id = item.category_data.id
             local result = self.category_service:markAsRead(category_id)
             if result then
@@ -618,7 +624,7 @@ function MinifluxBrowser:markSelectedAsUnread(selected_items)
 
     -- Extract entry IDs
     local entry_ids = {}
-    for _, item in ipairs(selected_items) do
+    for i, item in ipairs(selected_items) do
         table.insert(entry_ids, item.entry_data.id)
     end
 
@@ -646,7 +652,7 @@ function MinifluxBrowser:downloadSelectedEntries(selected_items)
 
     -- Extract entry data from selected items
     local entry_data_list = {}
-    for _, item in ipairs(selected_items) do
+    for i, item in ipairs(selected_items) do
         table.insert(entry_data_list, item.entry_data)
     end
 
@@ -683,7 +689,7 @@ function MinifluxBrowser:deleteSelectedEntries(selected_items)
     local EntryEntity = require("entities/entry_entity")
     Debugger.debug("Filtering local entries...")
 
-    for _, item in ipairs(selected_items) do
+    for i, item in ipairs(selected_items) do
         local entry_data = item.entry_data
         if entry_data then
             Debugger.debug("Checking entry ID: " .. tostring(entry_data.id))
@@ -719,12 +725,15 @@ function MinifluxBrowser:deleteSelectedEntries(selected_items)
         message = _("Delete this local entry?\n\nThis will remove the downloaded article and images from your device.")
         Debugger.debug("Using single entry message")
     else
-        message = T(_("Delete %1 local entries?\n\nThis will remove the downloaded articles and images from your device."), #local_entries)
+        message = T(
+            _("Delete %1 local entries?\n\nThis will remove the downloaded articles and images from your device."),
+            #local_entries
+        )
         Debugger.debug("Using multiple entries message with count: " .. #local_entries)
     end
 
     Debugger.debug("Creating ConfirmBox widget...")
-    local confirm_dialog = ConfirmBox:new{
+    local confirm_dialog = ConfirmBox:new({
         text = message,
         ok_text = _("Delete"),
         ok_callback = function()
@@ -735,7 +744,7 @@ function MinifluxBrowser:deleteSelectedEntries(selected_items)
         cancel_callback = function()
             Debugger.debug("User cancelled deletion")
         end,
-    }
+    })
 
     Debugger.debug("Showing confirmation dialog...")
     UIManager:show(confirm_dialog)
@@ -801,7 +810,7 @@ function MinifluxBrowser:getEntryItemConfig()
         show_feed_names = show_feed_names,
         onSelectItem = function(entry_data)
             self:openItem(entry_data)
-        end
+        end,
     }
 end
 
@@ -819,12 +828,12 @@ function MinifluxBrowser:updateItemTableStatus(selected_items, new_status, item_
 
         -- Create lookup table for faster searching
         local ids_to_update = {}
-        for _, item in ipairs(selected_items) do
+        for i, item in ipairs(selected_items) do
             ids_to_update[item.entry_data.id] = true
         end
 
         -- Selective updates - only rebuild changed items (O(k) where k = selected items)
-        for _, item in ipairs(self.item_table) do
+        for i, item in ipairs(self.item_table) do
             if item.entry_data and item.entry_data.id and ids_to_update[item.entry_data.id] then
                 -- Update underlying data
                 item.entry_data.status = new_status
@@ -839,7 +848,7 @@ function MinifluxBrowser:updateItemTableStatus(selected_items, new_status, item_
         end
     elseif item_type == "feed" then
         -- Update feed unread count to 0 for visual feedback
-        for _, item in ipairs(self.item_table) do
+        for i, item in ipairs(self.item_table) do
             if item.feed_data and item.feed_data.id == selected_items[1].feed_data.id then
                 item.feed_data.unread_count = 0
                 -- Update display text if it includes count
@@ -850,7 +859,7 @@ function MinifluxBrowser:updateItemTableStatus(selected_items, new_status, item_
         end
     elseif item_type == "category" then
         -- Update category unread count to 0 for visual feedback
-        for _, item in ipairs(self.item_table) do
+        for i, item in ipairs(self.item_table) do
             if item.category_data and item.category_data.id == selected_items[1].category_data.id then
                 item.category_data.unread_count = 0
                 -- Update display text if it includes count

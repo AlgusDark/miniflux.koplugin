@@ -281,7 +281,7 @@ function EntryEntity.loadMetadata(entry_id)
     }
 
     local settings = {}
-    for _, key in ipairs(settings_keys) do
+    for i, key in ipairs(settings_keys) do
         settings[key] = doc_settings:readSetting(key)
     end
 
@@ -401,7 +401,7 @@ function EntryEntity.showCancellationDialog(context)
 
     -- Build button table for ButtonDialog
     local dialog_buttons = { {} }
-    for _, btn in ipairs(dialog_config.buttons) do
+    for i, btn in ipairs(dialog_config.buttons) do
         table.insert(dialog_buttons[1], {
             text = btn.text,
             callback = function()
