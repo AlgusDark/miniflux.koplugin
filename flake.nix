@@ -21,7 +21,7 @@
             sha256 = "sha256-iHKqsE6+fZiGyxKqfXsRxtOL9YcqOHHl7KI9Y2bEAZ4=";
           };
           
-          disabled = pkgs.lua.luaOlder "5.1";
+          disabled = pkgs.lua51Packages.luaOlder "5.1";
           propagatedBuildInputs = [ pkgs.lua5_1 ];
         };
         
@@ -37,8 +37,9 @@
             # Lua development with integrated packages
             luaEnv                      # Includes lua5_1 + luacheck + busted + htmlparser
             
-            # Code quality (skip lua-language-server to reduce download size)
+            # Code quality and development tools
             stylua
+            lua-language-server         # Essential for development diagnostics
             
             # Build tools (use system git, rsync, zip)
             go-task
@@ -46,10 +47,9 @@
 
           shellHook = ''
             echo "🎯 Miniflux KOReader Plugin Development Environment"
-            echo "📦 Lua 5.1 + luacheck + busted + htmlparser + stylua (via Nix)"
-            echo "✨ Lua packages managed by Nix - fully reproducible!"
+            echo "📦 Lua 5.1 + luacheck + busted + htmlparser + stylua + LuaLS (via Nix)"
+            echo "✨ Complete Lua development environment - fully reproducible!"
             echo "🔍 Available commands: task check, task fmt-fix, task build"
-            echo "💡 For LSP support: install lua-language-server in your editor"
             
             # Set up project Lua paths
             export LUA_PATH="src/?.lua;src/?/init.lua;./?.lua;./?/init.lua;$LUA_PATH"
