@@ -1,5 +1,5 @@
 local _ = require('gettext')
-local Notification = require('src/utils/notification')
+local Notification = require('utils/notification')
 
 -- **Feed Service** - Handles feed workflows and orchestration.
 --
@@ -55,7 +55,7 @@ function FeedService:markAsRead(feed_id)
 
     if err then
         -- API failed - use queue fallback for offline mode
-        local FeedQueue = require('src/utils/feed_queue')
+        local FeedQueue = require('utils/feed_queue')
         FeedQueue.enqueue(feed_id, 'mark_all_read')
 
         -- Show offline message instead of error
@@ -63,7 +63,7 @@ function FeedService:markAsRead(feed_id)
         return true -- Still successful from user perspective
     else
         -- API success - remove from queue since server is source of truth
-        local FeedQueue = require('src/utils/feed_queue')
+        local FeedQueue = require('utils/feed_queue')
         FeedQueue.remove(feed_id)
 
         -- Invalidate both feed and category caches IMMEDIATELY so counts update

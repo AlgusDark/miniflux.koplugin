@@ -4,7 +4,7 @@ local UIManager = require('ui/uimanager')
 local ButtonDialog = require('ui/widget/buttondialog')
 local ReaderUI = require('apps/reader/readerui')
 local FileManager = require('apps/filemanager/filemanager')
-local Error = require('src/utils/error')
+local Error = require('utils/error')
 local _ = require('gettext')
 local T = require('ffi/util').template
 

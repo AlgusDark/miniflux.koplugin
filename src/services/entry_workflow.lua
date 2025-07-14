@@ -6,12 +6,12 @@ local _ = require('gettext')
 local T = require('ffi/util').template
 
 -- Import consolidated dependencies
-local EntryEntity = require('src/entities/entry_entity')
-local Images = require('src/utils/images')
+local EntryEntity = require('entities/entry_entity')
+local Images = require('utils/images')
 local Trapper = require('ui/trapper')
-local HtmlUtils = require('src/utils/html_utils')
-local Files = require('src/utils/files')
-local Notification = require('src/utils/notification')
+local HtmlUtils = require('utils/html_utils')
+local Files = require('utils/files')
+local Notification = require('utils/notification')
 
 -- Centralized workflow message templates for consistency and maintainability
 local WORKFLOW_MESSAGES = {

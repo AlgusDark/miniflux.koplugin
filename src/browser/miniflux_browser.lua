@@ -1,17 +1,17 @@
-local Browser = require('src/browser/browser')
+local Browser = require('browser/browser')
 local BrowserMode = Browser.BrowserMode
-local EntryRepository = require('src/repositories/entry_repository')
-local FeedRepository = require('src/repositories/feed_repository')
-local CategoryRepository = require('src/repositories/category_repository')
+local EntryRepository = require('repositories/entry_repository')
+local FeedRepository = require('repositories/feed_repository')
+local CategoryRepository = require('repositories/category_repository')
 
 local _ = require('gettext')
 local T = require('ffi/util').template
 
 -- Import view modules
-local MainView = require('src/browser/views/main_view')
-local FeedsView = require('src/browser/views/feeds_view')
-local CategoriesView = require('src/browser/views/categories_view')
-local EntriesView = require('src/browser/views/entries_view')
+local MainView = require('browser/views/main_view')
+local FeedsView = require('browser/views/feeds_view')
+local CategoriesView = require('browser/views/categories_view')
+local EntriesView = require('browser/views/entries_view')
 
 -- Type aliases for cleaner annotations
 ---@alias MinifluxRepositories {entry: EntryRepository, feed: FeedRepository, category: CategoryRepository}
@@ -65,7 +65,7 @@ end
 ---Override settings dialog with Miniflux-specific implementation
 function MinifluxBrowser:onLeftButtonTap()
     if not self.settings then
-        local Notification = require('src/utils/notification')
+        local Notification = require('utils/notification')
         Notification:error(_('Settings not available'))
         return
     end
@@ -160,7 +160,7 @@ function MinifluxBrowser:toggleHideReadEntries()
     self.settings:save()
 
     -- Show notification about the change
-    local Notification = require('src/utils/notification')
+    local Notification = require('utils/notification')
     local status_text = self.settings.hide_read_entries and _('Now showing unread entries only')
         or _('Now showing all entries')
     Notification:info(status_text)
@@ -211,7 +211,7 @@ end
 
 ---Refresh current view with global cache invalidation
 function MinifluxBrowser:refreshWithCacheInvalidation()
-    local Notification = require('src/utils/notification')
+    local Notification = require('utils/notification')
 
     -- Show loading notification
     local loading_notification = Notification:info(_('Refreshing...'))
@@ -328,7 +328,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
             })
         end,
         unread_entries = function()
-            local UnreadEntriesView = require('src/browser/views/unread_entries_view')
+            local UnreadEntriesView = require('browser/views/unread_entries_view')
             return UnreadEntriesView.show({
                 repositories = self.repositories,
                 settings = self.settings,
@@ -339,8 +339,8 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
             })
         end,
         local_entries = function()
-            local LocalEntriesView = require('src/browser/views/local_entries_view')
-            local EntryEntity = require('src/entities/entry_entity')
+            local LocalEntriesView = require('browser/views/local_entries_view')
+            local EntryEntity = require('entities/entry_entity')
 
             -- Get lightweight navigation entries (5x less memory than full metadata)
             local nav_entries =
@@ -395,7 +395,7 @@ end
 ---@return {has_local: boolean, has_remote: boolean} Analysis results
 function MinifluxBrowser:analyzeSelection(selected_items)
     local has_local, has_remote = false, false
-    local EntryEntity = require('src/entities/entry_entity')
+    local EntryEntity = require('entities/entry_entity')
     local lfs = require('libs/libkoreader-lfs')
 
     for i, item in ipairs(selected_items) do
@@ -755,7 +755,7 @@ function MinifluxBrowser:deleteSelectedEntries(selected_items)
 
     -- Filter to only local entries (entries that exist locally)
     local local_entries = {}
-    local EntryEntity = require('src/entities/entry_entity')
+    local EntryEntity = require('entities/entry_entity')
 
     for i, item in ipairs(selected_items) do
         local entry_data = item.entry_data
@@ -770,7 +770,7 @@ function MinifluxBrowser:deleteSelectedEntries(selected_items)
     end
 
     if #local_entries == 0 then
-        local Notification = require('src/utils/notification')
+        local Notification = require('utils/notification')
         Notification:info(_('No local entries selected for deletion'))
         return
     end
@@ -807,7 +807,7 @@ end
 ---Perform the actual batch deletion of local entries
 ---@param local_entries table Array of entry data objects
 function MinifluxBrowser:performBatchDelete(local_entries)
-    local Notification = require('src/utils/notification')
+    local Notification = require('utils/notification')
     local progress_notification = Notification:info(_('Deleting entries...'))
 
     local success_count = 0

@@ -1,6 +1,6 @@
 local lfs = require('libs/libkoreader-lfs')
-local Files = require('src/utils/files')
-local EntryEntity = require('src/entities/entry_entity')
+local Files = require('utils/files')
+local EntryEntity = require('entities/entry_entity')
 
 local CategoryQueue = {}
 

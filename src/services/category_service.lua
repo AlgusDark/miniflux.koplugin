@@ -1,5 +1,5 @@
 local _ = require('gettext')
-local Notification = require('src/utils/notification')
+local Notification = require('utils/notification')
 
 -- **Category Service** - Handles category workflows and orchestration.
 --
@@ -55,7 +55,7 @@ function CategoryService:markAsRead(category_id)
 
     if err then
         -- API failed - use queue fallback for offline mode
-        local CategoryQueue = require('src/utils/category_queue')
+        local CategoryQueue = require('utils/category_queue')
         CategoryQueue.enqueue(category_id, 'mark_all_read')
 
         -- Show offline message instead of error
@@ -63,7 +63,7 @@ function CategoryService:markAsRead(category_id)
         return true -- Still successful from user perspective
     else
         -- API success - remove from queue since server is source of truth
-        local CategoryQueue = require('src/utils/category_queue')
+        local CategoryQueue = require('utils/category_queue')
         CategoryQueue.remove(category_id)
 
         -- Invalidate both category and feed caches IMMEDIATELY so counts update

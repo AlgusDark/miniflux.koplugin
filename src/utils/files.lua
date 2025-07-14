@@ -1,5 +1,5 @@
 local lfs = require('libs/libkoreader-lfs')
-local Error = require('src/utils/error')
+local Error = require('utils/error')
 
 -- **Files** - Consolidated file utilities including basic file operations and
 -- metadata loading. Combines functionality from file_utils and metadata_loader

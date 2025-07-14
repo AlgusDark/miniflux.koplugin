@@ -5,12 +5,12 @@ local ButtonDialogTitle = require('ui/widget/buttondialogtitle')
 local lfs = require('libs/libkoreader-lfs')
 local _ = require('gettext')
 local T = require('ffi/util').template
-local Notification = require('src/utils/notification')
+local Notification = require('utils/notification')
 
-local EntryEntity = require('src/entities/entry_entity')
-local Navigation = require('src/services/navigation_service')
-local EntryWorkflow = require('src/services/entry_workflow')
-local Files = require('src/utils/files')
+local EntryEntity = require('entities/entry_entity')
+local Navigation = require('services/navigation_service')
+local EntryWorkflow = require('services/entry_workflow')
+local Files = require('utils/files')
 
 -- **Entry Service** - Handles complex entry workflows and orchestration.
 --
@@ -581,7 +581,7 @@ end
 ---@param completion_callback? function Optional callback called when batch completes
 ---@return boolean success Always returns true (fire-and-forget operations)
 function EntryService:downloadEntries(entry_data_list, completion_callback)
-    local BatchDownloadEntriesWorkflow = require('src/services/batch_download_entries_workflow')
+    local BatchDownloadEntriesWorkflow = require('services/batch_download_entries_workflow')
 
     BatchDownloadEntriesWorkflow.execute({
         entry_data_list = entry_data_list,

@@ -1,6 +1,6 @@
 local MultiInputDialog = require('ui/widget/multiinputdialog')
 local UIManager = require('ui/uimanager')
-local Notification = require('src/utils/notification')
+local Notification = require('utils/notification')
 local _ = require('gettext')
 
 -- **Server Configuration Settings** - Handles server address and API token

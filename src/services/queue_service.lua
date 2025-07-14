@@ -1,6 +1,6 @@
 local ButtonDialogTitle = require('ui/widget/buttondialogtitle')
 local UIManager = require('ui/uimanager')
-local Notification = require('src/utils/notification')
+local Notification = require('utils/notification')
 local _ = require('gettext')
 
 ---@class QueueService
@@ -23,8 +23,8 @@ end
 ---Get total count across all queue types
 ---@return number total_count, number status_count, number feed_count, number category_count
 function QueueService:getTotalQueueCount()
-    local FeedQueue = require('src/utils/feed_queue')
-    local CategoryQueue = require('src/utils/category_queue')
+    local FeedQueue = require('utils/feed_queue')
+    local CategoryQueue = require('utils/category_queue')
 
     -- Count entry status queue
     local status_queue = self.entry_service:loadQueue()
@@ -143,7 +143,7 @@ end
 ---Process the feed queue
 ---@return number processed, number failed
 function QueueService:processFeedQueue()
-    local FeedQueue = require('src/utils/feed_queue')
+    local FeedQueue = require('utils/feed_queue')
     local feed_queue = FeedQueue.load()
     local processed_count = 0
     local failed_count = 0
@@ -167,7 +167,7 @@ end
 ---Process the category queue
 ---@return number processed, number failed
 function QueueService:processCategoryQueue()
-    local CategoryQueue = require('src/utils/category_queue')
+    local CategoryQueue = require('utils/category_queue')
     local category_queue = CategoryQueue.load()
     local processed_count = 0
     local failed_count = 0
@@ -211,8 +211,8 @@ end
 ---Clear all queue types
 ---@return boolean success
 function QueueService:clearAllQueues()
-    local FeedQueue = require('src/utils/feed_queue')
-    local CategoryQueue = require('src/utils/category_queue')
+    local FeedQueue = require('utils/feed_queue')
+    local CategoryQueue = require('utils/category_queue')
 
     local status_success = self.entry_service:clearStatusQueue()
     local feed_success = FeedQueue.clear()

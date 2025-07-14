@@ -1,4 +1,4 @@
-local CachedRepository = require('src/repositories/cached_repository')
+local CachedRepository = require('repositories/cached_repository')
 
 -- **Entry Repository** - Data Access Layer
 --

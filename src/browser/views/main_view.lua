@@ -8,8 +8,8 @@ Handles data fetching, menu building, and UI rendering.
 --]]
 
 local _ = require('gettext')
-local ViewUtils = require('src/browser/views/view_utils')
-local EntryEntity = require('src/entities/entry_entity')
+local ViewUtils = require('browser/views/view_utils')
+local EntryEntity = require('entities/entry_entity')
 
 local MainView = {}
 
@@ -73,7 +73,7 @@ end
 function MainView.loadData(config)
     local repositories = config.repositories
 
-    local Notification = require('src/utils/notification')
+    local Notification = require('utils/notification')
     local loading_notification = Notification:info(_('Loading...'))
 
     -- Get unread count

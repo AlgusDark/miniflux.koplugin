@@ -1,5 +1,5 @@
 local UIManager = require('ui/uimanager')
-local Notification = require('src/utils/notification')
+local Notification = require('utils/notification')
 local _ = require('gettext')
 local T = require('ffi/util').template
 

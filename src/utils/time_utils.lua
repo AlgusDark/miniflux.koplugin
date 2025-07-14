@@ -1,4 +1,4 @@
-local Error = require('src/utils/error')
+local Error = require('utils/error')
 local _ = require('gettext')
 
 -- **TimeUtils** - Time utilities for Miniflux Plugin

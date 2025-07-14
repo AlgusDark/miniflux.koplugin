@@ -10,10 +10,6 @@ result-*
 # Lua development
 .luarocks/
 
-# Testing (when added)
-spec/
-*_spec.lua
-
 # OS
 .DS_Store
 Thumbs.db

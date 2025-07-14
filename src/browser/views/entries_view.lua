@@ -7,8 +7,8 @@ Handles data fetching, menu building, and UI rendering.
 @module miniflux.browser.views.entries_view
 --]]
 
-local ViewUtils = require('src/browser/views/view_utils')
-local EntryEntity = require('src/entities/entry_entity')
+local ViewUtils = require('browser/views/view_utils')
+local EntryEntity = require('entities/entry_entity')
 local _ = require('gettext')
 
 local EntriesView = {}

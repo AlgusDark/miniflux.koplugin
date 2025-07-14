@@ -12,17 +12,17 @@ local lfs = require('libs/libkoreader-lfs')
 local Dispatcher = require('dispatcher')
 local _ = require('gettext')
 
-local APIClient = require('src/api/api_client')
-local MinifluxAPI = require('src/api/miniflux_api')
-local MinifluxSettings = require('src/settings/settings')
-local Menu = require('src/menu/menu')
-local EntryService = require('src/services/entry_service')
-local FeedService = require('src/services/feed_service')
-local CategoryService = require('src/services/category_service')
-local QueueService = require('src/services/queue_service')
-local EntryEntity = require('src/entities/entry_entity')
-local KeyHandlerService = require('src/services/key_handler_service')
-local ReaderLinkService = require('src/services/readerlink_service')
+local APIClient = require('api/api_client')
+local MinifluxAPI = require('api/miniflux_api')
+local MinifluxSettings = require('settings/settings')
+local Menu = require('menu/menu')
+local EntryService = require('services/entry_service')
+local FeedService = require('services/feed_service')
+local CategoryService = require('services/category_service')
+local QueueService = require('services/queue_service')
+local EntryEntity = require('entities/entry_entity')
+local KeyHandlerService = require('services/key_handler_service')
+local ReaderLinkService = require('services/readerlink_service')
 
 local _static_browser_context = nil
 
@@ -68,8 +68,8 @@ function Miniflux:init()
     })
     self.miniflux_api = MinifluxAPI:new({ api_client = self.api_client })
 
-    local FeedRepository = require('src/repositories/feed_repository')
-    local CategoryRepository = require('src/repositories/category_repository')
+    local FeedRepository = require('repositories/feed_repository')
+    local CategoryRepository = require('repositories/category_repository')
 
     local feed_repository = FeedRepository:new({
         miniflux_api = self.miniflux_api,
@@ -110,7 +110,7 @@ function Miniflux:init()
         self.key_handler_service = KeyHandlerService:new({
             miniflux_plugin = self,
             entry_service = self.entry_service,
-            navigation_service = require('src/services/navigation_service'),
+            navigation_service = require('services/navigation_service'),
         })
     end
 
@@ -175,7 +175,7 @@ end
 ---Create and return a new browser instance (BookList-based)
 ---@return MinifluxBrowser Browser instance
 function Miniflux:createBrowser()
-    local MinifluxBrowser = require('src/browser/miniflux_browser')
+    local MinifluxBrowser = require('browser/miniflux_browser')
     local browser = MinifluxBrowser:new({
         title = _('Miniflux'),
         settings = self.settings,

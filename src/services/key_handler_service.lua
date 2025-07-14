@@ -165,7 +165,7 @@ end
 ---@param image table Image data from document
 ---@return nil
 function KeyHandlerService:showImageViewer(image)
-    local SmartImageViewer = require('src/widgets/smart_imageviewer')
+    local SmartImageViewer = require('widgets/smart_imageviewer')
 
     local imgviewer = SmartImageViewer:new({
         image = image,
@@ -269,7 +269,7 @@ function KeyHandlerService:enhanceDialogWithKeys(dialog, entry_info)
     -- Add event handlers
     function dialog:onNavigatePrevious()
         UIManager:close(self)
-        local Navigation = require('src/services/navigation_service')
+        local Navigation = require('services/navigation_service')
         Navigation.navigateToEntry(stored_entry_info, {
             navigation_options = { direction = 'previous' },
             settings = key_handler_service.miniflux_plugin.settings,
@@ -282,7 +282,7 @@ function KeyHandlerService:enhanceDialogWithKeys(dialog, entry_info)
 
     function dialog:onNavigateNext()
         UIManager:close(self)
-        local Navigation = require('src/services/navigation_service')
+        local Navigation = require('services/navigation_service')
         Navigation.navigateToEntry(stored_entry_info, {
             navigation_options = { direction = 'next' },
             settings = key_handler_service.miniflux_plugin.settings,

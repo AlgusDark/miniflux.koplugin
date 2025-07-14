@@ -1,24 +1,24 @@
-version: '3'
+version: "3"
 
 tasks:
   # Code Quality Tasks
   fmt:
     desc: Format Lua code with StyLua
     cmds:
-      - stylua --check src/ main.lua
+      - stylua --check src/
       - echo "✅ Code formatting is correct"
     silent: false
 
   fmt-fix:
     desc: Auto-fix Lua code formatting with StyLua
     cmds:
-      - stylua src/ main.lua
+      - stylua src/
       - echo "✅ Code formatted successfully"
 
   lint:
     desc: Run luacheck static analysis
     cmds:
-      - luacheck src/ main.lua
+      - luacheck src/
       - echo "✅ No linting issues found"
 
   lsp-check:
@@ -63,22 +63,10 @@ tasks:
       - mkdir -p dist
 
   copy-files:
-    desc: Copy plugin files excluding development files
+    desc: Copy all files from src/ to build directory
     cmds:
-      - |
-        rsync -av \
-          --exclude='.git' \
-          --exclude='.github' \
-          --exclude='.gitignore' \
-          --exclude='typedefs' \
-          --exclude='scripts' \
-          --exclude='Taskfile.yml' \
-          --exclude='dist' \
-          --exclude='spec' \
-          --exclude='*.rockspec' \
-          --exclude='improvements' \
-          --include='src/' \
-          . dist/miniflux.koplugin/
+      - mkdir -p dist/miniflux.koplugin
+      - cp -r src/* dist/miniflux.koplugin/
 
   verify:
     desc: Verify release artifact contents
@@ -86,21 +74,3 @@ tasks:
       - echo "=== Release artifact contents ==="
       - find dist -type f | sort
 
-  package:
-    desc: Create zip package (for local testing)
-    deps:
-      - build
-    cmds:
-      - cd dist && zip -r miniflux.koplugin.zip miniflux.koplugin/
-      - echo "Package created at dist/miniflux.koplugin.zip"
-
-  test-build:
-    desc: Test build locally and extract to verify
-    deps:
-      - package
-    cmds:
-      - rm -rf test-extract
-      - mkdir test-extract
-      - cd test-extract && unzip ../dist/miniflux.koplugin.zip
-      - echo "=== Extracted files ==="
-      - find test-extract -type f | sort

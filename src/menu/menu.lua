@@ -1,15 +1,15 @@
 local _ = require('gettext')
 
 -- Import settings components
-local ServerConfig = require('src/menu/settings/server_config')
-local Entries = require('src/menu/settings/entries')
-local SortOrder = require('src/menu/settings/sort_order')
-local SortDirection = require('src/menu/settings/sort_direction')
-local IncludeImages = require('src/menu/settings/include_images')
-local MarkAsReadOnOpen = require('src/menu/settings/mark_as_read_on_open')
-local CopyCss = require('src/menu/settings/copy_css')
-local TestConnection = require('src/menu/settings/test_connection')
-local ProxyImageDownloader = require('src/menu/settings/proxy_image_downloader')
+local ServerConfig = require('menu/settings/server_config')
+local Entries = require('menu/settings/entries')
+local SortOrder = require('menu/settings/sort_order')
+local SortDirection = require('menu/settings/sort_direction')
+local IncludeImages = require('menu/settings/include_images')
+local MarkAsReadOnOpen = require('menu/settings/mark_as_read_on_open')
+local CopyCss = require('menu/settings/copy_css')
+local TestConnection = require('menu/settings/test_connection')
+local ProxyImageDownloader = require('menu/settings/proxy_image_downloader')
 
 local Menu = {}
 

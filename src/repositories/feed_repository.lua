@@ -1,4 +1,4 @@
-local CachedRepository = require('src/repositories/cached_repository')
+local CachedRepository = require('repositories/cached_repository')
 
 ---@class MinifluxFeedsWithCountersResult
 ---@field feeds MinifluxFeed[] Array of feeds

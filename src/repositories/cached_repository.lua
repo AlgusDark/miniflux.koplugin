@@ -1,5 +1,5 @@
-local CacheStore = require('src/utils/cache_store')
-local Error = require('src/utils/error')
+local CacheStore = require('utils/cache_store')
+local Error = require('utils/error')
 
 -- **Cached Repository** - Base class for repositories with caching capabilities
 --
