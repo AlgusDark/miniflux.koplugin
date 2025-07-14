@@ -35,8 +35,10 @@ echo "📝 Checking code formatting..."
 if ! task fmt; then
     echo ""
     echo "❌ Code formatting issues found!"
-    echo "💡 Run 'task fmt-fix' to auto-fix formatting issues"
-    exit 1
+    echo "🔧 Auto-fixing formatting issues..."
+    task fmt-fix
+    echo "✅ Formatting fixed! Please review and commit again."
+    exit 1  # Still exit to let developer review changes
 fi
 
 echo "🔍 Running static analysis..."
