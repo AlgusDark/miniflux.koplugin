@@ -500,6 +500,9 @@ function Browser:onMenuSelect(item)
         if item.callback then
             -- Execute callback for navigation items (Unread, Feeds, Categories, etc.)
             item.callback()
+        elseif item.action_type == 'no_action' then
+            -- Ignore items marked as non-interactive (e.g., "No offline content available")
+            return true
         else
             -- Open as entry for items without callbacks
             self:openItem(item)
@@ -512,6 +515,11 @@ end
 ---@param item table Item data object
 ---@return boolean true (event handled)
 function Browser:onMenuHold(item)
+    -- Ignore items marked as non-interactive
+    if item.action_type == 'no_action' then
+        return true
+    end
+
     -- Only allow selection mode for items that have IDs (getItemId returns non-nil)
     local item_id = self:getItemId(item)
     if not item_id then

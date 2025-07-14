@@ -36,6 +36,23 @@ end
 function CategoryQueue.save(queue)
     local queue_file = CategoryQueue.getQueueFilePath()
 
+    -- Count entries in queue
+    local count = 0
+    for _ in pairs(queue) do
+        count = count + 1
+    end
+
+    -- If queue is empty, delete the file instead of writing empty table
+    if count == 0 then
+        local file_exists = lfs.attributes(queue_file, 'mode') == 'file'
+        if file_exists then
+            local success = os.remove(queue_file)
+            return success ~= nil
+        else
+            return true -- File doesn't exist, nothing to delete
+        end
+    end
+
     -- Ensure miniflux directory exists
     local miniflux_dir = queue_file:match('(.+)/[^/]+$')
     local success, _err = Files.createDirectory(miniflux_dir)
@@ -62,8 +79,13 @@ function CategoryQueue.save(queue)
         return false
     end
 
-    file:write(queue_content)
+    local write_success = file:write(queue_content)
     file:close()
+
+    if not write_success then
+        return false
+    end
+
     return true
 end
 
@@ -92,7 +114,18 @@ end
 ---Clear the entire category queue
 ---@return boolean success
 function CategoryQueue.clear()
-    return CategoryQueue.save({})
+    local queue_file = CategoryQueue.getQueueFilePath()
+
+    -- Check if file exists before trying to remove it
+    local file_exists = lfs.attributes(queue_file, 'mode') == 'file'
+
+    if not file_exists then
+        return true -- File doesn't exist, so it's already "cleared"
+    end
+
+    -- Remove the queue file
+    local success = os.remove(queue_file)
+    return success ~= nil
 end
 
 ---Count items in the queue

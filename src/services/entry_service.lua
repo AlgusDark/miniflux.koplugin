@@ -2,6 +2,7 @@ local UIManager = require('ui/uimanager')
 local ReaderUI = require('apps/reader/readerui')
 local FFIUtil = require('ffi/util')
 local ButtonDialogTitle = require('ui/widget/buttondialogtitle')
+local lfs = require('libs/libkoreader-lfs')
 local _ = require('gettext')
 local T = require('ffi/util').template
 local Notification = require('src/utils/notification')
@@ -176,11 +177,11 @@ function EntryService:confirmClearStatusQueue(queue_size)
         text = message,
         ok_text = _('Delete Queue'),
         ok_callback = function()
-            local _result, err = self:clearStatusQueue()
-            if err then
-                Notification:error(err.message)
-            else
+            local success = self:clearStatusQueue()
+            if success then
                 Notification:info(_('Sync queue cleared'))
+            else
+                Notification:error(_('Failed to clear sync queue'))
             end
         end,
         cancel_text = _('Cancel'),
@@ -212,17 +213,20 @@ function EntryService:removeFromQueue(entry_id)
 end
 
 ---Clear the status queue (delete all pending changes)
----@return boolean|nil result, table|nil error
+---@return boolean success
 function EntryService:clearStatusQueue()
     local queue_file = self:getQueueFilePath()
 
+    -- Check if file exists before trying to remove it
+    local file_exists = lfs.attributes(queue_file, 'mode') == 'file'
+
+    if not file_exists then
+        return true -- File doesn't exist, so it's already "cleared"
+    end
+
     -- Remove the queue file
     local success = os.remove(queue_file)
-    if success then
-        return true, nil
-    else
-        return nil, { message = _('Failed to clear sync queue') }
-    end
+    return success ~= nil
 end
 
 ---Process the status queue when network is available (with user confirmation)

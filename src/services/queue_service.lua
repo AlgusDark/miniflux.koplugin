@@ -222,7 +222,20 @@ function QueueService:clearAllQueues()
         Notification:success(_('All sync queues cleared'))
         return true
     else
-        Notification:error(_('Failed to clear some sync queues'))
+        -- Provide specific error details for debugging
+        local failed_queues = {}
+        if not status_success then
+            table.insert(failed_queues, 'status')
+        end
+        if not feed_success then
+            table.insert(failed_queues, 'feed')
+        end
+        if not category_success then
+            table.insert(failed_queues, 'category')
+        end
+
+        local error_msg = _('Failed to clear queues: ') .. table.concat(failed_queues, ', ')
+        Notification:error(error_msg)
         return false
     end
 end
