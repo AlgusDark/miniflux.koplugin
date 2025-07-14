@@ -30,18 +30,11 @@ jobs:
       - name: Set up LuaRocks
         uses: leafo/gh-actions-luarocks@v4
 
-      - name: Cache Lua dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.luarocks
-          key: ${{ runner.os }}-luarocks-${{ hashFiles('Taskfile.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-luarocks-
-
       - name: Install dependencies
         run: |
           luarocks install busted
           luarocks install luacheck
+          luarocks install htmlparser
 
       - name: Install StyLua
         uses: JohnnyMorganz/stylua-action@v4

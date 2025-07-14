@@ -173,11 +173,14 @@ tasks:
         echo ""
         echo "🚀 {{.version}} release: $CURRENT → $NEW_VERSION"
         echo ""
+        # Get current branch for display
+        CURRENT_BRANCH=$(git branch --show-current)
         echo "This will:"
         echo "  • Run all quality checks (tests, lint, format, LSP)"
         echo "  • Update src/_meta.lua version to $NEW_VERSION"
         echo "  • Create commit: 'chore: bump version to $NEW_VERSION'"
         echo "  • Create and push tag: v$NEW_VERSION"
+        echo "  • Push to current branch: $CURRENT_BRANCH"
         echo "  • Trigger GitHub Actions automated release"
         echo ""
         
@@ -249,11 +252,16 @@ tasks:
         
         echo "🏷️  Creating and pushing tag v$NEW_VERSION..."
         git tag "v$NEW_VERSION"
-        git push origin main
+        
+        # Push to current branch instead of hardcoding main
+        CURRENT_BRANCH=$(git branch --show-current)
+        echo "📤 Pushing to branch: $CURRENT_BRANCH"
+        git push origin "$CURRENT_BRANCH"
         git push origin "v$NEW_VERSION"
         
         echo ""
         echo "✅ Release v$NEW_VERSION created successfully!"
+        echo "📤 Pushed to branch: $CURRENT_BRANCH"
         echo "🚀 GitHub Actions will create the release automatically"
         echo "🔗 Check: https://github.com/$(git config --get remote.origin.url | sed 's/.*github.com[:/]\([^.]*\).*/\1/')/actions"
 
