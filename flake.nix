@@ -2,7 +2,7 @@
   description = "Miniflux KOReader Plugin Development Environment";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -11,35 +11,20 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         
-        # Create htmlparser as a simple Nix package (no luarocks-nix needed)
-        htmlparser = pkgs.lua51Packages.buildLuarocksPackage {
-          pname = "htmlparser";
-          version = "0.3.9-1";
-          
-          src = pkgs.fetchurl {
-            url = "https://luarocks.org/htmlparser-0.3.9-1.src.rock";
-            sha256 = "sha256-iHKqsE6+fZiGyxKqfXsRxtOL9YcqOHHl7KI9Y2bEAZ4=";
-          };
-          
-          disabled = pkgs.lua51Packages.luaOlder "5.1";
-          propagatedBuildInputs = [ pkgs.lua5_1 ];
-        };
-        
-        # Enhanced Lua environment with proper Nix packages
+        # Simple Lua environment with essential packages only
         luaEnv = pkgs.lua5_1.withPackages (ps: with ps; [
           luacheck
           busted
-          htmlparser  # Now a proper Nix package!
+          # htmlparser installed via luarocks locally when needed
         ]);
       in {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            # Lua development with integrated packages
-            luaEnv                      # Includes lua5_1 + luacheck + busted + htmlparser
-            
-            # Code quality and development tools
-            stylua
-            lua-language-server         # Essential for development diagnostics
+            # Lua development essentials
+            luaEnv                      # lua5_1 + luacheck + busted
+            lua51Packages.luarocks      # Use Lua 5.1 specific luarocks
+            lua-language-server         # LSP for IDE diagnostics
+            stylua                      # Lua code formatter
             
             # Build tools (use system git, rsync, zip)
             go-task
@@ -47,12 +32,18 @@
 
           shellHook = ''
             echo "🎯 Miniflux KOReader Plugin Development Environment"
-            echo "📦 Lua 5.1 + luacheck + busted + htmlparser + stylua + LuaLS (via Nix)"
-            echo "✨ Complete Lua development environment - fully reproducible!"
-            echo "🔍 Available commands: task check, task fmt-fix, task build"
+            echo "📦 Lua 5.1 + luacheck + busted + luarocks + lua-language-server + stylua"
+            echo "✨ Complete development toolchain ready!"
             
-            # Set up project Lua paths
+            # Ensure htmlparser is available
+            luarocks install --local htmlparser 2>/dev/null || true
+            
+            # Set up luarocks path and project paths
+            eval $(luarocks path)
             export LUA_PATH="src/?.lua;src/?/init.lua;./?.lua;./?/init.lua;$LUA_PATH"
+            
+            echo "✅ Environment ready (htmlparser available)"
+            echo "🔍 Available commands: task check, task fmt-fix, task build"
             
             # Set up git hooks automatically
             if [ -d .githooks ]; then

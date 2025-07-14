@@ -1,6 +1,54 @@
 version: '3'
 
 tasks:
+  # Code Quality Tasks
+  fmt:
+    desc: Format Lua code with StyLua
+    cmds:
+      - stylua --check src/ main.lua
+      - echo "✅ Code formatting is correct"
+    silent: false
+
+  fmt-fix:
+    desc: Auto-fix Lua code formatting with StyLua
+    cmds:
+      - stylua src/ main.lua
+      - echo "✅ Code formatted successfully"
+
+  lint:
+    desc: Run luacheck static analysis
+    cmds:
+      - luacheck src/ main.lua
+      - echo "✅ No linting issues found"
+
+  lsp-check:
+    desc: Run lua-language-server diagnostics on entire workspace (like Neovim does)
+    cmds:
+      - lua-language-server --check=. --checklevel=Warning --configpath=.luarc.json
+      - echo "✅ No LSP diagnostics found"
+
+  test:
+    desc: Run all tests with busted
+    cmds:
+      - busted spec/
+      - echo "✅ All tests passed"
+
+  check:
+    desc: Run all code quality checks (format + lint + lsp + tests)
+    deps:
+      - fmt
+      - lint
+      - lsp-check
+      - test
+    cmds:
+      - echo "✅ All code quality checks passed"
+
+  fix:
+    desc: Auto-fix all fixable issues
+    deps:
+      - fmt-fix
+    cmds:
+      - echo "✅ Auto-fixes applied"
   build:
     desc: Build release artifact
     cmds:
@@ -26,6 +74,10 @@ tasks:
           --exclude='scripts' \
           --exclude='Taskfile.yml' \
           --exclude='dist' \
+          --exclude='spec' \
+          --exclude='*.rockspec' \
+          --exclude='improvements' \
+          --include='src/' \
           . dist/miniflux.koplugin/
 
   verify:

@@ -24,6 +24,12 @@ if ! command -v luacheck &> /dev/null; then
     exit 1
 fi
 
+# Check if lua-language-server is available
+if ! command -v lua-language-server &> /dev/null; then
+    echo "❌ lua-language-server not found. Please install from https://github.com/LuaLS/lua-language-server"
+    exit 1
+fi
+
 # Run code quality checks
 echo "📝 Checking code formatting..."
 if ! task fmt; then
@@ -37,6 +43,14 @@ echo "🔍 Running static analysis..."
 if ! task lint; then
     echo ""
     echo "❌ Linting issues found!"
+    echo "💡 Fix the issues above and try again"
+    exit 1
+fi
+
+echo "🔍 Running LSP diagnostics..."
+if ! task lsp-check; then
+    echo ""
+    echo "❌ LSP diagnostics found!"
     echo "💡 Fix the issues above and try again"
     exit 1
 fi

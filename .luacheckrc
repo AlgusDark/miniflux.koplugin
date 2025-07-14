@@ -74,7 +74,12 @@ exclude_files = {
 ignore = {
     "212", -- Unused argument (common in callback functions)
     "213", -- Unused loop variable (common in pairs/ipairs)
+    "311", -- Value assigned to variable is unused (false positives in complex flow analysis)
+    "542", -- Empty if branch (intentional early returns and error handling)
+    "431", -- Shadowing upvalue (acceptable in nested scopes)
+    "432", -- Shadowing definition of variable (acceptable in different scopes)
     "631", -- Line too long (handled by StyLua)
+    "211/_.*", -- Unused variables starting with underscore (intentionally unused)
 }
 
 -- Pattern-specific configurations

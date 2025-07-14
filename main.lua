@@ -5,29 +5,26 @@ This plugin provides integration with Miniflux RSS reader.
 This main file acts as a coordinator, delegating to specialized modules.
 --]]
 
-local WidgetContainer = require("ui/widget/container/widgetcontainer")
-local FFIUtil = require("ffi/util")
-local UIManager = require("ui/uimanager")
-local lfs = require("libs/libkoreader-lfs")
-local Dispatcher = require("dispatcher")
-local _ = require("gettext")
+local WidgetContainer = require('ui/widget/container/widgetcontainer')
+local FFIUtil = require('ffi/util')
+local UIManager = require('ui/uimanager')
+local lfs = require('libs/libkoreader-lfs')
+local Dispatcher = require('dispatcher')
+local _ = require('gettext')
 
--- Import specialized modules
-local APIClient = require("api/api_client")
-local MinifluxAPI = require("api/miniflux_api")
-local MinifluxSettings = require("settings/settings")
-local Menu = require("menu/menu")
-local EntryService = require("services/entry_service")
-local FeedService = require("services/feed_service")
-local CategoryService = require("services/category_service")
-local QueueService = require("services/queue_service")
-local EntryEntity = require("entities/entry_entity")
-local KeyHandlerService = require("services/key_handler_service")
-local ReaderLinkService = require("services/readerlink_service")
+local APIClient = require('src/api/api_client')
+local MinifluxAPI = require('src/api/miniflux_api')
+local MinifluxSettings = require('src/settings/settings')
+local Menu = require('src/menu/menu')
+local EntryService = require('src/services/entry_service')
+local FeedService = require('src/services/feed_service')
+local CategoryService = require('src/services/category_service')
+local QueueService = require('src/services/queue_service')
+local EntryEntity = require('src/entities/entry_entity')
+local KeyHandlerService = require('src/services/key_handler_service')
+local ReaderLinkService = require('src/services/readerlink_service')
 
--- Static browser context shared across all plugin instances
 local _static_browser_context = nil
-
 
 ---@class Miniflux : WidgetContainer
 ---@field name string Plugin name identifier
@@ -42,94 +39,84 @@ local _static_browser_context = nil
 ---@field queue_service QueueService Unified queue management service instance
 ---@field key_handler_service KeyHandlerService Key handler service instance
 ---@field readerlink_service ReaderLinkService ReaderLink enhancement service instance
+---@field subprocesses_pids table[] List of subprocess PIDs for cleanup
+---@field subprocesses_collector boolean|nil Flag indicating if subprocess collector is active
+---@field subprocesses_collect_interval number Interval for subprocess collection in seconds
+---@field browser MinifluxBrowser|nil Browser instance for UI navigation
 local Miniflux = WidgetContainer:extend({
-    name = "miniflux",
+    name = 'miniflux',
     is_doc_only = false,
     settings = nil,
-    -- Subprocess management
     subprocesses_pids = {},
     subprocesses_collector = nil,
-    subprocesses_collect_interval = 10, -- check every 10 seconds
+    subprocesses_collect_interval = 10,
 })
-
 
 ---Initialize the plugin by setting up all components
 ---@return nil
 function Miniflux:init()
-
-    -- Initialize download directory
     local download_dir = self:initializeDownloadDirectory()
     if not download_dir then
         return
     end
     self.download_dir = download_dir
 
-    -- Initialize settings instance
     self.settings = MinifluxSettings:new()
 
-    -- Initialize API client (generic HTTP client)
     self.api_client = APIClient:new({
-        settings = self.settings
+        settings = self.settings,
     })
-
-    -- Initialize Miniflux-specific API
     self.miniflux_api = MinifluxAPI:new({ api_client = self.api_client })
 
-    -- Initialize repositories first
-    local FeedRepository = require("repositories/feed_repository")
-    local CategoryRepository = require("repositories/category_repository")
-    
+    local FeedRepository = require('src/repositories/feed_repository')
+    local CategoryRepository = require('src/repositories/category_repository')
+
     local feed_repository = FeedRepository:new({
         miniflux_api = self.miniflux_api,
-        settings = self.settings
-    })
-    
-    local category_repository = CategoryRepository:new({
-        miniflux_api = self.miniflux_api,
-        settings = self.settings
+        settings = self.settings,
     })
 
-    -- Initialize service instances with repository dependencies
+    local category_repository = CategoryRepository:new({
+        miniflux_api = self.miniflux_api,
+        settings = self.settings,
+    })
+
     self.entry_service = EntryService:new({
         settings = self.settings,
         miniflux_api = self.miniflux_api,
         miniflux_plugin = self,
         feed_repository = feed_repository,
-        category_repository = category_repository
+        category_repository = category_repository,
     })
-    
-    -- Initialize feed and category services
+
     self.feed_service = FeedService:new({
         feed_repository = feed_repository,
         category_repository = category_repository,
-        settings = self.settings
+        settings = self.settings,
     })
-    
+
     self.category_service = CategoryService:new({
         category_repository = category_repository,
         feed_repository = feed_repository,
-        settings = self.settings
+        settings = self.settings,
     })
 
-    -- Initialize unified queue service
     self.queue_service = QueueService:new({
         entry_service = self.entry_service,
-        miniflux_api = self.miniflux_api
+        miniflux_api = self.miniflux_api,
     })
 
-    -- Initialize key handler service (only in ReaderUI context)
     if self.ui and self.ui.document then
         self.key_handler_service = KeyHandlerService:new({
             miniflux_plugin = self,
             entry_service = self.entry_service,
-            navigation_service = require("services/navigation_service")
+            navigation_service = require('src/services/navigation_service'),
         })
     end
 
-    -- Initialize ReaderLink enhancement service (only in ReaderUI context)
     if self.ui and self.ui.link then
         self.readerlink_service = ReaderLinkService:new({
-            miniflux_plugin = self
+            miniflux_plugin = self,
         })
         -- Set cross-service reference for image viewer integration
         if self.key_handler_service then
@@ -142,7 +129,6 @@ function Miniflux:init()
 
     -- Register with KOReader menu system
     self.ui.menu:registerToMainMenu(self)
-
 end
 
 ---Initialize the download directory for entries
@@ -151,7 +137,7 @@ function Miniflux:initializeDownloadDirectory()
     local download_dir = EntryEntity.getDownloadDir()
 
     -- Create the directory if it doesn't exist
-    if not lfs.attributes(download_dir, "mode") then
+    if not lfs.attributes(download_dir, 'mode') then
         local success = lfs.mkdir(download_dir)
         if not success then
             return nil
@@ -171,10 +157,10 @@ end
 ---Handle dispatcher events (method required by KOReader)
 ---@return nil
 function Miniflux:onDispatcherRegisterActions()
-    Dispatcher:registerAction("miniflux_read_entries", {
-        category = "none",
-        event = "ReadMinifluxEntries",
-        title = _("Read Miniflux entries"),
+    Dispatcher:registerAction('miniflux_read_entries', {
+        category = 'none',
+        event = 'ReadMinifluxEntries',
+        title = _('Read Miniflux entries'),
         general = true,
     })
 end
@@ -189,9 +175,9 @@ end
 ---Create and return a new browser instance (BookList-based)
 ---@return MinifluxBrowser Browser instance
 function Miniflux:createBrowser()
-    local MinifluxBrowser = require("browser/miniflux_browser")
+    local MinifluxBrowser = require('src/browser/miniflux_browser')
     local browser = MinifluxBrowser:new({
-        title = _("Miniflux"),
+        title = _('Miniflux'),
         settings = self.settings,
         miniflux_api = self.miniflux_api,
         download_dir = self.download_dir,
@@ -224,9 +210,9 @@ function Miniflux:overrideEndOfBookBehavior()
         local file_path = self.ui.document.file
 
         -- Check if this is a miniflux HTML entry
-        if file_path:match("/miniflux/") and file_path:match("%.html$") then
+        if file_path:match('/miniflux/') and file_path:match('%.html$') then
             -- Extract entry ID from path and convert to number
-            local entry_id_str = file_path:match("/miniflux/(%d+)/")
+            local entry_id_str = file_path:match('/miniflux/(%d+)/')
             local entry_id = entry_id_str and tonumber(entry_id_str)
 
             if entry_id then
@@ -251,9 +237,9 @@ end
 function Miniflux:onReaderReady(doc_settings)
     local file_path = self.ui and self.ui.document and self.ui.document.file
     -- Pass ReaderUI's DocSettings to avoid cache conflicts
-    self.entry_service:onReaderReady({ 
+    self.entry_service:onReaderReady({
         file_path = file_path,
-        doc_settings = doc_settings  -- ReaderUI's cached DocSettings instance
+        doc_settings = doc_settings, -- ReaderUI's cached DocSettings instance
     })
 end
 
@@ -281,11 +267,13 @@ end
 ---Track a new subprocess PID for zombie cleanup
 ---@param pid number Process ID to track
 function Miniflux:trackSubprocess(pid)
-    if not pid then return end
-    
+    if not pid then
+        return
+    end
+
     UIManager:preventStandby()
     table.insert(self.subprocesses_pids, pid)
-    
+
     -- Start zombie collector if not already running
     if not self.subprocesses_collector then
         self.subprocesses_collector = true
@@ -298,7 +286,7 @@ end
 ---Collect finished subprocesses to prevent zombies
 function Miniflux:collectSubprocesses()
     self.subprocesses_collector = nil
-    
+
     if #self.subprocesses_pids > 0 then
         -- Check each subprocess and remove completed ones
         for i = #self.subprocesses_pids, 1, -1 do
@@ -308,7 +296,7 @@ function Miniflux:collectSubprocesses()
                 UIManager:allowStandby()
             end
         end
-        
+
         -- If subprocesses still running, schedule next collection
         if #self.subprocesses_pids > 0 then
             self.subprocesses_collector = true
@@ -346,7 +334,7 @@ function Miniflux:onNetworkConnected()
     if self.queue_service then
         -- Check if any queue has items before showing dialog
         local total_count = self.queue_service:getTotalQueueCount()
-        
+
         if total_count > 0 then
             -- Show sync dialog only if there are items to sync
             self.queue_service:processAllQueues()
@@ -361,12 +349,14 @@ function Miniflux:onSuspend()
     -- Queue operations will be processed on next network connection
 end
 
----Handle plugin close event - ensure proper cleanup  
+---Handle plugin close event - ensure proper cleanup
 function Miniflux:onClose()
     self:terminateBackgroundJobs()
     -- Cancel any scheduled zombie collection
     if self.subprocesses_collector then
-        UIManager:unschedule(function() self:collectSubprocesses() end)
+        UIManager:unschedule(function()
+            self:collectSubprocesses()
+        end)
         self.subprocesses_collector = nil
     end
 end
@@ -376,7 +366,9 @@ function Miniflux:onCloseWidget()
     self:terminateBackgroundJobs()
     -- Cancel any scheduled zombie collection
     if self.subprocesses_collector then
-        UIManager:unschedule(function() self:collectSubprocesses() end)
+        UIManager:unschedule(function()
+            self:collectSubprocesses()
+        end)
         self.subprocesses_collector = nil
     end
     -- Cleanup key handler service touch zones

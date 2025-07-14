@@ -11,4 +11,4 @@ call_parentheses = "Always"
 
 # KOReader-specific settings
 collapse_simple_statement = "Never"
-space_after_function_names = false
+space_after_function_names = "Never"

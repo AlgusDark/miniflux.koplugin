@@ -5,6 +5,7 @@ dist/
 .direnv/
 result
 result-*
+# Note: .envrc is tracked (needed for team development)
 
 # Lua development
 .luarocks/
