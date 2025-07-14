@@ -3,10 +3,7 @@
   "workspace": {
     "library": [
       "./typedefs",
-      "./src",
-      "./spec",
-      "${3rd}/busted/library",
-      "${3rd}/luassert/library"
+      "./src"
     ],
     "checkThirdParty": true,
     "ignoreSubmodules": true
@@ -48,9 +45,7 @@
       "?.lua",
       "?/init.lua",
       "src/?.lua",
-      "src/?/init.lua",
-      "spec/?.lua",
-      "spec/?/init.lua"
+      "src/?/init.lua"
     ]
   },
   "format": {

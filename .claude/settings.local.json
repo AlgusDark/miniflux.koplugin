@@ -5,7 +5,8 @@
       "Bash(git restore:*)",
       "Bash(rm:*)",
       "Bash(sed:*)",
-      "WebFetch(domain:miniflux.app)"
+      "WebFetch(domain:miniflux.app)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": []
   }

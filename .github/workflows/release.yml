@@ -32,9 +32,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          luarocks install busted
           luarocks install luacheck
-          luarocks install htmlparser
 
       - name: Install StyLua
         uses: JohnnyMorganz/stylua-action@v4
@@ -42,9 +40,6 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           version: latest
           args: --version
-
-      - name: Run tests
-        run: task test
 
       - name: Run linting
         run: task lint

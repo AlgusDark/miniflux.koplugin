@@ -20,6 +20,12 @@ local DEFAULTS = {
     proxy_image_downloader_enabled = false,
     proxy_image_downloader_url = '',
     proxy_image_downloader_token = '',
+
+    -- Auto-Update settings
+    auto_update_enabled = true,
+    auto_update_check_frequency = 'weekly', -- 'daily', 'weekly', 'monthly', 'manual'
+    auto_update_include_beta = false,
+    auto_update_last_check = 0, -- timestamp of last check
 }
 
 -- **Miniflux Settings** - Settings management with idiomatic property access
@@ -40,6 +46,10 @@ local DEFAULTS = {
 ---@field proxy_image_downloader_enabled boolean Whether proxy image downloader is enabled
 ---@field proxy_image_downloader_url string Proxy URL for image downloads
 ---@field proxy_image_downloader_token string Proxy API token for authentication
+---@field auto_update_enabled boolean Whether automatic update checking is enabled
+---@field auto_update_check_frequency "daily"|"weekly"|"monthly"|"manual" How often to check for updates
+---@field auto_update_include_beta boolean Whether to include beta releases in update checks
+---@field auto_update_last_check number Timestamp of last update check
 local MinifluxSettings = {}
 
 ---Create a new MinifluxSettings instance

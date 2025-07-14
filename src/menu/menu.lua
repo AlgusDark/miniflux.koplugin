@@ -10,6 +10,7 @@ local MarkAsReadOnOpen = require('menu/settings/mark_as_read_on_open')
 local CopyCss = require('menu/settings/copy_css')
 local TestConnection = require('menu/settings/test_connection')
 local ProxyImageDownloader = require('menu/settings/proxy_image_downloader')
+local UpdateSettings = require('menu/settings/update_settings')
 
 local Menu = {}
 
@@ -61,6 +62,9 @@ function Menu.build(plugin)
                     MarkAsReadOnOpen.getMenuItem(plugin.settings),
                     ProxyImageDownloader.getMenuItem(plugin.settings),
                     CopyCss.getMenuItem(plugin),
+
+                    -- === UPDATE SETTINGS ===
+                    UpdateSettings.getMenuItem(plugin.settings),
                 },
             },
         },

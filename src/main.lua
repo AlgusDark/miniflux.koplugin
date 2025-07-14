@@ -23,6 +23,7 @@ local QueueService = require('services/queue_service')
 local EntryEntity = require('entities/entry_entity')
 local KeyHandlerService = require('services/key_handler_service')
 local ReaderLinkService = require('services/readerlink_service')
+local UpdateSettings = require('menu/settings/update_settings')
 
 local _static_browser_context = nil
 
@@ -129,6 +130,9 @@ function Miniflux:init()
 
     -- Register with KOReader menu system
     self.ui.menu:registerToMainMenu(self)
+
+    -- Check for automatic updates if enabled
+    self:checkForAutomaticUpdates()
 end
 
 ---Initialize the download directory for entries
@@ -359,6 +363,21 @@ function Miniflux:onClose()
         end)
         self.subprocesses_collector = nil
     end
+end
+
+---Check for automatic updates if enabled and due
+---@return nil
+function Miniflux:checkForAutomaticUpdates()
+    if not self.settings or not UpdateSettings.isUpdateCheckDue(self.settings) then
+        return
+    end
+
+    -- Perform automatic update check in background
+    UIManager:nextTick(function()
+        local CheckUpdates = require('menu/settings/check_updates')
+        CheckUpdates.checkForUpdates(false) -- Don't show "no update" dialog for automatic checks
+        UpdateSettings.markUpdateCheckPerformed(self.settings)
+    end)
 end
 
 ---Handle widget close event - ensure proper cleanup

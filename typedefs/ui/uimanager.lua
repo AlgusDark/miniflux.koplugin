@@ -13,7 +13,12 @@
 --
 -- As a singleton, UIManager coordinates all UI interactions and ensures proper
 -- e-ink display handling, making it the foundation of KOReader's user interface.
+---@class Screen
+---@field getWidth fun(self: Screen): number Get screen width
+---@field getHeight fun(self: Screen): number Get screen height
+
 ---@class UIManager
+---@field screen Screen Screen interface
 ---@field show fun(self: UIManager, widget: table): nil Show a widget
 ---@field close fun(self: UIManager, widget: table): nil Close a widget
 ---@field forceRePaint fun(self: UIManager): nil Force screen repaint
@@ -24,6 +29,7 @@
 ---@field isWidgetShown fun(self: UIManager, widget: table): boolean Check if widget is shown
 ---@field preventStandby fun(self: UIManager): nil Prevent device standby/sleep
 ---@field allowStandby fun(self: UIManager): nil Allow device standby/sleep
+---@field restartKOReader fun(self: UIManager): nil Restart KOReader application
 local UIManager = {}
 
 return UIManager

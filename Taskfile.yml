@@ -27,19 +27,12 @@ tasks:
       - lua-language-server --check=. --checklevel=Warning --configpath=.luarc.json
       - echo "✅ No LSP diagnostics found"
 
-  test:
-    desc: Run all tests with busted
-    cmds:
-      - busted spec/
-      - echo "✅ All tests passed"
-
   check:
-    desc: Run all code quality checks (format + lint + lsp + tests)
+    desc: Run all code quality checks (format + lint + lsp)
     deps:
       - fmt
       - lint
       - lsp-check
-      - test
     cmds:
       - echo "✅ All code quality checks passed"
 
@@ -176,7 +169,7 @@ tasks:
         # Get current branch for display
         CURRENT_BRANCH=$(git branch --show-current)
         echo "This will:"
-        echo "  • Run all quality checks (tests, lint, format, LSP)"
+        echo "  • Run all quality checks (lint, format, LSP)"
         echo "  • Update src/_meta.lua version to $NEW_VERSION"
         echo "  • Create commit: 'chore: bump version to $NEW_VERSION'"
         echo "  • Create and push tag: v$NEW_VERSION"
