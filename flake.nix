@@ -44,15 +44,6 @@
             
             echo "✅ Environment ready (htmlparser available)"
             echo "🔍 Available commands: task check, task fmt-fix, task build"
-            
-            # Set up git hooks automatically
-            if [ -d .githooks ]; then
-              chmod +x .githooks/*
-              git config --get core.hooksPath >/dev/null || {
-                git config core.hooksPath .githooks
-                echo "🪝 Git hooks enabled automatically"
-              }
-            fi
           '';
 
           # Environment variables for development

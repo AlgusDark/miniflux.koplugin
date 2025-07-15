@@ -8,6 +8,7 @@ local Files = require('utils/files')
 local util = require('util')
 local Notification = require('utils/notification')
 local Error = require('utils/error')
+local logger = require('logger')
 
 -- This is the main API client that handles HTTP communication and coordinates
 -- with specialized API modules. It provides convenient HTTP methods and manages
@@ -165,6 +166,7 @@ function APIClient:makeRequest(method, endpoint, config)
 
     socketutil:set_timeout(socketutil.LARGE_BLOCK_TIMEOUT, socketutil.LARGE_TOTAL_TIMEOUT)
     local code, resp_headers, _status = socket.skip(1, http.request(request))
+    logger.dbg('[Miniflux:APIClient]', method, url, '->', code or 'no response')
     socketutil:reset_timeout()
 
     if loading_notification then
@@ -172,6 +174,7 @@ function APIClient:makeRequest(method, endpoint, config)
     end
     if resp_headers == nil then
         local error_message = _('Network error occurred')
+        logger.err('[Miniflux:APIClient] Network error:', method, url)
         if dialogs and dialogs.error then
             local error_text = dialogs.error.text or error_message
             Notification:error(error_text, { timeout = dialogs.error.timeout })
@@ -204,6 +207,7 @@ function APIClient:makeRequest(method, endpoint, config)
     end
 
     local error_message = buildErrorMessage(code, response_text)
+    logger.warn('[Miniflux:APIClient] API error:', method, url, '->', code, error_message)
 
     if dialogs and dialogs.error then
         local error_text = dialogs.error.text or error_message

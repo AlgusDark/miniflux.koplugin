@@ -41,10 +41,12 @@ tasks:
     cmds:
       - task: pre-commit-fmt
       - task: pre-commit-lint
+      - task: pre-commit-lsp
       - echo "✅ Pre-commit checks passed"
 
   pre-commit-fmt:
     desc: Check formatting only on staged files
+    silent: true
     cmds:
       - |
         STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.lua$' || true)
@@ -58,6 +60,7 @@ tasks:
 
   pre-commit-lint:
     desc: Run luacheck only on staged files
+    silent: true
     cmds:
       - |
         STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.lua$' || true)
@@ -71,14 +74,30 @@ tasks:
 
   pre-commit-lsp:
     desc: Run LSP check (always checks entire workspace)
+    silent: true
     cmds:
       - |
         STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.lua$' || true)
         if [ -n "$STAGED_FILES" ]; then
           echo "⚠️  Skipping LSP diagnostics in pre-commit (checks entire workspace)"
-          echo "   Run 'task lsp' manually to check with language server"
+          echo "   Run 'task lsp-check' manually to check with language server"
         else
           echo "ℹ️  No staged Lua files, skipping LSP check"
+        fi
+
+  pre-commit-fix:
+    desc: Auto-fix formatting on staged files and re-stage them
+    silent: true
+    cmds:
+      - |
+        STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.lua$' || true)
+        if [ -n "$STAGED_FILES" ]; then
+          echo "📝 Auto-fixing formatting for staged files..."
+          echo "$STAGED_FILES" | xargs stylua
+          echo "$STAGED_FILES" | xargs git add
+          echo "✅ Formatting fixed and files re-staged"
+        else
+          echo "ℹ️  No staged Lua files to fix"
         fi
 
   fix:
