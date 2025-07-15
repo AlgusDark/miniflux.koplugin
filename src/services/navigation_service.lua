@@ -39,13 +39,18 @@ function Navigation.getContextAwareOptions(opts)
     end
 
     -- Add context-aware filtering based on browsing context
-    if context and context.type == 'feed' and entry_metadata.feed then
-        options.feed_id = entry_metadata.feed.id
-    elseif context and context.type == 'category' and entry_metadata.category then
-        options.category_id = entry_metadata.category.id
+    if context and context.type == 'feed' then
+        -- Use context.id if available (browsing specific feed), otherwise use entry's feed
+        local feed_id = context.id or (entry_metadata.feed and entry_metadata.feed.id)
+        options.feed_id = feed_id
+    elseif context and context.type == 'category' then
+        -- Use context.id if available (browsing specific category), otherwise use entry's category
+        local category_id = context.id or (entry_metadata.category and entry_metadata.category.id)
+        options.category_id = category_id
     elseif context and context.type == 'local' then
         -- Local context detected - this will be handled in the main navigation function
         -- Just continue with normal options building for now
+    else
     end
     -- For "global" type or nil context, no additional filtering (browse all entries)
 
@@ -87,19 +92,13 @@ function Navigation.navigateToEntry(entry_info, config)
     local metadata = metadata_result.metadata
     local published_unix = metadata_result.published_unix
 
-    -- Get navigation context from ReaderUI.instance
+    -- Get navigation context from browser cache
     local context
-    local ReaderUI = require('apps/reader/readerui')
-    if ReaderUI.instance and ReaderUI.instance.miniflux_context then
-        -- Use context attached to current ReaderUI.instance
-        context = ReaderUI.instance.miniflux_context
-        logger.dbg(
-            '[Miniflux:NavigationService] Navigating in',
-            context and context.type or 'unknown',
-            'context'
-        )
-    else
-        -- Default to global context if no specific context is attached
+    local BrowserCache = require('utils/browser_cache')
+    context = BrowserCache.load()
+
+    if not context then
+        -- Default to global context if no specific context is cached
         context = { type = 'global' }
     end
 

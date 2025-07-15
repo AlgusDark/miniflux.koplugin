@@ -1,5 +1,6 @@
 local lfs = require('libs/libkoreader-lfs')
 local Error = require('utils/error')
+local logger = require('logger')
 
 -- **Files** - Consolidated file utilities including basic file operations and
 -- metadata loading. Combines functionality from file_utils and metadata_loader
@@ -85,19 +86,23 @@ function Files.openWithReader(file_path, opts)
 
     -- Open the file
     local ReaderUI = require('apps/reader/readerui')
+
+    -- Save navigation context to cache if provided
+    if context then
+        local BrowserCache = require('utils/browser_cache')
+        BrowserCache.save(context)
+    end
+
+    -- Show the reader
     ReaderUI:showReader(file_path)
 
-    -- Register post-ready callback if provided and ReaderUI instance exists
-    if ReaderUI.instance then
-        -- Attach navigation context to ReaderUI.instance if provided
-        if context then
-            ReaderUI.instance.miniflux_context = context
-        end
-
-        -- Register callbacks
-        if opts.on_ready then
-            ReaderUI.instance:registerPostReaderReadyCallback(opts.on_ready)
-        end
+    -- Handle post-ready callback if provided
+    -- Note: This won't work reliably because showReader is async
+    -- Callbacks should be registered through the plugin system instead
+    if opts.on_ready then
+        logger.warn(
+            '[Miniflux:Files] on_ready callback may not work reliably with async showReader'
+        )
     end
 end
 

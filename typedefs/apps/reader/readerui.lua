@@ -7,7 +7,7 @@
 ---- Document lifecycle (opening, closing, rendering, caching)
 ---- Reader module orchestration (highlights, bookmarks, annotations, etc.)
 ---- User interface coordination and widget management
----- Input handling and gesture processing for reading interactions  
+---- Input handling and gesture processing for reading interactions
 ---- View management and display modes (paging, scrolling, zooming)
 ---- Integration with file management and document settings
 ---- Plugin system integration and module registration
@@ -34,7 +34,6 @@
 ---@field rolling table Rolling view module (for reflowable documents)
 ---@field paging table Paging view module (for fixed layout documents)
 ---@field doc_settings DocSettings Document settings for current file
----@field miniflux_context? MinifluxContext Navigation context attached by Miniflux plugin
 local ReaderUI = {}
 
 ---Register a reader module with the UI
