@@ -23,19 +23,20 @@ end
 ---Get total count across all queue types
 ---@return number total_count, number status_count, number feed_count, number category_count
 function QueueService:getTotalQueueCount()
-    local FeedQueue = require('utils/feed_queue')
-    local CategoryQueue = require('utils/category_queue')
+    local CollectionsQueue = require('utils/collections_queue')
+    local feed_queue = CollectionsQueue:new('feed')
+    local category_queue = CollectionsQueue:new('category')
 
     -- Count entry status queue
     local status_queue = self.entry_service:loadQueue()
     local status_count = 0
-    for i in pairs(status_queue) do
+    for _ in pairs(status_queue) do
         status_count = status_count + 1
     end
 
     -- Count feed and category queues
-    local feed_count = FeedQueue.count()
-    local category_count = CategoryQueue.count()
+    local feed_count = feed_queue:count()
+    local category_count = category_queue:count()
 
     local total_count = status_count + feed_count + category_count
     return total_count, status_count, feed_count, category_count
@@ -79,14 +80,14 @@ function QueueService:executeQueueProcessing(opts)
 
     -- 2. Process feed queue
     if opts.feed_count > 0 then
-        local processed, failed = self:processFeedQueue()
+        local processed, failed = self:processQueue('feed')
         total_processed = total_processed + processed
         total_failed = total_failed + failed
     end
 
     -- 3. Process category queue
     if opts.category_count > 0 then
-        local processed, failed = self:processCategoryQueue()
+        local processed, failed = self:processQueue('category')
         total_processed = total_processed + processed
         total_failed = total_failed + failed
     end
@@ -140,44 +141,28 @@ function QueueService:showSyncConfirmationDialog(total_count, opts)
     return true -- Dialog shown, processing will happen async
 end
 
----Process the feed queue
+---Process a queue (feed or category)
+---@param queue_type string Type of queue ('feed' or 'category')
 ---@return number processed, number failed
-function QueueService:processFeedQueue()
-    local FeedQueue = require('utils/feed_queue')
-    local feed_queue = FeedQueue.load()
+function QueueService:processQueue(queue_type)
+    local CollectionsQueue = require('utils/collections_queue')
+    local queue_instance = CollectionsQueue:new(queue_type)
+    local queue_data = queue_instance:load()
     local processed_count = 0
     local failed_count = 0
 
-    for feed_id, opts in pairs(feed_queue) do
-        if opts and opts.operation == 'mark_all_read' and feed_id then
-            local _result, err = self.miniflux_api:markFeedAsRead(feed_id)
-            if not err then
-                -- Success - remove from queue
-                FeedQueue.remove(feed_id)
-                processed_count = processed_count + 1
-            else
-                failed_count = failed_count + 1
+    for collection_id, opts in pairs(queue_data) do
+        if opts and opts.operation == 'mark_all_read' and collection_id then
+            local _, err
+            if queue_type == 'feed' then
+                _, err = self.miniflux_api:markFeedAsRead(collection_id)
+            elseif queue_type == 'category' then
+                _, err = self.miniflux_api:markCategoryAsRead(collection_id)
             end
-        end
-    end
 
-    return processed_count, failed_count
-end
-
----Process the category queue
----@return number processed, number failed
-function QueueService:processCategoryQueue()
-    local CategoryQueue = require('utils/category_queue')
-    local category_queue = CategoryQueue.load()
-    local processed_count = 0
-    local failed_count = 0
-
-    for category_id, opts in pairs(category_queue) do
-        if opts and opts.operation == 'mark_all_read' and category_id then
-            local _result, err = self.miniflux_api:markCategoryAsRead(category_id)
             if not err then
                 -- Success - remove from queue
-                CategoryQueue.remove(category_id)
+                queue_instance:remove(collection_id)
                 processed_count = processed_count + 1
             else
                 failed_count = failed_count + 1
@@ -211,12 +196,13 @@ end
 ---Clear all queue types
 ---@return boolean success
 function QueueService:clearAllQueues()
-    local FeedQueue = require('utils/feed_queue')
-    local CategoryQueue = require('utils/category_queue')
+    local CollectionsQueue = require('utils/collections_queue')
+    local feed_queue = CollectionsQueue:new('feed')
+    local category_queue = CollectionsQueue:new('category')
 
     local status_success = self.entry_service:clearStatusQueue()
-    local feed_success = FeedQueue.clear()
-    local category_success = CategoryQueue.clear()
+    local feed_success = feed_queue:clear()
+    local category_success = category_queue:clear()
 
     if status_success and feed_success and category_success then
         Notification:success(_('All sync queues cleared'))

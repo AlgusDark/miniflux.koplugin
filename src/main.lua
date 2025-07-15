@@ -84,11 +84,13 @@ function Miniflux:init()
     self.feed_service = FeedService:new({
         cache_service = self.cache_service,
         settings = self.settings,
+        miniflux_api = self.miniflux_api,
     })
 
     self.category_service = CategoryService:new({
         cache_service = self.cache_service,
         settings = self.settings,
+        miniflux_api = self.miniflux_api,
     })
 
     self.queue_service = QueueService:new({

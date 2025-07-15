@@ -9,11 +9,13 @@ local Notification = require('utils/notification')
 ---@class CategoryService
 ---@field settings MinifluxSettings Settings instance
 ---@field cache_service CacheService Cache service for data access and invalidation
+---@field miniflux_api MinifluxAPI API client for category operations
 local CategoryService = {}
 
 ---@class CategoryServiceDeps
 ---@field cache_service CacheService
 ---@field settings MinifluxSettings
+---@field miniflux_api MinifluxAPI
 
 ---Create a new CategoryService instance
 ---@param deps CategoryServiceDeps Dependencies containing cache service and settings
@@ -22,6 +24,7 @@ function CategoryService:new(deps)
     local instance = {
         settings = deps.settings,
         cache_service = deps.cache_service,
+        miniflux_api = deps.miniflux_api,
     }
     setmetatable(instance, self)
     self.__index = self
@@ -43,7 +46,7 @@ function CategoryService:markAsRead(category_id)
     local _error_message = _('Failed to mark category as read')
 
     -- Call API with dialog management
-    local _result, err = self.cache_service:markCategoryAsRead(category_id, {
+    local _result, err = self.miniflux_api:markCategoryAsRead(category_id, {
         dialogs = {
             loading = { text = progress_message },
             -- Note: No success/error dialogs - we handle both cases gracefully
@@ -52,16 +55,18 @@ function CategoryService:markAsRead(category_id)
 
     if err then
         -- API failed - use queue fallback for offline mode
-        local CategoryQueue = require('utils/category_queue')
-        CategoryQueue.enqueue(category_id, 'mark_all_read')
+        local CollectionsQueue = require('utils/collections_queue')
+        local category_queue = CollectionsQueue:new('category')
+        category_queue:enqueue(category_id, 'mark_all_read')
 
         -- Show offline message instead of error
         Notification:info(_('Category marked as read (will sync when online)'))
         return true -- Still successful from user perspective
     else
         -- API success - remove from queue since server is source of truth
-        local CategoryQueue = require('utils/category_queue')
-        CategoryQueue.remove(category_id)
+        local CollectionsQueue = require('utils/collections_queue')
+        local category_queue = CollectionsQueue:new('category')
+        category_queue:remove(category_id)
 
         -- Invalidate all caches IMMEDIATELY so counts update
         self.cache_service:invalidateAll()

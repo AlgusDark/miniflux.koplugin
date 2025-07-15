@@ -123,14 +123,6 @@ function CacheService:getFeedCount(config)
     return #feeds, nil
 end
 
----Mark feed as read (direct API call)
----@param feed_id number Feed ID
----@param config? table Optional configuration
----@return table|nil result, Error|nil error
-function CacheService:markFeedAsRead(feed_id, config)
-    return self.miniflux_api:markFeedAsRead(feed_id, config)
-end
-
 -- =============================================================================
 -- CATEGORY OPERATIONS (replaces CategoryRepository)
 -- =============================================================================
@@ -170,14 +162,6 @@ function CacheService:getCategoryCount(config)
         return nil, err
     end
     return #categories, nil
-end
-
----Mark category as read (direct API call)
----@param category_id number Category ID
----@param config? table Optional configuration
----@return table|nil result, Error|nil error
-function CacheService:markCategoryAsRead(category_id, config)
-    return self.miniflux_api:markCategoryAsRead(category_id, config)
 end
 
 -- =============================================================================
