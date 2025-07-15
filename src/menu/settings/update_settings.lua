@@ -1,5 +1,4 @@
 local UIManager = require('ui/uimanager')
-local InfoMessage = require('ui/widget/infomessage')
 local MultiConfirmBox = require('ui/widget/multiconfirmbox')
 local Notification = require('utils/notification')
 local _ = require('gettext')
@@ -48,10 +47,7 @@ function UpdateSettings.showFrequencyDialog(settings, callback)
                 settings.auto_update_check_frequency = option.value
                 settings:save()
 
-                UIManager:show(InfoMessage:new({
-                    text = string.format(_('Update frequency set to: %s'), option.text),
-                    timeout = 3,
-                }))
+                Notification:success(string.format(_('Update frequency set to: %s'), option.text))
 
                 if callback then
                     callback()
@@ -109,10 +105,7 @@ function UpdateSettings.getSubMenu(settings)
                 local status_text = settings.auto_update_enabled and _('Auto-update enabled')
                     or _('Auto-update disabled')
 
-                UIManager:show(InfoMessage:new({
-                    text = status_text,
-                    timeout = 3,
-                }))
+                Notification:success(status_text)
             end,
         },
 
@@ -204,10 +197,7 @@ function UpdateSettings.getSubMenu(settings)
                 local status_text = settings.auto_update_include_beta and _('Beta releases enabled')
                     or _('Beta releases disabled')
 
-                UIManager:show(InfoMessage:new({
-                    text = status_text,
-                    timeout = 3,
-                }))
+                Notification:success(status_text)
             end,
         },
     }
@@ -283,10 +273,7 @@ function UpdateSettings.createMenuItems(settings)
                 local status_text = settings.auto_update_enabled and _('Auto-update enabled')
                     or _('Auto-update disabled')
 
-                UIManager:show(InfoMessage:new({
-                    text = status_text,
-                    timeout = 3,
-                }))
+                Notification:success(status_text)
             end,
         },
         {
@@ -300,10 +287,7 @@ function UpdateSettings.createMenuItems(settings)
                     callback = function()
                         settings.auto_update_check_frequency = 'manual'
                         settings:save()
-                        UIManager:show(InfoMessage:new({
-                            text = _('Update frequency: Manual only'),
-                            timeout = 3,
-                        }))
+                        Notification:success(_('Update frequency: Manual only'))
                     end,
                 },
                 {
@@ -314,10 +298,7 @@ function UpdateSettings.createMenuItems(settings)
                     callback = function()
                         settings.auto_update_check_frequency = 'daily'
                         settings:save()
-                        UIManager:show(InfoMessage:new({
-                            text = _('Update frequency: Daily'),
-                            timeout = 3,
-                        }))
+                        Notification:success(_('Update frequency: Daily'))
                     end,
                 },
                 {
@@ -328,10 +309,7 @@ function UpdateSettings.createMenuItems(settings)
                     callback = function()
                         settings.auto_update_check_frequency = 'weekly'
                         settings:save()
-                        UIManager:show(InfoMessage:new({
-                            text = _('Update frequency: Weekly'),
-                            timeout = 3,
-                        }))
+                        Notification:success(_('Update frequency: Weekly'))
                     end,
                 },
                 {
@@ -342,10 +320,7 @@ function UpdateSettings.createMenuItems(settings)
                     callback = function()
                         settings.auto_update_check_frequency = 'monthly'
                         settings:save()
-                        UIManager:show(InfoMessage:new({
-                            text = _('Update frequency: Monthly'),
-                            timeout = 3,
-                        }))
+                        Notification:success(_('Update frequency: Monthly'))
                     end,
                 },
             },
@@ -362,10 +337,7 @@ function UpdateSettings.createMenuItems(settings)
                 local status_text = settings.auto_update_include_beta and _('Beta releases enabled')
                     or _('Beta releases disabled')
 
-                UIManager:show(InfoMessage:new({
-                    text = status_text,
-                    timeout = 3,
-                }))
+                Notification:success(status_text)
             end,
         },
     }
