@@ -79,7 +79,8 @@ ignore = {
     "431", -- Shadowing upvalue (acceptable in nested scopes)
     "432", -- Shadowing definition of variable (acceptable in different scopes)
     "631", -- Line too long (handled by StyLua)
-    "211/_.*", -- Unused variables starting with underscore (intentionally unused)
+    "211", -- Unused local variables (including underscore-prefixed)
+    "231", -- Variables set but never accessed (including underscore-prefixed)
 }
 
 -- Pattern-specific configurations

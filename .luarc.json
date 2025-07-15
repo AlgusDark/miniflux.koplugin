@@ -10,6 +10,7 @@
     "callSnippet": "Both"
   },
   "diagnostics": {
+    "unusedLocalExclude": ["_*"],
     "globals": [
       "require",
       "_",

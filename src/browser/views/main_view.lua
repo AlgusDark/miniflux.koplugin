@@ -30,7 +30,7 @@ function MainView.show(config)
     local counts = nil
     if is_online then
         -- Try to load online data if connected
-        local _error_msg -- luacheck: ignore
+        local _error_msg
         counts, _error_msg = MainView.loadData({ cache_service = config.cache_service })
         if not counts then
             -- Fall back to offline mode instead of showing error
