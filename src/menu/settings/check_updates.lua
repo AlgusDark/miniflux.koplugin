@@ -1,7 +1,6 @@
 local UIManager = require('ui/uimanager')
-local InfoMessage = require('ui/widget/infomessage')
 local ConfirmBox = require('ui/widget/confirmbox')
-local Notification = require('ui/widget/notification')
+local Notification = require('utils/notification')
 local ProgressWidget = require('ui/widget/progresswidget')
 local util = require('util')
 local lfs = require('libs/libkoreader-lfs')
@@ -44,14 +43,12 @@ function CheckUpdates.showUpdateDialog(update_info)
         ok_callback = has_update and function()
             CheckUpdates.performUpdate(update_info)
         end or nil,
-        cancel_callback = has_update
-                and function()
-                    UIManager:show(InfoMessage:new({
-                        text = _('Update skipped. You can check for updates again later.'),
-                        timeout = 3,
-                    }))
-                end
-            or nil,
+        cancel_callback = has_update and function()
+            Notification:info(
+                _('Update skipped. You can check for updates again later.'),
+                { timeout = 3 }
+            )
+        end or nil,
         other_buttons = has_update and {
             {
                 text = _('Release Notes'),
@@ -90,10 +87,7 @@ end
 ---@param update_info table Update information with download URL
 function CheckUpdates.performUpdate(update_info)
     if not update_info.download_url then
-        UIManager:show(InfoMessage:new({
-            text = _('No download available for this update.'),
-            timeout = 3,
-        }))
+        Notification:warning(_('No download available for this update.'))
         return
     end
 
@@ -153,10 +147,7 @@ function CheckUpdates.downloadAndInstall(update_info, progress_widget)
 
     if not download_success then
         UIManager:close(progress_widget)
-        UIManager:show(InfoMessage:new({
-            text = _('Download failed: ') .. (download_error or _('Unknown error')),
-            timeout = 5,
-        }))
+        Notification:error(_('Download failed: ') .. (download_error or _('Unknown error')))
         os.execute('rm -rf "' .. temp_dir .. '"')
         return
     end
@@ -171,10 +162,7 @@ function CheckUpdates.downloadAndInstall(update_info, progress_widget)
     local backup_path, backup_error = UpdateService.createBackup()
     if not backup_path then
         UIManager:close(progress_widget)
-        UIManager:show(InfoMessage:new({
-            text = _('Backup failed: ') .. (backup_error or _('Unknown error')),
-            timeout = 5,
-        }))
+        Notification:error(_('Backup failed: ') .. (backup_error or _('Unknown error')))
         os.execute('rm -rf "' .. temp_dir .. '"')
         return
     end
@@ -183,10 +171,7 @@ function CheckUpdates.downloadAndInstall(update_info, progress_widget)
     local extract_success, extract_error = UpdateService.extractZip(zip_path, temp_dir)
     if not extract_success then
         UIManager:close(progress_widget)
-        UIManager:show(InfoMessage:new({
-            text = _('Extraction failed: ') .. (extract_error or _('Unknown error')),
-            timeout = 5,
-        }))
+        Notification:error(_('Extraction failed: ') .. (extract_error or _('Unknown error')))
         os.execute('rm -rf "' .. temp_dir .. '"')
         return
     end
@@ -205,10 +190,7 @@ function CheckUpdates.downloadAndInstall(update_info, progress_widget)
 
     if not lfs.attributes(plugin_dir, 'mode') then
         UIManager:close(progress_widget)
-        UIManager:show(InfoMessage:new({
-            text = _('Invalid update package: plugin directory not found'),
-            timeout = 5,
-        }))
+        Notification:error(_('Invalid update package: plugin directory not found'))
         os.execute('rm -rf "' .. temp_dir .. '"')
         return
     end
@@ -229,17 +211,12 @@ function CheckUpdates.downloadAndInstall(update_info, progress_widget)
         UIManager:close(progress_widget)
 
         if restore_success then
-            UIManager:show(InfoMessage:new({
-                text = _('Installation failed. Plugin restored to previous version.'),
-                timeout = 5,
-            }))
+            Notification:error(_('Installation failed. Plugin restored to previous version.'))
         else
-            UIManager:show(InfoMessage:new({
-                text = _(
-                    'Installation failed and backup restoration failed! Please reinstall manually.'
-                ),
-                timeout = 10,
-            }))
+            Notification:error(
+                _('Installation failed and backup restoration failed! Please reinstall manually.'),
+                { timeout = 10 }
+            )
         end
 
         os.execute('rm -rf "' .. temp_dir .. '"')
@@ -263,19 +240,13 @@ function CheckUpdates.downloadAndInstall(update_info, progress_widget)
         ok_text = _('Restart Now'),
         cancel_text = _('Restart Later'),
         ok_callback = function()
-            UIManager:show(InfoMessage:new({
-                text = _('Restarting KOReader...'),
-                timeout = 2,
-            }))
+            Notification:info(_('Restarting KOReader...'), { timeout = 2 })
             UIManager:nextTick(function()
                 UIManager:restartKOReader()
             end)
         end,
         cancel_callback = function()
-            UIManager:show(InfoMessage:new({
-                text = _('Please restart KOReader to complete the update.'),
-                timeout = 5,
-            }))
+            Notification:info(_('Please restart KOReader to complete the update.'), { timeout = 5 })
         end,
     }))
 end
@@ -288,20 +259,13 @@ function CheckUpdates.checkForUpdates(show_no_update)
     end
 
     -- Show checking message
-    local checking_notification = Notification:new({
-        text = _('Checking for updates...'),
-        timeout = 2,
-    })
-    UIManager:show(checking_notification)
+    local checking_notification = Notification:info(_('Checking for updates...'), { timeout = 2 })
 
     UIManager:nextTick(function()
         local update_info, error = UpdateService.checkForUpdates()
 
         if error then
-            UIManager:show(InfoMessage:new({
-                text = _('Update check failed: ') .. error,
-                timeout = 5,
-            }))
+            Notification:error(_('Update check failed: ') .. error)
             return
         end
 
