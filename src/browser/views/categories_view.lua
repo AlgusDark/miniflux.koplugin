@@ -12,14 +12,14 @@ local _ = require('gettext')
 
 local CategoriesView = {}
 
----@alias CategoriesViewConfig {repositories: MinifluxRepositories, settings: MinifluxSettings, page_state?: number, onSelectItem: function}
+---@alias CategoriesViewConfig {cache_service: CacheService, settings: MinifluxSettings, page_state?: number, onSelectItem: function}
 
 ---Complete categories view component (React-style) - returns view data for rendering
 ---@param config CategoriesViewConfig
 ---@return table|nil View data for browser rendering, or nil on error
 function CategoriesView.show(config)
     -- Fetch data with API-level dialog management
-    local categories, err = config.repositories.category:getAll({
+    local categories, err = config.cache_service:getCategories({
         dialogs = {
             loading = { text = _('Fetching categories...') },
             error = { text = _('Failed to fetch categories'), timeout = 5 },

@@ -21,27 +21,24 @@ local Files = require('utils/files')
 ---@field settings MinifluxSettings Settings instance
 ---@field miniflux_api MinifluxAPI Miniflux API instance
 ---@field miniflux_plugin Miniflux Plugin instance for context management
----@field feed_repository FeedRepository Feed repository for cache invalidation
----@field category_repository CategoryRepository Category repository for cache invalidation
+---@field cache_service CacheService Cache service for data access and invalidation
 local EntryService = {}
 
 ---@class EntryServiceDeps
 ---@field settings MinifluxSettings
 ---@field miniflux_api MinifluxAPI
 ---@field miniflux_plugin Miniflux
----@field feed_repository FeedRepository
----@field category_repository CategoryRepository
+---@field cache_service CacheService
 
 ---Create a new EntryService instance
----@param deps EntryServiceDeps Dependencies containing settings, API, plugin, and repositories
+---@param deps EntryServiceDeps Dependencies containing settings, API, plugin, and cache service
 ---@return EntryService
 function EntryService:new(deps)
     local instance = {
         settings = deps.settings,
         miniflux_api = deps.miniflux_api,
         miniflux_plugin = deps.miniflux_plugin,
-        feed_repository = deps.feed_repository,
-        category_repository = deps.category_repository,
+        cache_service = deps.cache_service,
     }
     setmetatable(instance, self)
     self.__index = self
@@ -511,8 +508,7 @@ function EntryService:markEntriesAsRead(entry_ids)
         Notification:success(_('Successfully marked ') .. #entry_ids .. _(' entries as read'))
 
         -- Invalidate caches so next navigation shows updated counts
-        self.feed_repository:invalidateCache()
-        self.category_repository:invalidateCache()
+        self.cache_service:invalidateAll()
 
         return true
     else
@@ -567,8 +563,7 @@ function EntryService:markEntriesAsUnread(entry_ids)
         Notification:success(_('Successfully marked ') .. #entry_ids .. _(' entries as unread'))
 
         -- Invalidate caches so next navigation shows updated counts
-        self.feed_repository:invalidateCache()
-        self.category_repository:invalidateCache()
+        self.cache_service:invalidateAll()
 
         return true
     else
@@ -669,8 +664,7 @@ function EntryService:changeEntryStatus(entry_id, opts)
         self:removeFromQueue(entry_id)
 
         -- Invalidate caches so next navigation shows updated counts
-        self.feed_repository:invalidateCache()
-        self.category_repository:invalidateCache()
+        self.cache_service:invalidateAll()
 
         return true
     end

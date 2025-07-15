@@ -8,23 +8,20 @@ local Notification = require('utils/notification')
 -- cache management.
 ---@class CategoryService
 ---@field settings MinifluxSettings Settings instance
----@field category_repository CategoryRepository Category repository instance
----@field feed_repository FeedRepository Feed repository for cross-invalidation
+---@field cache_service CacheService Cache service for data access and invalidation
 local CategoryService = {}
 
 ---@class CategoryServiceDeps
----@field category_repository CategoryRepository
----@field feed_repository FeedRepository
+---@field cache_service CacheService
 ---@field settings MinifluxSettings
 
 ---Create a new CategoryService instance
----@param deps CategoryServiceDeps Dependencies containing repositories and settings
+---@param deps CategoryServiceDeps Dependencies containing cache service and settings
 ---@return CategoryService
 function CategoryService:new(deps)
     local instance = {
         settings = deps.settings,
-        category_repository = deps.category_repository,
-        feed_repository = deps.feed_repository,
+        cache_service = deps.cache_service,
     }
     setmetatable(instance, self)
     self.__index = self
@@ -46,7 +43,7 @@ function CategoryService:markAsRead(category_id)
     local _error_message = _('Failed to mark category as read')
 
     -- Call API with dialog management
-    local _result, err = self.category_repository:markAsRead(category_id, {
+    local _result, err = self.cache_service:markCategoryAsRead(category_id, {
         dialogs = {
             loading = { text = progress_message },
             -- Note: No success/error dialogs - we handle both cases gracefully
@@ -66,9 +63,8 @@ function CategoryService:markAsRead(category_id)
         local CategoryQueue = require('utils/category_queue')
         CategoryQueue.remove(category_id)
 
-        -- Invalidate both category and feed caches IMMEDIATELY so counts update
-        self.category_repository:invalidateCache()
-        self.feed_repository:invalidateCache()
+        -- Invalidate all caches IMMEDIATELY so counts update
+        self.cache_service:invalidateAll()
 
         -- Show simple success notification (no dialog)
         Notification:success(success_message)

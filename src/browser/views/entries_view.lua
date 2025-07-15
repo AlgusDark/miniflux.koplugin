@@ -13,7 +13,7 @@ local _ = require('gettext')
 
 local EntriesView = {}
 
----@alias EntriesViewConfig {repositories: MinifluxRepositories, settings: MinifluxSettings, entry_type: "unread"|"feed"|"category", id?: number, page_state?: number, onSelectItem: function}
+---@alias EntriesViewConfig {cache_service: CacheService, settings: MinifluxSettings, entry_type: "unread"|"feed"|"category", id?: number, page_state?: number, onSelectItem: function}
 
 ---Complete entries view component (React-style) - returns view data for rendering
 ---@param config EntriesViewConfig
@@ -46,11 +46,11 @@ function EntriesView.show(config)
     -- Fetch data based on type
     local entries, err
     if entry_type == 'unread' then
-        entries, err = config.repositories.entry:getUnread(dialog_config)
+        entries, err = config.cache_service:getUnreadEntries(dialog_config)
     elseif entry_type == 'feed' then
-        entries, err = config.repositories.entry:getByFeed(id, dialog_config)
+        entries, err = config.cache_service:getEntriesByFeed(id, dialog_config)
     elseif entry_type == 'category' then
-        entries, err = config.repositories.entry:getByCategory(id, dialog_config)
+        entries, err = config.cache_service:getEntriesByCategory(id, dialog_config)
     end
 
     if err then

@@ -67,15 +67,9 @@ function Miniflux:init()
     })
     self.miniflux_api = MinifluxAPI:new({ api_client = self.api_client })
 
-    local FeedRepository = require('repositories/feed_repository')
-    local CategoryRepository = require('repositories/category_repository')
+    local CacheService = require('services/cache_service')
 
-    local feed_repository = FeedRepository:new({
-        miniflux_api = self.miniflux_api,
-        settings = self.settings,
-    })
-
-    local category_repository = CategoryRepository:new({
+    self.cache_service = CacheService:new({
         miniflux_api = self.miniflux_api,
         settings = self.settings,
     })
@@ -84,19 +78,16 @@ function Miniflux:init()
         settings = self.settings,
         miniflux_api = self.miniflux_api,
         miniflux_plugin = self,
-        feed_repository = feed_repository,
-        category_repository = category_repository,
+        cache_service = self.cache_service,
     })
 
     self.feed_service = FeedService:new({
-        feed_repository = feed_repository,
-        category_repository = category_repository,
+        cache_service = self.cache_service,
         settings = self.settings,
     })
 
     self.category_service = CategoryService:new({
-        category_repository = category_repository,
-        feed_repository = feed_repository,
+        cache_service = self.cache_service,
         settings = self.settings,
     })
 
@@ -186,6 +177,7 @@ function Miniflux:createBrowser()
         entry_service = self.entry_service,
         feed_service = self.feed_service,
         category_service = self.category_service,
+        cache_service = self.cache_service,
         miniflux_plugin = self, -- Pass plugin reference for context management
     })
     return browser

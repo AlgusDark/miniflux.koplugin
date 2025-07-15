@@ -8,23 +8,20 @@ local Notification = require('utils/notification')
 -- cache management.
 ---@class FeedService
 ---@field settings MinifluxSettings Settings instance
----@field feed_repository FeedRepository Feed repository instance
----@field category_repository CategoryRepository Category repository for cross-invalidation
+---@field cache_service CacheService Cache service for data access and invalidation
 local FeedService = {}
 
 ---@class FeedServiceDeps
----@field feed_repository FeedRepository
----@field category_repository CategoryRepository
+---@field cache_service CacheService
 ---@field settings MinifluxSettings
 
 ---Create a new FeedService instance
----@param deps FeedServiceDeps Dependencies containing repositories and settings
+---@param deps FeedServiceDeps Dependencies containing cache service and settings
 ---@return FeedService
 function FeedService:new(deps)
     local instance = {
         settings = deps.settings,
-        feed_repository = deps.feed_repository,
-        category_repository = deps.category_repository,
+        cache_service = deps.cache_service,
     }
     setmetatable(instance, self)
     self.__index = self
@@ -46,7 +43,7 @@ function FeedService:markAsRead(feed_id)
     local _error_message = _('Failed to mark feed as read')
 
     -- Call API with dialog management
-    local _result, err = self.feed_repository:markAsRead(feed_id, {
+    local _result, err = self.cache_service:markFeedAsRead(feed_id, {
         dialogs = {
             loading = { text = progress_message },
             -- Note: No success/error dialogs - we handle both cases gracefully
@@ -66,9 +63,8 @@ function FeedService:markAsRead(feed_id)
         local FeedQueue = require('utils/feed_queue')
         FeedQueue.remove(feed_id)
 
-        -- Invalidate both feed and category caches IMMEDIATELY so counts update
-        self.feed_repository:invalidateCache()
-        self.category_repository:invalidateCache()
+        -- Invalidate all caches IMMEDIATELY so counts update
+        self.cache_service:invalidateAll()
 
         -- Show simple success notification (no dialog)
         Notification:success(success_message)

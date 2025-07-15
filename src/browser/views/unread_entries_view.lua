@@ -12,14 +12,14 @@ local _ = require('gettext')
 
 local UnreadEntriesView = {}
 
----@alias UnreadEntriesViewConfig {repositories: MinifluxRepositories, settings: MinifluxSettings, page_state?: number, onSelectItem: function}
+---@alias UnreadEntriesViewConfig {cache_service: CacheService, settings: MinifluxSettings, page_state?: number, onSelectItem: function}
 
 ---Complete unread entries view component - returns view data for rendering
 ---@param config UnreadEntriesViewConfig
 ---@return table|nil View data for browser rendering, or nil on error
 function UnreadEntriesView.show(config)
     -- Fetch unread entries with API-level dialog management
-    local entries, err = config.repositories.entry:getUnread({
+    local entries, err = config.cache_service:getUnreadEntries({
         dialogs = {
             loading = { text = _('Fetching unread entries...') },
             error = { text = _('Failed to fetch unread entries'), timeout = 5 },
