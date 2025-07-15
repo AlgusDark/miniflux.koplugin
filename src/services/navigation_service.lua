@@ -1,6 +1,7 @@
 local lfs = require('libs/libkoreader-lfs')
 local Notification = require('utils/notification')
 local _ = require('gettext')
+local logger = require('logger')
 
 -- Import dependencies
 local TimeUtils = require('utils/time_utils')
@@ -70,6 +71,7 @@ function Navigation.navigateToEntry(entry_info, config)
     -- Validate input
     local _valid, err = Navigation.validateNavigationInput(entry_info, miniflux_api)
     if err then
+        logger.err('[Miniflux:NavigationService] Navigation failed:', err.message)
         Notification:warning(err.message)
         return
     end
@@ -91,6 +93,11 @@ function Navigation.navigateToEntry(entry_info, config)
     if ReaderUI.instance and ReaderUI.instance.miniflux_context then
         -- Use context attached to current ReaderUI.instance
         context = ReaderUI.instance.miniflux_context
+        logger.dbg(
+            '[Miniflux:NavigationService] Navigating in',
+            context and context.type or 'unknown',
+            'context'
+        )
     else
         -- Default to global context if no specific context is attached
         context = { type = 'global' }
@@ -125,6 +132,10 @@ function Navigation.navigateToEntry(entry_info, config)
                     context = enhanced_context,
                 })
             else
+                logger.err(
+                    '[Miniflux:NavigationService] Failed to load metadata for entry:',
+                    target_entry_id
+                )
                 local Notification = require('utils/notification')
                 Notification:error(_('Failed to open target entry'))
             end
@@ -327,9 +338,15 @@ function Navigation.performNavigationSearch(config)
         return true, result
     end
 
+    logger.warn(
+        '[Miniflux:NavigationService] API search failed, falling back to offline:',
+        err.message or 'unknown error'
+    )
+
     -- API call failed - try simple offline navigation
     local target_entry_id = Navigation.findAdjacentEntryId(current_entry_id, direction)
     if target_entry_id then
+        logger.info('[Miniflux:NavigationService] Found offline entry:', target_entry_id)
         Notification:info(_('Found a local entry'))
         -- Create minimal entry data for navigation
         return true, {
@@ -407,6 +424,11 @@ function Navigation.navigateLocalEntries(config)
     end
 
     if not current_index then
+        logger.warn(
+            '[Miniflux:NavigationService] Current entry',
+            current_entry_id,
+            'not found in local entries'
+        )
         return nil -- Current entry not found in local list
     end
 

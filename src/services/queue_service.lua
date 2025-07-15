@@ -2,6 +2,7 @@ local ButtonDialogTitle = require('ui/widget/buttondialogtitle')
 local UIManager = require('ui/uimanager')
 local Notification = require('utils/notification')
 local _ = require('gettext')
+local logger = require('logger')
 
 ---@class QueueService
 ---@field entry_service EntryService Reference to entry service for entry queue operations
@@ -51,6 +52,16 @@ function QueueService:processAllQueues()
         Notification:info(_('All changes are already synced'))
         return true -- Nothing to process
     end
+
+    logger.info(
+        '[Miniflux:QueueService] Processing queues:',
+        status_count,
+        'entries,',
+        feed_count,
+        'feeds,',
+        category_count,
+        'categories'
+    )
 
     -- Always show confirmation dialog for user interaction
     return self:showSyncConfirmationDialog(total_count, {
@@ -165,6 +176,13 @@ function QueueService:processQueue(queue_type)
                 queue_instance:remove(collection_id)
                 processed_count = processed_count + 1
             else
+                logger.err(
+                    '[Miniflux:QueueService] Failed to mark',
+                    queue_type,
+                    collection_id,
+                    'as read:',
+                    err.message or 'unknown error'
+                )
                 failed_count = failed_count + 1
             end
         end
@@ -205,6 +223,7 @@ function QueueService:clearAllQueues()
     local category_success = category_queue:clear()
 
     if status_success and feed_success and category_success then
+        logger.info('[Miniflux:QueueService] All sync queues cleared')
         Notification:success(_('All sync queues cleared'))
         return true
     else
@@ -221,6 +240,10 @@ function QueueService:clearAllQueues()
         end
 
         local error_msg = _('Failed to clear queues: ') .. table.concat(failed_queues, ', ')
+        logger.err(
+            '[Miniflux:QueueService] Failed to clear queues:',
+            table.concat(failed_queues, ', ')
+        )
         Notification:error(error_msg)
         return false
     end

@@ -127,11 +127,11 @@ end
 ---@field published_at string
 ---@field feed {id: number, title: string}
 ---@field category {id: number, title: string}
----@field images {included: boolean, count: number}
+---@field images table<string, string> Image mapping (filename -> URL)
 ---@field last_updated string
 
 ---Save metadata for an entry using DocSettings
----@param params table Parameters: entry_data, include_images, images_count
+---@param params table Parameters: entry_data, images_mapping
 ---@return string|nil result, Error|nil error
 function EntryEntity.saveMetadata(params)
     local entry_data = params.entry_data
@@ -139,8 +139,7 @@ function EntryEntity.saveMetadata(params)
         return nil, Error.new('Invalid entry data')
     end
 
-    local include_images = params.include_images or false
-    local images_count = params.images_count or 0
+    local images_mapping = params.images_mapping or {}
 
     local html_file = EntryEntity.getEntryHtmlPath(entry_data.id)
     if not html_file then
@@ -156,10 +155,7 @@ function EntryEntity.saveMetadata(params)
         url = entry_data.url,
         status = entry_data.status,
         published_at = entry_data.published_at,
-        images = {
-            included = include_images,
-            count = images_count,
-        },
+        images = images_mapping,
         last_updated = os.date('%Y-%m-%d %H:%M:%S', os.time()),
     }
 

@@ -1,5 +1,6 @@
 local DataStorage = require('datastorage')
 local CacheSQLite = require('cachesqlite')
+local logger = require('logger')
 
 -- **Generic Cache Store** - Provider-agnostic caching layer using KOReader's CacheSQLite
 --
@@ -111,11 +112,16 @@ function CacheStore:set(key, opts)
     local success, err = self.cache:insert(key, cache_entry)
 
     if success and err then
+        logger.dbg('[Miniflux:CacheStore] Set cache key:', key, 'TTL:', ttl)
         return true
     else
         -- CacheSQLite can fail with large objects due to type conversion errors
         -- This is expected behavior for large entry arrays - cache only small metadata
-
+        logger.dbg(
+            '[Miniflux:CacheStore] Failed to cache key:',
+            key,
+            '- likely too large for SQLite'
+        )
         return false -- Not a fatal error - just means no caching for this data
     end
 end
@@ -135,15 +141,18 @@ function CacheStore:get(key, opts)
     local cache_entry = self.cache:check(key)
 
     if not cache_entry then
+        logger.dbg('[Miniflux:CacheStore] Cache miss for key:', key)
         return nil, false -- Cache miss
     end
 
     -- Check if entry is expired
     if self:isExpired(cache_entry) then
+        logger.dbg('[Miniflux:CacheStore] Cache expired for key:', key)
         self.cache:remove(key) -- Remove expired entry
         return nil, false
     end
 
+    logger.dbg('[Miniflux:CacheStore] Cache hit for key:', key)
     return cache_entry.data, true
 end
 
@@ -158,6 +167,7 @@ end
 
 ---Clear all cache entries (useful for settings changes)
 function CacheStore:clear()
+    logger.info('[Miniflux:CacheStore] Clearing all cache entries')
     self.cache:clear()
 end
 

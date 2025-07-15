@@ -34,7 +34,7 @@ end
 ---Get current plugin version from _meta.lua
 ---@return string Current version
 function UpdateService.getCurrentVersion()
-    logger.info('UpdateService: Attempting to get current version from _meta.lua')
+    logger.info('[Miniflux:UpdateService] Attempting to get current version from _meta.lua')
 
     local meta = nil
     local success, err = pcall(function()
@@ -42,25 +42,25 @@ function UpdateService.getCurrentVersion()
     end)
 
     if not success then
-        logger.warn('UpdateService: Failed to require _meta.lua:', err)
-        logger.info('UpdateService: Using fallback version: 0.0.1')
+        logger.warn('[Miniflux:UpdateService] Failed to require _meta.lua:', err)
+        logger.info('[Miniflux:UpdateService] Using fallback version: 0.0.1')
         return '0.0.1'
     end
 
     if not meta then
-        logger.warn('UpdateService: _meta.lua returned nil')
-        logger.info('UpdateService: Using fallback version: 0.0.1')
+        logger.warn('[Miniflux:UpdateService] _meta.lua returned nil')
+        logger.info('[Miniflux:UpdateService] Using fallback version: 0.0.1')
         return '0.0.1'
     end
 
     local version = meta.version
     if not version then
-        logger.warn('UpdateService: _meta.lua has no version field')
-        logger.info('UpdateService: Using fallback version: 0.0.1')
+        logger.warn('[Miniflux:UpdateService] _meta.lua has no version field')
+        logger.info('[Miniflux:UpdateService] Using fallback version: 0.0.1')
         return '0.0.1'
     end
 
-    logger.info('UpdateService: Found version in _meta.lua:', version)
+    logger.info('[Miniflux:UpdateService] Found version in _meta.lua:', version)
     return version
 end
 
@@ -104,16 +104,16 @@ end
 ---@param url string API endpoint URL
 ---@return table|nil response, string|nil error
 function UpdateService.makeGitHubRequest(url)
-    logger.info('UpdateService: Making GitHub API request to:', url)
-    logger.info('UpdateService: Using User-Agent:', USER_AGENT)
-    logger.info('UpdateService: Repository:', REPO_OWNER .. '/' .. REPO_NAME)
+    logger.info('[Miniflux:UpdateService] Making GitHub API request to:', url)
+    logger.info('[Miniflux:UpdateService] Using User-Agent:', USER_AGENT)
+    logger.info('[Miniflux:UpdateService] Repository:', REPO_OWNER .. '/' .. REPO_NAME)
 
     if not UpdateService.isNetworkAvailable() then
-        logger.warn('UpdateService: Network not available')
+        logger.warn('[Miniflux:UpdateService] Network not available')
         return nil, _('Network not available')
     end
 
-    logger.info('UpdateService: Network connection confirmed')
+    logger.info('[Miniflux:UpdateService] Network connection confirmed')
 
     local response_body = {}
     local request_config = {
@@ -126,53 +126,57 @@ function UpdateService.makeGitHubRequest(url)
         sink = ltn12.sink.table(response_body),
     }
 
-    logger.info('UpdateService: Sending HTTP request...')
+    logger.info('[Miniflux:UpdateService] Sending HTTP request...')
     local result, status_code, headers = http.request(request_config)
 
-    logger.info('UpdateService: HTTP request completed')
-    logger.info('UpdateService: Result:', tostring(result))
-    logger.info('UpdateService: Status code:', tostring(status_code))
+    logger.info('[Miniflux:UpdateService] HTTP request completed')
+    logger.info('[Miniflux:UpdateService] Result:', tostring(result))
+    logger.info('[Miniflux:UpdateService] Status code:', tostring(status_code))
 
     if headers then
-        logger.info('UpdateService: Response headers received')
+        logger.info('[Miniflux:UpdateService] Response headers received')
         if headers['x-ratelimit-remaining'] then
             logger.info(
-                'UpdateService: GitHub rate limit remaining:',
+                '[Miniflux:UpdateService] GitHub rate limit remaining:',
                 headers['x-ratelimit-remaining']
             )
         end
     end
 
     if not result or status_code ~= 200 then
-        logger.warn('UpdateService: GitHub API request failed with status:', status_code)
+        logger.warn('[Miniflux:UpdateService] GitHub API request failed with status:', status_code)
         if status_code == 404 then
-            logger.warn('UpdateService: 404 - Repository not found or private (no access)')
+            logger.warn(
+                '[Miniflux:UpdateService] 404 - Repository not found or private (no access)'
+            )
         elseif status_code == 403 then
-            logger.warn('UpdateService: 403 - Rate limited or authentication required')
+            logger.warn('[Miniflux:UpdateService] 403 - Rate limited or authentication required')
         elseif status_code == 401 then
-            logger.warn('UpdateService: 401 - Authentication required for private repository')
+            logger.warn(
+                '[Miniflux:UpdateService] 401 - Authentication required for private repository'
+            )
         end
         return nil, _('Failed to check for updates: HTTP ') .. tostring(status_code)
     end
 
     local response_text = table.concat(response_body)
-    logger.info('UpdateService: Response body length:', #response_text)
+    logger.info('[Miniflux:UpdateService] Response body length:', #response_text)
     logger.info(
-        'UpdateService: Response preview:',
+        '[Miniflux:UpdateService] Response preview:',
         response_text:sub(1, 200) .. (response_text:len() > 200 and '...' or '')
     )
 
-    logger.info('UpdateService: Parsing JSON response...')
+    logger.info('[Miniflux:UpdateService] Parsing JSON response...')
     local success, parsed_json = pcall(json.decode, response_text)
 
     if not success then
-        logger.warn('UpdateService: Failed to parse JSON response:', parsed_json)
+        logger.warn('[Miniflux:UpdateService] Failed to parse JSON response:', parsed_json)
         return nil, _('Failed to parse update information')
     end
 
-    logger.info('UpdateService: JSON parsing successful')
+    logger.info('[Miniflux:UpdateService] JSON parsing successful')
     if parsed_json and parsed_json.tag_name then
-        logger.info('UpdateService: Found release tag:', parsed_json.tag_name)
+        logger.info('[Miniflux:UpdateService] Found release tag:', parsed_json.tag_name)
     end
 
     return parsed_json, nil
@@ -181,34 +185,34 @@ end
 ---Check for latest release on GitHub
 ---@return table|nil release_info, string|nil error
 function UpdateService.checkForUpdates()
-    logger.info('UpdateService: Starting update check process')
-    logger.info('UpdateService: Target repository:', REPO_OWNER .. '/' .. REPO_NAME)
+    logger.info('[Miniflux:UpdateService] Starting update check process')
+    logger.info('[Miniflux:UpdateService] Target repository:', REPO_OWNER .. '/' .. REPO_NAME)
 
     local release_data, error = UpdateService.makeGitHubRequest(RELEASES_URL)
     if error then
-        logger.warn('UpdateService: GitHub API request failed:', error)
+        logger.warn('[Miniflux:UpdateService] GitHub API request failed:', error)
         return nil, error
     end
 
     if not release_data or not release_data.tag_name then
-        logger.warn('UpdateService: Invalid release data from GitHub')
-        logger.warn('UpdateService: release_data is nil:', release_data == nil)
+        logger.warn('[Miniflux:UpdateService] Invalid release data from GitHub')
+        logger.warn('[Miniflux:UpdateService] release_data is nil:', release_data == nil)
         if release_data then
-            logger.warn('UpdateService: Missing tag_name field in release data')
+            logger.warn('[Miniflux:UpdateService] Missing tag_name field in release data')
         end
         return nil, _('Invalid release information from GitHub')
     end
 
-    logger.info('UpdateService: Getting current version...')
+    logger.info('[Miniflux:UpdateService] Getting current version...')
     local current_version = UpdateService.getCurrentVersion()
     local latest_version = release_data.tag_name
 
-    logger.info('UpdateService: Version comparison:')
-    logger.info('UpdateService:   Current version:', current_version)
-    logger.info('UpdateService:   Latest version:', latest_version)
+    logger.info('[Miniflux:UpdateService] Version comparison:')
+    logger.info('[Miniflux:UpdateService]   Current version:', current_version)
+    logger.info('[Miniflux:UpdateService]   Latest version:', latest_version)
 
     local has_update = UpdateService.isNewerVersion(current_version, latest_version)
-    logger.info('UpdateService: Update available:', has_update)
+    logger.info('[Miniflux:UpdateService] Update available:', has_update)
 
     local update_info = {
         current_version = current_version,
@@ -221,44 +225,47 @@ function UpdateService.checkForUpdates()
         download_size = nil,
     }
 
-    logger.info('UpdateService: Release info:')
-    logger.info('UpdateService:   Release name:', update_info.release_name)
-    logger.info('UpdateService:   Published at:', update_info.published_at)
+    logger.info('[Miniflux:UpdateService] Release info:')
+    logger.info('[Miniflux:UpdateService]   Release name:', update_info.release_name)
+    logger.info('[Miniflux:UpdateService]   Published at:', update_info.published_at)
 
     -- Find the plugin ZIP file in assets
-    logger.info('UpdateService: Looking for download assets...')
+    logger.info('[Miniflux:UpdateService] Looking for download assets...')
     if release_data.assets then
-        logger.info('UpdateService: Found', #release_data.assets, 'assets')
+        logger.info('[Miniflux:UpdateService] Found', #release_data.assets, 'assets')
         for i, asset in ipairs(release_data.assets) do
-            logger.info('UpdateService: Asset', i .. ':', asset.name or 'unnamed')
+            logger.info('[Miniflux:UpdateService] Asset', i .. ':', asset.name or 'unnamed')
             if asset.name and asset.name:match('%.koplugin%.zip$') then
-                logger.info('UpdateService: Found plugin ZIP:', asset.name)
+                logger.info('[Miniflux:UpdateService] Found plugin ZIP:', asset.name)
                 update_info.download_url = asset.browser_download_url
                 update_info.download_size = asset.size
-                logger.info('UpdateService: Download URL:', asset.browser_download_url)
-                logger.info('UpdateService: Download size:', asset.size)
+                logger.info('[Miniflux:UpdateService] Download URL:', asset.browser_download_url)
+                logger.info('[Miniflux:UpdateService] Download size:', asset.size)
                 break
             end
         end
     else
-        logger.warn('UpdateService: No assets found in release data')
+        logger.warn('[Miniflux:UpdateService] No assets found in release data')
     end
 
     if not update_info.download_url then
-        logger.warn('UpdateService: No .koplugin.zip file found in release assets')
+        logger.warn('[Miniflux:UpdateService] No .koplugin.zip file found in release assets')
     end
 
     if update_info.has_update and not update_info.download_url then
-        logger.warn('UpdateService: Update available but no download URL found')
+        logger.warn('[Miniflux:UpdateService] Update available but no download URL found')
         return nil, _('Update available but download not found')
     end
 
-    logger.info('UpdateService: Update check completed successfully')
-    logger.info('UpdateService: Summary:')
-    logger.info('UpdateService:   Current version:', current_version)
-    logger.info('UpdateService:   Latest version:', latest_version)
-    logger.info('UpdateService:   Update available:', tostring(update_info.has_update))
-    logger.info('UpdateService:   Download available:', tostring(update_info.download_url ~= nil))
+    logger.info('[Miniflux:UpdateService] Update check completed successfully')
+    logger.info('[Miniflux:UpdateService] Summary:')
+    logger.info('[Miniflux:UpdateService]   Current version:', current_version)
+    logger.info('[Miniflux:UpdateService]   Latest version:', latest_version)
+    logger.info('[Miniflux:UpdateService]   Update available:', tostring(update_info.has_update))
+    logger.info(
+        '[Miniflux:UpdateService]   Download available:',
+        tostring(update_info.download_url ~= nil)
+    )
 
     return update_info, nil
 end
@@ -276,7 +283,7 @@ function UpdateService.downloadFile(opts)
     local local_path = opts.local_path
     local progress_callback = opts.progress_callback
 
-    logger.info('UpdateService: Downloading', url, 'to', local_path)
+    logger.info('[Miniflux:UpdateService] Downloading', url, 'to', local_path)
 
     local file = io.open(local_path, 'wb')
     if not file then
@@ -315,7 +322,7 @@ function UpdateService.downloadFile(opts)
         return false, _('Downloaded file is empty')
     end
 
-    logger.info('UpdateService: Download complete', file_attrs.size, 'bytes')
+    logger.info('[Miniflux:UpdateService] Download complete', file_attrs.size, 'bytes')
     return true, nil
 end
 

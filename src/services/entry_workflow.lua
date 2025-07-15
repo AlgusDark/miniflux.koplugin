@@ -4,6 +4,7 @@ local FFIUtil = require('ffi/util')
 local time = require('ui/time')
 local _ = require('gettext')
 local T = require('ffi/util').template
+local logger = require('logger')
 
 -- Import consolidated dependencies
 local EntryEntity = require('entities/entry_entity')
@@ -91,6 +92,7 @@ local function handleCancellation(user_wants_to_continue, context)
         User wants to abandon the entire workflow.
         Clean up any partial downloads and temporary files.
         --]]
+        logger.info('[Miniflux:EntryWorkflow] User cancelled workflow, cleaning up')
         Images.cleanupTempFiles(context.entry_dir)
         FFIUtil.purgeDir(context.entry_dir) -- Remove entire entry directory
         current_phase = PHASES.IDLE -- Reset phase state
@@ -207,6 +209,12 @@ local function downloadImagesWithProgress(opts)
         if not success then
             -- Track error reason for better user feedback (used in completion summary)
             img.error_reason = 'network_or_invalid_url'
+            logger.dbg(
+                '[Miniflux:EntryWorkflow] Failed to download image:',
+                img.filename,
+                'from',
+                img.src
+            )
         end
 
         -- Yield control to allow UI updates between downloads (prevents blocking)
@@ -258,6 +266,7 @@ local function generateHtmlContent(config)
 
     -- Error handling: Fail gracefully with descriptive error message
     if html_error then
+        logger.err('[Miniflux:EntryWorkflow] Failed to process HTML:', html_error.message)
         Notification:error(_('Failed to process content: ') .. html_error.message)
         return PHASE_RESULTS.ERROR
     end
@@ -426,6 +435,12 @@ function EntryWorkflow.execute(deps)
 
         -- First user interaction: Show preparation progress
         -- Trapper:info() returns true if user wants to continue, false if cancelled
+        logger.info(
+            '[Miniflux:EntryWorkflow] Starting download for entry',
+            entry_data.id,
+            ':',
+            title
+        )
         local user_wants_to_continue = Trapper:info(
             T(WORKFLOW_MESSAGES.DOWNLOAD_PREPARING, context.title or _('Unknown Entry'))
         )
@@ -436,7 +451,7 @@ function EntryWorkflow.execute(deps)
             return -- User cancelled - fire and forget
         end
 
-        -- Discover images inline (simple content extraction, moved from EntryOperations per YAGNI)
+        -- Always discover images to build mapping (regardless of download setting)
         local content = entry_data.content or entry_data.summary or ''
         local base_url = entry_data.url and socket_url.parse(entry_data.url) or nil
         local images, seen_images = Images.discoverImages(content, base_url)
@@ -444,6 +459,12 @@ function EntryWorkflow.execute(deps)
         if not images then
             Notification:error(_('Failed to discover images'))
             return -- Discovery failed - fire and forget
+        end
+
+        -- Build image mapping from discovered images (always needed for metadata)
+        local images_mapping = {}
+        for _, img in ipairs(images) do
+            images_mapping[img.filename] = img.src
         end
 
         --[[
@@ -491,6 +512,13 @@ function EntryWorkflow.execute(deps)
         UX decision: Partial content is better than no content for RSS entries.
         --]]
         if download_summary.has_errors then
+            logger.warn(
+                '[Miniflux:EntryWorkflow] Image download errors:',
+                failed_count,
+                'of',
+                #images,
+                'failed'
+            )
             local error_msg = T(
                 WORKFLOW_MESSAGES.DOWNLOAD_ERRORS,
                 download_summary.success_count,
@@ -524,8 +552,7 @@ function EntryWorkflow.execute(deps)
         -- Save metadata directly using EntryEntity (no abstraction needed per YAGNI)
         local _metadata_result, metadata_error = EntryEntity.saveMetadata({
             entry_data = entry_data,
-            images_count = download_summary.success_count, -- Use actual download count, not discovery count
-            include_images = settings.include_images,
+            images_mapping = images_mapping,
         })
         if metadata_error then
             Notification:error(_('Failed to save metadata: ') .. metadata_error.message)
@@ -546,6 +573,13 @@ function EntryWorkflow.execute(deps)
         })
 
         -- Open completed entry (clean file opening with browser cleanup)
+        logger.info(
+            '[Miniflux:EntryWorkflow] Successfully downloaded entry',
+            entry_data.id,
+            'with',
+            success_count,
+            'images'
+        )
         Files.openWithReader(context.html_file, {
             before_open = function()
                 if browser then

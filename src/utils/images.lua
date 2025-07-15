@@ -308,7 +308,7 @@ end
 -- HTML IMAGE PROCESSING
 -- =============================================================================
 
----Process HTML content to replace image tags based on download results using DOM parser
+---Process HTML content to replace image tags with local filenames
 ---@param content string Original HTML content
 ---@param opts table Options containing seen_images, include_images, base_url
 ---@return string Processed HTML content
@@ -318,16 +318,14 @@ function Images.processHtmlImages(content, opts)
     local include_images = opts.include_images
     local base_url = opts.base_url
 
-    -- If include_images is false, return content unchanged (no processing needed)
-    if not include_images then
-        return content
-    end
+    -- Always process images to update src to local filenames
+    -- This ensures HTML is ready for images whether downloaded now or later
 
     -- Use regex approach for image replacement (proven pattern used by newsdownloader.koplugin)
     local replaceImg = function(img_tag)
         local src = img_tag:match(IMG_SRC_PATTERN)
 
-        -- Skip data URLs, empty src, or if include_images is false
+        -- Skip data URLs or empty src
         if not src or src == '' or src:sub(1, 5) == 'data:' then
             return img_tag
         end
@@ -335,11 +333,12 @@ function Images.processHtmlImages(content, opts)
         local normalized_src = Images.normalizeImageUrl(src, base_url)
         local img_info = seen_images[normalized_src]
 
-        -- Only replace if image was successfully downloaded
-        if img_info and img_info.downloaded then
+        -- Always replace with local filename if we have image info
+        -- The file may or may not exist depending on include_images setting
+        if img_info then
             return Images.createLocalImageTag(img_info)
         else
-            return img_tag -- Leave original unchanged
+            return img_tag -- Leave original unchanged (image wasn't discovered)
         end
     end
 
