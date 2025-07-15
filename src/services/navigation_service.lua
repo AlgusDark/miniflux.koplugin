@@ -47,6 +47,9 @@ function Navigation.getContextAwareOptions(opts)
         -- Use context.id if available (browsing specific category), otherwise use entry's category
         local category_id = context.id or (entry_metadata.category and entry_metadata.category.id)
         options.category_id = category_id
+    elseif context and context.type == 'unread' then
+        -- For unread context, always filter by unread status only
+        -- This ensures navigation stays within unread entries
     elseif context and context.type == 'local' then
         -- Local context detected - this will be handled in the main navigation function
         -- Just continue with normal options building for now
@@ -256,6 +259,11 @@ function Navigation.buildNavigationOptions(config)
         direction = settings.direction,
         status = settings.hide_read_entries and { 'unread' } or { 'unread', 'read' },
     }
+
+    -- For unread context, always filter by unread status regardless of settings
+    if context and context.type == 'unread' then
+        base_options.status = { 'unread' }
+    end
 
     local options = Navigation.getContextAwareOptions({
         base_options = base_options,

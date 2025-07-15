@@ -323,7 +323,10 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
                 settings = self.settings,
                 page_state = nav_config.page_state,
                 onSelectItem = function(entry_data)
-                    self:openItem(entry_data, nil) -- No context for global unread
+                    local context = {
+                        type = 'unread', -- Specific context for unread navigation
+                    }
+                    self:openItem(entry_data, context)
                 end,
             })
         end,
