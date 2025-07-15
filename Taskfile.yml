@@ -36,6 +36,53 @@ tasks:
     cmds:
       - echo "✅ All code quality checks passed"
 
+  pre-commit:
+    desc: Run quality checks only on staged/changed files (for pre-commit hooks)
+    cmds:
+      - task: pre-commit-fmt
+      - task: pre-commit-lint
+      - task: pre-commit-lsp
+      - echo "✅ Pre-commit checks passed"
+
+  pre-commit-fmt:
+    desc: Check formatting only on staged files
+    cmds:
+      - |
+        STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.lua$' || true)
+        if [ -n "$STAGED_FILES" ]; then
+          echo "📝 Checking formatting for staged files..."
+          echo "$STAGED_FILES" | xargs stylua --check
+          echo "✅ Staged files formatting is correct"
+        else
+          echo "ℹ️  No staged Lua files to check"
+        fi
+
+  pre-commit-lint:
+    desc: Run luacheck only on staged files
+    cmds:
+      - |
+        STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.lua$' || true)
+        if [ -n "$STAGED_FILES" ]; then
+          echo "🔍 Linting staged files..."
+          echo "$STAGED_FILES" | xargs luacheck
+          echo "✅ Staged files passed linting"
+        else
+          echo "ℹ️  No staged Lua files to lint"
+        fi
+
+  pre-commit-lsp:
+    desc: Run LSP check (always checks entire workspace)
+    cmds:
+      - |
+        STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.lua$' || true)
+        if [ -n "$STAGED_FILES" ]; then
+          echo "🔍 Running LSP diagnostics (full workspace)..."
+          lua-language-server --check=. --checklevel=Warning --configpath=.luarc.json
+          echo "✅ LSP diagnostics passed"
+        else
+          echo "ℹ️  No staged Lua files, skipping LSP check"
+        fi
+
   fix:
     desc: Auto-fix all fixable issues
     deps:
