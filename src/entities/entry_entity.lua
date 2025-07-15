@@ -7,6 +7,8 @@ local FileManager = require('apps/filemanager/filemanager')
 local Error = require('utils/error')
 local _ = require('gettext')
 local T = require('ffi/util').template
+local DownloadCache = require('utils/download_cache')
+local logger = require('logger')
 
 -- **Entry Entity** - Pure utility functions for entry operations, validation,
 -- and business logic. Delegates file operations to Files utilities while
@@ -114,8 +116,7 @@ end
 ---@param entry_id number Entry ID
 ---@return boolean True if downloaded
 function EntryEntity.isEntryDownloaded(entry_id)
-    local html_file = EntryEntity.getEntryHtmlPath(entry_id)
-    return lfs.attributes(html_file, 'mode') == 'file'
+    return DownloadCache.isDownloaded(entry_id, EntryEntity.getEntryHtmlPath)
 end
 
 ---@class EntryMetadata
@@ -180,6 +181,14 @@ function EntryEntity.saveMetadata(params)
 
     -- Return original pattern: flush result (string|nil) and error
     local flush_result = doc_settings:flush()
+
+    -- Invalidate download cache for this entry since we just saved it
+    DownloadCache.invalidate(entry_data.id)
+    logger.dbg(
+        '[Miniflux:EntryEntity] Invalidated download cache after saving entry',
+        entry_data.id
+    )
+
     return flush_result, nil
 end
 

@@ -11,6 +11,7 @@ local UIManager = require('ui/uimanager')
 local lfs = require('libs/libkoreader-lfs')
 local Dispatcher = require('dispatcher')
 local _ = require('gettext')
+local logger = require('logger')
 
 local APIClient = require('api/api_client')
 local MinifluxAPI = require('api/miniflux_api')
@@ -52,11 +53,15 @@ local Miniflux = WidgetContainer:extend({
 ---Initialize the plugin by setting up all components
 ---@return nil
 function Miniflux:init()
+    logger.info('[Miniflux:Main] Initializing plugin')
+
     local download_dir = self:initializeDownloadDirectory()
     if not download_dir then
+        logger.err('[Miniflux:Main] Failed to initialize download directory')
         return
     end
     self.download_dir = download_dir
+    logger.dbg('[Miniflux:Main] Download directory:', download_dir)
 
     self.settings = MinifluxSettings:new()
 
@@ -91,6 +96,7 @@ function Miniflux:init()
     })
 
     if self.ui and self.ui.document then
+        logger.dbg('[Miniflux:Main] Initializing KeyHandlerService for document context')
         self.key_handler_service = KeyHandlerService:new({
             miniflux_plugin = self,
             entry_service = self.entry_service,
@@ -99,6 +105,7 @@ function Miniflux:init()
     end
 
     if self.ui and self.ui.link then
+        logger.dbg('[Miniflux:Main] Initializing ReaderLinkService')
         self.readerlink_service = ReaderLinkService:new({
             miniflux_plugin = self,
         })
@@ -116,6 +123,8 @@ function Miniflux:init()
 
     -- Check for automatic updates if enabled
     self:checkForAutomaticUpdates()
+
+    logger.info('[Miniflux:Main] Plugin initialization complete')
 end
 
 ---Initialize the download directory for entries
@@ -300,13 +309,16 @@ end
 
 ---Handle network connected event - process all offline queues
 function Miniflux:onNetworkConnected()
+    logger.info('[Miniflux:Main] Network connected event received')
     -- Only process if QueueService is available (plugin initialized)
     if self.queue_service then
         -- Check if any queue has items before showing dialog
         local total_count = self.queue_service:getTotalQueueCount()
+        logger.dbg('[Miniflux:Main] Queue items pending sync:', total_count)
 
         if total_count > 0 then
             -- Show sync dialog only if there are items to sync
+            logger.info('[Miniflux:Main] Processing offline queues')
             self.queue_service:processAllQueues()
         end
         -- If all queues are empty, do nothing (silent)
@@ -315,12 +327,14 @@ end
 
 ---Handle device suspend event - terminate background jobs to save battery
 function Miniflux:onSuspend()
+    logger.info('[Miniflux:Main] Device suspend event - terminating background jobs')
     self:terminateBackgroundJobs()
     -- Queue operations will be processed on next network connection
 end
 
 ---Handle plugin close event - ensure proper cleanup
 function Miniflux:onClose()
+    logger.info('[Miniflux:Main] Plugin closing - cleaning up')
     self:terminateBackgroundJobs()
     -- Cancel any scheduled zombie collection
     if self.subprocesses_collector then
@@ -356,6 +370,11 @@ function Miniflux:onCloseWidget()
         end)
         self.subprocesses_collector = nil
     end
+
+    -- Clear download cache on plugin close
+    local DownloadCache = require('utils/download_cache')
+    DownloadCache.clear()
+
     -- Cleanup key handler service touch zones
     if self.key_handler_service then
         self.key_handler_service:cleanup()

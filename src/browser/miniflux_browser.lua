@@ -3,6 +3,7 @@ local BrowserMode = Browser.BrowserMode
 
 local _ = require('gettext')
 local T = require('ffi/util').template
+local logger = require('logger')
 
 -- Import view modules
 local MainView = require('browser/views/main_view')
@@ -28,6 +29,8 @@ local MinifluxBrowser = Browser:extend({})
 ---@alias MinifluxNavigationContext {feed_id?: number, category_id?: number}
 
 function MinifluxBrowser:init()
+    logger.dbg('[Miniflux:Browser] Initializing MinifluxBrowser')
+
     -- Initialize Miniflux-specific dependencies
     self.settings = self.settings or {}
     self.miniflux_api = self.miniflux_api or {}
@@ -41,6 +44,8 @@ function MinifluxBrowser:init()
 
     -- Initialize Browser parent (handles generic setup)
     Browser.init(self)
+
+    logger.dbg('[Miniflux:Browser] MinifluxBrowser initialized')
 end
 
 -- =============================================================================
@@ -196,6 +201,7 @@ end
 
 ---Refresh current view with global cache invalidation
 function MinifluxBrowser:refreshWithCacheInvalidation()
+    logger.info('[Miniflux:Browser] Refreshing with cache invalidation')
     local Notification = require('utils/notification')
 
     -- Show loading notification
@@ -217,6 +223,12 @@ end
 ---@param entry_data table Entry data from API
 ---@param context? {type: "feed"|"category", id: number} Navigation context (nil = global)
 function MinifluxBrowser:openItem(entry_data, context)
+    logger.dbg(
+        '[Miniflux:Browser] Opening entry:',
+        entry_data.id,
+        'with context:',
+        context and context.type or 'global'
+    )
     -- Pass context directly to readEntry to flow through EntryWorkflow
     self.entry_service:readEntry(entry_data, { browser = self, context = context })
 end

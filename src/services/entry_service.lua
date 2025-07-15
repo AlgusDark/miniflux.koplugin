@@ -6,11 +6,13 @@ local lfs = require('libs/libkoreader-lfs')
 local _ = require('gettext')
 local T = require('ffi/util').template
 local Notification = require('utils/notification')
+local logger = require('logger')
 
 local EntryEntity = require('entities/entry_entity')
 local Navigation = require('services/navigation_service')
 local EntryWorkflow = require('services/entry_workflow')
 local Files = require('utils/files')
+local DownloadCache = require('utils/download_cache')
 
 -- **Entry Service** - Handles complex entry workflows and orchestration.
 --
@@ -231,11 +233,20 @@ end
 ---@param silent? boolean Skip notifications if true
 ---@return boolean success
 function EntryService:processStatusQueue(auto_confirm, silent)
+    logger.info(
+        '[Miniflux:EntryService] Processing status queue, auto_confirm:',
+        auto_confirm,
+        'silent:',
+        silent
+    )
+
     local queue = self:loadQueue()
     local queue_size = 0
     for i in pairs(queue) do
         queue_size = queue_size + 1
     end
+
+    logger.dbg('[Miniflux:EntryService] Queue size:', queue_size)
 
     if queue_size == 0 then
         -- Show friendly message only when manually triggered (auto_confirm is nil)
@@ -937,6 +948,13 @@ function EntryService:deleteLocalEntry(entry_id)
     local ok = FFIUtil.purgeDir(entry_dir)
 
     if ok then
+        -- Invalidate download cache for this entry
+        DownloadCache.invalidate(entry_id)
+        logger.dbg(
+            '[Miniflux:EntryService] Invalidated download cache after deleting entry',
+            entry_id
+        )
+
         Notification:success(_('Local entry deleted successfully'))
 
         -- Open Miniflux folder

@@ -1,4 +1,5 @@
 local CacheStore = require('utils/cache_store')
+local logger = require('logger')
 
 -- **Cache Service** - Replaces repository pattern with simple caching
 --
@@ -89,10 +90,12 @@ function CacheService:getFeedsWithCounters(config)
         self.cache:get(cache_key, { ttl = self.settings.api_cache_ttl_counters })
 
     if is_valid and cached_data then
+        logger.dbg('[Miniflux:CacheService] Cache hit: feeds_with_counters')
         return cached_data.result, cached_data.error
     end
 
     -- Cache miss - build result
+    logger.dbg('[Miniflux:CacheService] Cache miss: feeds_with_counters, fetching from API')
     local feeds, err = self:getFeeds(config)
     if err then
         return nil, err
@@ -283,6 +286,7 @@ end
 ---Critical for count updates after status changes
 ---@return boolean success
 function CacheService:invalidateAll()
+    logger.info('[Miniflux:CacheService] Invalidating all cache')
     if not self.settings.api_cache_enabled then
         return true
     end
@@ -295,6 +299,7 @@ end
 ---@param cache_key string Cache key to invalidate
 ---@return boolean success
 function CacheService:invalidate(cache_key)
+    logger.dbg('[Miniflux:CacheService] Invalidating cache key:', cache_key)
     if not self.settings.api_cache_enabled then
         return true
     end
