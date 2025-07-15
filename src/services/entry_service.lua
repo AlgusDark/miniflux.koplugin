@@ -24,6 +24,7 @@ local DownloadCache = require('utils/download_cache')
 ---@field miniflux_api MinifluxAPI Miniflux API instance
 ---@field miniflux_plugin Miniflux Plugin instance for context management
 ---@field cache_service CacheService Cache service for data access and invalidation
+---@field entry_subprocesses table<number, number> Map of entry_id to subprocess PID
 local EntryService = {}
 
 ---@class EntryServiceDeps
@@ -41,6 +42,7 @@ function EntryService:new(deps)
         miniflux_api = deps.miniflux_api,
         miniflux_plugin = deps.miniflux_plugin,
         cache_service = deps.cache_service,
+        entry_subprocesses = {}, -- Track subprocesses per entry
     }
     setmetatable(instance, self)
     self.__index = self
@@ -155,6 +157,18 @@ function EntryService:enqueueStatusChange(entry_id, opts)
     local success = self:saveQueue(queue)
 
     if success then
+        logger.dbg(
+            '[Miniflux:EntryService] Enqueued status change for entry',
+            entry_id,
+            'from',
+            opts.original_status,
+            'to',
+            opts.new_status,
+            'queue size:',
+            queue_size_after
+        )
+    else
+        logger.err('[Miniflux:EntryService] Failed to save queue after enqueuing entry', entry_id)
     end
 
     return success
@@ -613,6 +627,18 @@ function EntryService:downloadEntries(entry_data_list, completion_callback)
     return true
 end
 
+---Kill any active subprocess for an entry
+---@param entry_id number Entry ID
+---@private
+function EntryService:killEntrySubprocess(entry_id)
+    local pid = self.entry_subprocesses[entry_id]
+    if pid then
+        logger.info('[Miniflux:EntryService] Killing subprocess', pid, 'for entry', entry_id)
+        FFIUtil.terminateSubProcess(pid)
+        self.entry_subprocesses[entry_id] = nil
+    end
+end
+
 ---Change entry status with validation and side effects
 ---@param entry_id number Entry ID
 ---@param opts EntryStatusOptions Options for status update
@@ -625,6 +651,9 @@ function EntryService:changeEntryStatus(entry_id, opts)
         Notification:error(_('Cannot change status: invalid entry ID'))
         return false
     end
+
+    -- Kill any active subprocess for this entry (prevents conflicting updates)
+    self:killEntrySubprocess(entry_id)
 
     -- Prepare status messages using templates
     local loading_text = T(_('Marking entry as %1...'), new_status)
@@ -717,7 +746,13 @@ function EntryService:autoMarkAsRead(file_path, doc_settings)
     local pid =
         self:spawnUpdateStatus(entry_id, { new_status = 'read', doc_settings = doc_settings })
     if pid then
+        logger.info('[Miniflux:EntryService] Auto-mark-as-read spawned with PID:', pid)
+        -- Track the subprocess for proper cleanup
+        self.miniflux_plugin:trackSubprocess(pid)
+        -- Also track per entry so we can kill it on manual status change
+        self.entry_subprocesses[entry_id] = pid
     else
+        logger.dbg('[Miniflux:EntryService] Auto-mark-as-read skipped (already read or disabled)')
     end
 end
 
@@ -854,22 +889,22 @@ end
 -- PRIVATE HELPER METHODS
 -- =============================================================================
 
----Spawn update entry status with optimistic update and queue fallback
+---Spawn update entry status in subprocess with optimistic update and queue fallback
 ---@param entry_id number Entry ID to update
 ---@param opts EntryStatusOptions Options for status update
----@return boolean success True if operation initiated successfully
+---@return number|nil pid Process ID if spawned, nil if operation skipped
 function EntryService:spawnUpdateStatus(entry_id, opts)
     local new_status = opts.new_status
     local doc_settings = opts.doc_settings
 
     -- Check if auto-mark feature is enabled
     if not self.settings.mark_as_read_on_open then
-        return false
+        return nil
     end
 
     -- Validate entry ID first
     if not EntryEntity.isValidId(entry_id) then
-        return false
+        return nil
     end
 
     -- Load current metadata to get original status
@@ -882,58 +917,143 @@ function EntryService:spawnUpdateStatus(entry_id, opts)
             == EntryEntity.isEntryRead(new_status)
 
     if is_already_target_status then
-        return false
+        -- Clean up any existing subprocess for this entry
+        self:killEntrySubprocess(entry_id)
+        return nil
     end
 
-    -- Smart queue logic: try direct API call if online, queue only if failed or offline
+    -- Step 1: Always do optimistic update first (immediate UX)
+    local optimistic_success = EntryEntity.updateEntryStatus(
+        entry_id,
+        { new_status = new_status, doc_settings = doc_settings }
+    )
+    if not optimistic_success then
+        return nil
+    end
+
+    -- Step 2: Background API call in subprocess (non-blocking)
+    local FFIUtil = require('ffi/util')
     local NetworkMgr = require('ui/network/manager')
-    local success = false
 
-    if NetworkMgr:isOnline() then
-        -- Online: Try direct API call first
+    -- Extract settings data for subprocess (separate memory space)
+    local server_address = self.settings.server_address
+    local api_token = self.settings.api_token
 
-        -- Step 1: Optimistic update (immediate UX)
-        local optimistic_success = EntryEntity.updateEntryStatus(
-            entry_id,
-            { new_status = new_status, doc_settings = doc_settings }
-        )
-        if not optimistic_success then
-            return false
+    local pid = FFIUtil.runInSubProcess(function()
+        -- Import required modules in subprocess
+        local APIClient = require('api/api_client')
+        local MinifluxAPI = require('api/miniflux_api')
+        local EntryEntity = require('entities/entry_entity')
+        local logger = require('logger')
+
+        -- Create settings object for subprocess
+        local subprocess_settings = {
+            server_address = server_address,
+            api_token = api_token,
+        }
+
+        -- Create API client instances
+        local api_client = APIClient:new({ settings = subprocess_settings })
+        local miniflux_api = MinifluxAPI:new({ api_client = api_client })
+
+        -- Check network connectivity
+        local NetworkMgr = require('ui/network/manager')
+        if not NetworkMgr:isOnline() then
+            logger.dbg(
+                '[Miniflux:Subprocess] Device offline, skipping API call for entry:',
+                entry_id
+            )
+            -- Can't queue from subprocess, main process will handle it
+            return
         end
 
-        -- Step 2: Try immediate API call
-        success = self:tryUpdateEntryStatus(entry_id, new_status)
+        -- Make API call with built-in timeout handling
+        local result, err = miniflux_api:updateEntries(entry_id, {
+            body = { status = new_status },
+            -- No dialogs config - silent background operation
+        })
 
-        if success then
-            return true
+        if err then
+            logger.warn(
+                '[Miniflux:Subprocess] API call failed for entry:',
+                entry_id,
+                'error:',
+                err.message or err
+            )
+            -- Auto-healing: If API call failed, revert local metadata
+            EntryEntity.updateEntryStatus(
+                entry_id,
+                { new_status = original_status, subprocess = true }
+            )
         else
-            -- Fall through to queue logic below
+            logger.dbg(
+                '[Miniflux:Subprocess] Successfully updated entry',
+                entry_id,
+                'to',
+                new_status
+            )
+            -- Remove from queue since server is now source of truth
+            -- Note: Queue operations need to be duplicated in subprocess
+            local Files = require('utils/files')
+            local miniflux_dir = EntryEntity.getDownloadDir()
+            local queue_file = miniflux_dir .. 'status_queue.lua'
+
+            -- Load queue
+            local lfs = require('libs/libkoreader-lfs')
+            if lfs.attributes(queue_file, 'mode') then
+                local success, queue_data = pcall(dofile, queue_file)
+                if success and type(queue_data) == 'table' then
+                    -- Remove this entry from queue
+                    queue_data[entry_id] = nil
+
+                    -- Save updated queue
+                    local queue_content = 'return {\n'
+                    for qid, qopts in pairs(queue_data) do
+                        queue_content = queue_content
+                            .. string.format(
+                                '  [%d] = {\n    new_status = %q,\n    original_status = %q,\n    timestamp = %d\n  },\n',
+                                qid,
+                                qopts.new_status,
+                                qopts.original_status,
+                                qopts.timestamp
+                            )
+                    end
+                    queue_content = queue_content .. '}\n'
+                    Files.writeFile(queue_file, queue_content)
+                end
+            end
         end
+        -- Process exits automatically
+    end)
+
+    -- If subprocess couldn't start or we're offline, queue for later
+    if not pid or not NetworkMgr:isOnline() then
+        self:enqueueStatusChange(entry_id, {
+            new_status = new_status,
+            original_status = original_status,
+        })
     else
-        -- Offline: Do optimistic update only
-        local optimistic_success = EntryEntity.updateEntryStatus(
-            entry_id,
-            { new_status = new_status, doc_settings = doc_settings }
-        )
-        if not optimistic_success then
-            return false
-        end
+        -- Track subprocess for this entry
+        self.entry_subprocesses[entry_id] = pid
+
+        -- Schedule cleanup check to remove from tracking when done
+        UIManager:scheduleIn(30, function()
+            if self.entry_subprocesses[entry_id] == pid then
+                -- Check if subprocess is done
+                if FFIUtil.isSubProcessDone(pid) then
+                    self.entry_subprocesses[entry_id] = nil
+                    logger.dbg(
+                        '[Miniflux:EntryService] Cleaned up completed subprocess',
+                        pid,
+                        'for entry',
+                        entry_id
+                    )
+                end
+            end
+        end)
     end
 
-    -- Queue for later sync (either because offline or API call failed)
-    local queue_success = self:enqueueStatusChange(entry_id, {
-        new_status = new_status,
-        original_status = original_status,
-    })
-
-    if queue_success then
-        success = true
-    else
-        -- Optimistic update still provides immediate UX even if queue fails
-        success = true
-    end
-
-    return success
+    return pid
 end
 
 ---Delete a local entry

@@ -41,6 +41,7 @@ local UpdateSettings = require('menu/settings/update_settings')
 ---@field subprocesses_collector boolean|nil Flag indicating if subprocess collector is active
 ---@field subprocesses_collect_interval number Interval for subprocess collection in seconds
 ---@field browser MinifluxBrowser|nil Browser instance for UI navigation
+---@field wrapped_onClose table|nil Wrapped ReaderUI onClose method for metadata preservation
 local Miniflux = WidgetContainer:extend({
     name = 'miniflux',
     is_doc_only = false,
@@ -102,6 +103,10 @@ function Miniflux:init()
             entry_service = self.entry_service,
             navigation_service = require('services/navigation_service'),
         })
+
+        -- Wrap ReaderUI to preserve metadata on close
+        local MetadataPreserver = require('utils/metadata_preserver')
+        self.wrapped_onClose = MetadataPreserver.wrapReaderClose(self.ui)
     end
 
     if self.ui and self.ui.link then
@@ -382,6 +387,12 @@ function Miniflux:onCloseWidget()
     -- Cleanup ReaderLink service
     if self.readerlink_service then
         self.readerlink_service:cleanup()
+    end
+
+    -- Revert the wrapped onClose method if it exists
+    if self.wrapped_onClose then
+        self.wrapped_onClose:revert()
+        self.wrapped_onClose = nil
     end
 end
 

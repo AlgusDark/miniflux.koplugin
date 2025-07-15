@@ -55,7 +55,8 @@ function ReaderUI:showReader(file) end
 
 ---Close current document and clean up
 ---@param self ReaderUI
-function ReaderUI:onClose() end
+---@param full_refresh boolean|nil Whether to do a full screen refresh
+function ReaderUI:onClose(full_refresh) end
 
 ---Check if reader is ready for interaction
 ---@param self ReaderUI

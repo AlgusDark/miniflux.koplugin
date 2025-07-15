@@ -202,11 +202,19 @@ function EntryEntity.updateEntryStatus(entry_id, opts)
     local success = true
     local timestamp = os.date('%Y-%m-%d %H:%M:%S', os.time())
 
+    logger.dbg('[Miniflux:EntryEntity] Updating entry', entry_id, 'status to', new_status)
+
     local sdr_result, sdr_err = EntryEntity.updateMetadata(entry_id, {
         status = new_status,
     })
 
     if not sdr_result or sdr_err then
+        logger.err(
+            '[Miniflux:EntryEntity] Failed to update SDR metadata for entry',
+            entry_id,
+            ':',
+            sdr_err
+        )
         success = false
     end
 
@@ -217,6 +225,12 @@ function EntryEntity.updateEntryStatus(entry_id, opts)
             ui_entry_metadata.status = new_status
             ui_entry_metadata.last_updated = timestamp
             doc_settings:saveSetting('miniflux_entry', ui_entry_metadata)
+            logger.dbg('[Miniflux:EntryEntity] Updated ReaderUI DocSettings for entry', entry_id)
+        else
+            logger.warn(
+                '[Miniflux:EntryEntity] No miniflux_entry in ReaderUI DocSettings for entry',
+                entry_id
+            )
         end
     end
 
@@ -282,6 +296,16 @@ function EntryEntity.updateMetadata(entry_id, updates)
 
     -- Always update timestamp
     entry_metadata.last_updated = os.date('%Y-%m-%d %H:%M:%S', os.time())
+
+    -- Track if this update is from a subprocess (helps with race condition detection)
+    if updates.subprocess then
+        entry_metadata.subprocess_update = true
+        entry_metadata.subprocess_timestamp = os.time()
+    else
+        -- Clear subprocess flag if this is a user-initiated update
+        entry_metadata.subprocess_update = nil
+        entry_metadata.subprocess_timestamp = nil
+    end
 
     doc_settings:saveSetting('miniflux_entry', entry_metadata)
 
