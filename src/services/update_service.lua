@@ -263,12 +263,19 @@ function UpdateService.checkForUpdates()
     return update_info, nil
 end
 
+---@class DownloadOptions
+---@field url string Download URL
+---@field local_path string Local file path
+---@field progress_callback? function Optional progress callback
+
 ---Download file from URL to local path
----@param url string Download URL
----@param local_path string Local file path
----@param progress_callback function|nil Optional progress callback
+---@param opts DownloadOptions Download configuration
 ---@return boolean success, string|nil error
-function UpdateService.downloadFile(url, local_path, progress_callback)
+function UpdateService.downloadFile(opts)
+    local url = opts.url
+    local local_path = opts.local_path
+    local progress_callback = opts.progress_callback
+
     logger.info('UpdateService: Downloading', url, 'to', local_path)
 
     local file = io.open(local_path, 'wb')

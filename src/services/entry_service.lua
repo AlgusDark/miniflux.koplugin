@@ -395,7 +395,10 @@ function EntryService:tryUpdateEntryStatus(entry_id, new_status)
             end
         end
 
-        EntryEntity.updateEntryStatus(entry_id, new_status, doc_settings)
+        EntryEntity.updateEntryStatus(
+            entry_id,
+            { new_status = new_status, doc_settings = doc_settings }
+        )
 
         -- Remove from queue since server is now source of truth
         self:removeFromQueue(entry_id)
@@ -437,7 +440,10 @@ function EntryService:tryBatchUpdateEntries(entry_ids, new_status)
         for i, entry_id in ipairs(entry_ids) do
             -- Pass doc_settings only if this entry is currently open
             local entry_doc_settings = (entry_id == current_entry_id) and doc_settings or nil
-            EntryEntity.updateEntryStatus(entry_id, new_status, entry_doc_settings)
+            EntryEntity.updateEntryStatus(
+                entry_id,
+                { new_status = new_status, doc_settings = entry_doc_settings }
+            )
         end
         return true
     end
@@ -487,7 +493,7 @@ function EntryService:markEntriesAsRead(entry_ids)
     if not err then
         -- API success - update local metadata
         for i, entry_id in ipairs(entry_ids) do
-            EntryEntity.updateEntryStatus(entry_id, 'read')
+            EntryEntity.updateEntryStatus(entry_id, { new_status = 'read' })
             -- Remove from queue since server is now source of truth
             self:removeFromQueue(entry_id)
         end
@@ -504,7 +510,7 @@ function EntryService:markEntriesAsRead(entry_ids)
         -- API failed - use queue fallback with better UX messaging
         -- Perform optimistic local updates immediately for good UX
         for i, entry_id in ipairs(entry_ids) do
-            EntryEntity.updateEntryStatus(entry_id, 'read')
+            EntryEntity.updateEntryStatus(entry_id, { new_status = 'read' })
             -- Queue each entry for later sync
             self:enqueueStatusChange(entry_id, {
                 new_status = 'read',
@@ -543,7 +549,7 @@ function EntryService:markEntriesAsUnread(entry_ids)
     if not err then
         -- API success - update local metadata
         for i, entry_id in ipairs(entry_ids) do
-            EntryEntity.updateEntryStatus(entry_id, 'unread')
+            EntryEntity.updateEntryStatus(entry_id, { new_status = 'unread' })
             -- Remove from queue since server is now source of truth
             self:removeFromQueue(entry_id)
         end
@@ -560,7 +566,7 @@ function EntryService:markEntriesAsUnread(entry_ids)
         -- API failed - use queue fallback with better UX messaging
         -- Perform optimistic local updates immediately for good UX
         for i, entry_id in ipairs(entry_ids) do
-            EntryEntity.updateEntryStatus(entry_id, 'unread')
+            EntryEntity.updateEntryStatus(entry_id, { new_status = 'unread' })
             -- Queue each entry for later sync
             self:enqueueStatusChange(entry_id, {
                 new_status = 'unread',
@@ -594,10 +600,12 @@ end
 
 ---Change entry status with validation and side effects
 ---@param entry_id number Entry ID
----@param new_status string New status
----@param doc_settings? table Optional ReaderUI DocSettings instance to use
----@return boolean success
-function EntryService:changeEntryStatus(entry_id, new_status, doc_settings)
+---@param opts EntryStatusOptions Options for status update
+---@return boolean success True if status change succeeded
+function EntryService:changeEntryStatus(entry_id, opts)
+    local new_status = opts.new_status
+    local doc_settings = opts.doc_settings
+
     if not EntryEntity.isValidId(entry_id) then
         Notification:error(_('Cannot change status: invalid entry ID'))
         return false
@@ -621,7 +629,10 @@ function EntryService:changeEntryStatus(entry_id, new_status, doc_settings)
     if err then
         -- API failed - use queue fallback for offline mode
         -- Perform optimistic local update for immediate UX
-        EntryEntity.updateEntryStatus(entry_id, new_status, doc_settings)
+        EntryEntity.updateEntryStatus(
+            entry_id,
+            { new_status = new_status, doc_settings = doc_settings }
+        )
 
         -- Queue for later sync (determine original status from current metadata)
         local _metadata = EntryEntity.loadMetadata(entry_id)
@@ -640,7 +651,10 @@ function EntryService:changeEntryStatus(entry_id, new_status, doc_settings)
         return true -- Still successful from user perspective
     else
         -- API success - update local metadata using provided DocSettings if available
-        EntryEntity.updateEntryStatus(entry_id, new_status, doc_settings)
+        EntryEntity.updateEntryStatus(
+            entry_id,
+            { new_status = new_status, doc_settings = doc_settings }
+        )
 
         -- Remove from queue since server is now source of truth
         self:removeFromQueue(entry_id)
@@ -686,7 +700,8 @@ function EntryService:autoMarkAsRead(file_path, doc_settings)
     end
 
     -- Spawn update status to "read" with ReaderUI's DocSettings
-    local pid = self:spawnUpdateStatus(entry_id, 'read', doc_settings)
+    local pid =
+        self:spawnUpdateStatus(entry_id, { new_status = 'read', doc_settings = doc_settings })
     if pid then
     else
     end
@@ -718,11 +733,17 @@ function EntryService:showEndOfEntryDialog(entry_info)
     local mark_callback
     if EntryEntity.isEntryRead(entry_status) then
         mark_callback = function()
-            self:changeEntryStatus(entry_info.entry_id, 'unread', doc_settings)
+            self:changeEntryStatus(
+                entry_info.entry_id,
+                { new_status = 'unread', doc_settings = doc_settings }
+            )
         end
     else
         mark_callback = function()
-            self:changeEntryStatus(entry_info.entry_id, 'read', doc_settings)
+            self:changeEntryStatus(
+                entry_info.entry_id,
+                { new_status = 'read', doc_settings = doc_settings }
+            )
         end
     end
 
@@ -821,10 +842,12 @@ end
 
 ---Spawn update entry status with optimistic update and queue fallback
 ---@param entry_id number Entry ID to update
----@param new_status string New status ("read" or "unread')
----@param doc_settings? table Optional ReaderUI DocSettings instance
+---@param opts EntryStatusOptions Options for status update
 ---@return boolean success True if operation initiated successfully
-function EntryService:spawnUpdateStatus(entry_id, new_status, doc_settings)
+function EntryService:spawnUpdateStatus(entry_id, opts)
+    local new_status = opts.new_status
+    local doc_settings = opts.doc_settings
+
     -- Check if auto-mark feature is enabled
     if not self.settings.mark_as_read_on_open then
         return false
@@ -856,7 +879,10 @@ function EntryService:spawnUpdateStatus(entry_id, new_status, doc_settings)
         -- Online: Try direct API call first
 
         -- Step 1: Optimistic update (immediate UX)
-        local optimistic_success = EntryEntity.updateEntryStatus(entry_id, new_status, doc_settings)
+        local optimistic_success = EntryEntity.updateEntryStatus(
+            entry_id,
+            { new_status = new_status, doc_settings = doc_settings }
+        )
         if not optimistic_success then
             return false
         end
@@ -871,7 +897,10 @@ function EntryService:spawnUpdateStatus(entry_id, new_status, doc_settings)
         end
     else
         -- Offline: Do optimistic update only
-        local optimistic_success = EntryEntity.updateEntryStatus(entry_id, new_status, doc_settings)
+        local optimistic_success = EntryEntity.updateEntryStatus(
+            entry_id,
+            { new_status = new_status, doc_settings = doc_settings }
+        )
         if not optimistic_success then
             return false
         end

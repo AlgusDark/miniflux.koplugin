@@ -183,12 +183,17 @@ function EntryEntity.saveMetadata(params)
     return flush_result, nil
 end
 
+---@class EntryStatusOptions
+---@field new_status string New status ("read" or "unread")
+---@field doc_settings? table Optional ReaderUI DocSettings instance to use
+
 ---Update local entry status using DocSettings
 ---@param entry_id number Entry ID
----@param new_status string New status ("read" or "unread')
----@param doc_settings? table Optional ReaderUI DocSettings instance to use
----@return boolean success
-function EntryEntity.updateEntryStatus(entry_id, new_status, doc_settings)
+---@param opts EntryStatusOptions Options for status update
+---@return boolean success True if status update succeeded
+function EntryEntity.updateEntryStatus(entry_id, opts)
+    local new_status = opts.new_status
+    local doc_settings = opts.doc_settings
     local success = true
     local timestamp = os.date('%Y-%m-%d %H:%M:%S', os.time())
 

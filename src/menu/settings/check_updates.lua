@@ -145,8 +145,11 @@ function CheckUpdates.downloadAndInstall(update_info, progress_widget)
     end
 
     -- Download the update
-    local download_success, download_error =
-        UpdateService.downloadFile(update_info.download_url, zip_path, progress_callback)
+    local download_success, download_error = UpdateService.downloadFile({
+        url = update_info.download_url,
+        local_path = zip_path,
+        progress_callback = progress_callback,
+    })
 
     if not download_success then
         UIManager:close(progress_widget)

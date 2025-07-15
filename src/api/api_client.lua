@@ -58,11 +58,16 @@ function APIClient:new(config)
     return instance
 end
 
+---@class QueryParam
+---@field key string Parameter key
+---@field value string|number Parameter value
+
 ---Add a URL-encoded query parameter to the query parts array
 ---@param query_parts table Array to append the parameter to
----@param key string Parameter key
----@param value string|number Parameter value
-local function addQueryParam(query_parts, key, value)
+---@param query_param QueryParam Parameter to add
+local function addQueryParam(query_parts, query_param)
+    local key = query_param.key
+    local value = query_param.value
     local encoded_key = util.urlEncode(tostring(key))
     local encoded_value = util.urlEncode(tostring(value))
     table.insert(query_parts, encoded_key .. '=' .. encoded_value)
@@ -129,10 +134,10 @@ function APIClient:makeRequest(method, endpoint, config)
         for key, value in pairs(config.query) do
             if type(value) == 'table' then
                 for i, v in ipairs(value) do
-                    addQueryParam(query_parts, key, v)
+                    addQueryParam(query_parts, { key = key, value = v })
                 end
             else
-                addQueryParam(query_parts, key, value)
+                addQueryParam(query_parts, { key = key, value = value })
             end
         end
         url = url .. '?' .. table.concat(query_parts, '&')

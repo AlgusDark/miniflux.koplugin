@@ -668,7 +668,7 @@ function MinifluxBrowser:markSelectedAsRead(selected_items)
 
     if success then
         -- Update status in current item_table for immediate visual feedback
-        self:updateItemTableStatus(selected_items, 'read', item_type)
+        self:updateItemTableStatus(selected_items, { new_status = 'read', item_type = item_type })
 
         -- For feed/category operations, refresh data to show updated counts
         if item_type == 'feed' or item_type == 'category' then
@@ -707,7 +707,7 @@ function MinifluxBrowser:markSelectedAsUnread(selected_items)
 
     if success then
         -- Update status in current item_table for immediate visual feedback
-        self:updateItemTableStatus(selected_items, 'unread', item_type)
+        self:updateItemTableStatus(selected_items, { new_status = 'unread', item_type = item_type })
     end
 
     -- Clear selection and exit selection mode
@@ -864,11 +864,17 @@ function MinifluxBrowser:getEntryItemConfig()
     }
 end
 
+---@class ItemStatusOptions
+---@field new_status string New status ("read" or "unread")
+---@field item_type string Type of items ("entry", "feed", "category")
+
 ---Update item status in current item_table for immediate visual feedback
 ---@param selected_items table Array of selected item objects
----@param new_status string New status ("read" or "unread')
----@param item_type string Type of items ("entry", "feed", "category')
-function MinifluxBrowser:updateItemTableStatus(selected_items, new_status, item_type)
+---@param opts ItemStatusOptions Status update options
+function MinifluxBrowser:updateItemTableStatus(selected_items, opts)
+    local new_status = opts.new_status
+    local item_type = opts.item_type
+
     if not self.item_table then
         return
     end
