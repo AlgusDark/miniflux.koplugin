@@ -25,7 +25,7 @@ jobs:
       - name: Set up Lua
         uses: leafo/gh-actions-lua@v10
         with:
-          luaVersion: '5.1'
+          luaVersion: "5.1"
 
       - name: Set up LuaRocks
         uses: leafo/gh-actions-luarocks@v4
@@ -55,7 +55,7 @@ jobs:
 
       - name: Build release artifact
         run: |
-          task build-optimize
+          task build-optimized
           echo "=== Checking build output ==="
           ls -la
           ls -la dist/ || echo "dist directory not found"
@@ -72,17 +72,17 @@ jobs:
         run: |
           TAG_VERSION=${GITHUB_REF#refs/tags/v}
           META_VERSION="${{ steps.get_version.outputs.version }}"
-          
+
           echo "🏷️  Tag version: $TAG_VERSION"
           echo "📄 _meta.lua version: $META_VERSION"
-          
+
           if [ "$TAG_VERSION" != "$META_VERSION" ]; then
             echo "❌ Version mismatch!"
             echo "Tag version ($TAG_VERSION) does not match _meta.lua version ($META_VERSION)"
             echo "Please update src/_meta.lua or use the correct tag"
             exit 1
           fi
-          
+
           echo "✅ Version validation passed"
 
       - name: Upload release artifact
@@ -139,4 +139,3 @@ jobs:
           prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
