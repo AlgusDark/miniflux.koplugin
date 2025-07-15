@@ -347,11 +347,12 @@ local EntryWorkflow = {}
 
 ---Execute complete entry workflow with progress tracking (fire-and-forget)
 ---Downloads entry, creates files, and opens in reader with full user interaction support
----@param deps {entry_data: table, settings: table, browser?: table}
+---@param deps {entry_data: table, settings: table, browser?: table, context?: MinifluxContext}
 function EntryWorkflow.execute(deps)
     local entry_data = deps.entry_data
     local settings = deps.settings
     local browser = deps.browser
+    local browser_context = deps.context
 
     --[[
     TRAPPER WORKFLOW PATTERN EXPLANATION:
@@ -391,6 +392,7 @@ function EntryWorkflow.execute(deps)
                         browser:close()
                     end
                 end,
+                context = browser_context,
             })
             return -- Completed - fire and forget
         end
@@ -550,6 +552,7 @@ function EntryWorkflow.execute(deps)
                     browser:close() -- Close browser before opening reader
                 end
             end,
+            context = browser_context,
         })
 
         -- Reset phase to idle on completion (important for module-level state)

@@ -238,10 +238,8 @@ end
 ---@param entry_data table Entry data from API
 ---@param context? {type: "feed"|"category", id: number} Navigation context (nil = global)
 function MinifluxBrowser:openItem(entry_data, context)
-    -- Set browser context before opening entry (preserve all context fields)
-    self.miniflux_plugin:setBrowserContext(context or { type = 'global' })
-
-    self.entry_service:readEntry(entry_data, self)
+    -- Pass context directly to readEntry to flow through EntryWorkflow
+    self.entry_service:readEntry(entry_data, { browser = self, context = context })
 end
 
 ---Get Miniflux-specific route handlers (implements Browser:getRouteHandlers)

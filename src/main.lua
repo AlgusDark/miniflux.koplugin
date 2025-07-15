@@ -25,8 +25,6 @@ local KeyHandlerService = require('services/key_handler_service')
 local ReaderLinkService = require('services/readerlink_service')
 local UpdateSettings = require('menu/settings/update_settings')
 
-local _static_browser_context = nil
-
 ---@class Miniflux : WidgetContainer
 ---@field name string Plugin name identifier
 ---@field is_doc_only boolean Whether plugin is document-only
@@ -245,23 +243,6 @@ function Miniflux:onReaderReady(doc_settings)
         file_path = file_path,
         doc_settings = doc_settings, -- ReaderUI's cached DocSettings instance
     })
-end
-
--- =============================================================================
--- BROWSER CONTEXT MANAGEMENT
--- =============================================================================
-
----Set the browser context (called when browser opens entry)
----@param context {type: "feed"|"category"|"global"}|nil Browser context or nil
----@return nil
-function Miniflux:setBrowserContext(context)
-    _static_browser_context = context
-end
-
----Get the current browser context
----@return {type: "feed"|"category"|"global"}|nil Current context or nil
-function Miniflux:getBrowserContext()
-    return _static_browser_context
 end
 
 -- =============================================================================

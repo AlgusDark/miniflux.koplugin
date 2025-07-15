@@ -85,11 +85,14 @@ function Navigation.navigateToEntry(entry_info, config)
     local metadata = metadata_result.metadata
     local published_unix = metadata_result.published_unix
 
-    -- Get browser context from plugin
+    -- Get navigation context from ReaderUI.instance
     local context
-    if miniflux_plugin then
-        context = miniflux_plugin:getBrowserContext() or { type = 'global' }
+    local ReaderUI = require('apps/reader/readerui')
+    if ReaderUI.instance and ReaderUI.instance.miniflux_context then
+        -- Use context attached to current ReaderUI.instance
+        context = ReaderUI.instance.miniflux_context
     else
+        -- Default to global context if no specific context is attached
         context = { type = 'global' }
     end
 
@@ -117,7 +120,10 @@ function Navigation.navigateToEntry(entry_info, config)
 
             if target_entry_data then
                 -- Open the local entry using the same method as browser
-                entry_service:readEntry(target_entry_data, miniflux_plugin.browser)
+                entry_service:readEntry(target_entry_data, {
+                    browser = miniflux_plugin.browser,
+                    context = enhanced_context,
+                })
             else
                 local Notification = require('utils/notification')
                 Notification:error(_('Failed to open target entry'))
@@ -155,8 +161,14 @@ function Navigation.navigateToEntry(entry_info, config)
         local target_entry = result.entries[1]
 
         -- Try local file first, fallback to reading entry
-        if not Navigation.tryLocalFileFirst(entry_info, target_entry) then
-            entry_service:readEntry(target_entry)
+        if
+            not Navigation.tryLocalFileFirst({
+                entry_info = entry_info,
+                entry_data = target_entry,
+                context = context,
+            })
+        then
+            entry_service:readEntry(target_entry, { context = context })
         end
     else
         -- Handle different failure scenarios with appropriate messages
@@ -219,7 +231,7 @@ function Navigation.loadEntryMetadata(entry_info)
 end
 
 ---Build navigation options based on direction
----@param config {published_unix: number, direction: string, settings: table, context: table, metadata: table}
+---@param config {published_unix: number, direction: string, settings: table, context: MinifluxContext?, metadata: table}
 ---@return table|nil result, Error|nil error
 function Navigation.buildNavigationOptions(config)
     local published_unix = config.published_unix
@@ -260,11 +272,19 @@ function Navigation.buildNavigationOptions(config)
     return options, nil
 end
 
+---@class TryLocalFileOptions
+---@field entry_info table Current entry information
+---@field entry_data table Entry data from API
+---@field context? MinifluxContext Navigation context to preserve
+
 ---Try to open local file if it exists
----@param entry_info table Current entry information
----@param entry_data table Entry data from API
+---@param opts TryLocalFileOptions Options for local file attempt
 ---@return boolean success True if local file was opened
-function Navigation.tryLocalFileFirst(entry_info, entry_data)
+function Navigation.tryLocalFileFirst(opts)
+    local entry_info = opts.entry_info
+    local entry_data = opts.entry_data
+    local context = opts.context
+
     local entry_id = tostring(entry_data.id)
     local miniflux_dir = entry_info.file_path:match('(.*)/miniflux/')
 
@@ -274,7 +294,7 @@ function Navigation.tryLocalFileFirst(entry_info, entry_data)
 
         if lfs.attributes(html_file, 'mode') == 'file' then
             local Files = require('utils/files')
-            Files.openWithReader(html_file)
+            Files.openWithReader(html_file, { context = context })
             return true
         end
     end

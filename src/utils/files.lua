@@ -58,16 +58,29 @@ end
 -- READER INTEGRATION
 -- =============================================================================
 
+---@class OpenWithReaderCallbacks
+---@field before_open? function Callback executed before opening the file
+---@field on_ready? function Callback executed after ReaderUI is ready
+
+---@class MinifluxContext
+---@field type string Context type ("feed", "category", "global", "local")
+---@field id? number Feed or category ID
+---@field ordered_entries? table[] Ordered entries for navigation
+
+---@class OpenWithReaderOptions : OpenWithReaderCallbacks
+---@field context? MinifluxContext Optional navigation context to attach to ReaderUI.instance
+
 ---Open a file with ReaderUI and optional callbacks
 ---@param file_path string Path to the file to open
----@param callbacks? {before_open?: function, on_ready?: function} table Optional callbacks
+---@param opts? OpenWithReaderOptions Options including callbacks and context
 ---@return nil
-function Files.openWithReader(file_path, callbacks)
-    callbacks = callbacks or {}
+function Files.openWithReader(file_path, opts)
+    opts = opts or {}
+    local context = opts.context
 
     -- Execute pre-open callback if provided
-    if callbacks.before_open then
-        callbacks.before_open()
+    if opts.before_open then
+        opts.before_open()
     end
 
     -- Open the file
@@ -75,8 +88,16 @@ function Files.openWithReader(file_path, callbacks)
     ReaderUI:showReader(file_path)
 
     -- Register post-ready callback if provided and ReaderUI instance exists
-    if callbacks.on_ready and ReaderUI.instance then
-        ReaderUI.instance:registerPostReaderReadyCallback(callbacks.on_ready)
+    if ReaderUI.instance then
+        -- Attach navigation context to ReaderUI.instance if provided
+        if context then
+            ReaderUI.instance.miniflux_context = context
+        end
+
+        -- Register callbacks
+        if opts.on_ready then
+            ReaderUI.instance:registerPostReaderReadyCallback(opts.on_ready)
+        end
     end
 end
 

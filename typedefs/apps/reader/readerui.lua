@@ -34,6 +34,7 @@
 ---@field rolling table Rolling view module (for reflowable documents)
 ---@field paging table Paging view module (for fixed layout documents)
 ---@field doc_settings DocSettings Document settings for current file
+---@field miniflux_context? MinifluxContext Navigation context attached by Miniflux plugin
 local ReaderUI = {}
 
 ---Register a reader module with the UI
