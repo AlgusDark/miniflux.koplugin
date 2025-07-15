@@ -17,8 +17,7 @@ local MinifluxAPI = require('api/miniflux_api')
 local MinifluxSettings = require('settings/settings')
 local Menu = require('menu/menu')
 local EntryService = require('services/entry_service')
-local FeedService = require('services/feed_service')
-local CategoryService = require('services/category_service')
+local CollectionService = require('services/collection_service')
 local QueueService = require('services/queue_service')
 local EntryEntity = require('entities/entry_entity')
 local KeyHandlerService = require('services/key_handler_service')
@@ -33,8 +32,7 @@ local UpdateSettings = require('menu/settings/update_settings')
 ---@field api_client APIClient Generic API client instance
 ---@field miniflux_api MinifluxAPI Miniflux-specific API instance
 ---@field entry_service EntryService Entry service instance
----@field feed_service FeedService Feed service instance
----@field category_service CategoryService Category service instance
+---@field collection_service CollectionService Collection service instance
 ---@field queue_service QueueService Unified queue management service instance
 ---@field key_handler_service KeyHandlerService Key handler service instance
 ---@field readerlink_service ReaderLinkService ReaderLink enhancement service instance
@@ -81,13 +79,7 @@ function Miniflux:init()
         cache_service = self.cache_service,
     })
 
-    self.feed_service = FeedService:new({
-        cache_service = self.cache_service,
-        settings = self.settings,
-        miniflux_api = self.miniflux_api,
-    })
-
-    self.category_service = CategoryService:new({
+    self.collection_service = CollectionService:new({
         cache_service = self.cache_service,
         settings = self.settings,
         miniflux_api = self.miniflux_api,
@@ -177,8 +169,7 @@ function Miniflux:createBrowser()
         miniflux_api = self.miniflux_api,
         download_dir = self.download_dir,
         entry_service = self.entry_service,
-        feed_service = self.feed_service,
-        category_service = self.category_service,
+        collection_service = self.collection_service,
         cache_service = self.cache_service,
         miniflux_plugin = self, -- Pass plugin reference for context management
     })

@@ -96,6 +96,20 @@ tasks:
       - task: copy-files
       - task: verify
 
+  build-optimized:
+    desc: Build optimized release artifact (removes comments)
+    cmds:
+      - task: clean
+      - task: copy-files
+      - task: remove-comments
+      - task: verify
+
+  remove-comments:
+    desc: Remove comments from dist files to reduce size
+    cmds:
+      - lua scripts/remove-comments.lua dist/miniflux.koplugin
+      - echo "✅ Comments removed from dist files"
+
   clean:
     desc: Clean build directory
     cmds:

@@ -48,7 +48,7 @@ function CacheService:getFeeds(config)
     end
 
     local cache_key = 'feeds'
-    local cached_data, is_valid = self.cache:get(cache_key, { ttl = 300 })
+    local cached_data, is_valid = self.cache:get(cache_key, { ttl = self.settings.api_cache_ttl })
 
     if is_valid and cached_data then
         return cached_data.result, cached_data.error
@@ -60,7 +60,7 @@ function CacheService:getFeeds(config)
     -- Cache result (even errors to avoid repeated failures)
     self.cache:set(cache_key, {
         data = { result = feeds, error = err },
-        ttl = 300,
+        ttl = self.settings.api_cache_ttl,
     })
 
     return feeds, err
@@ -85,7 +85,8 @@ function CacheService:getFeedsWithCounters(config)
     end
 
     local cache_key = 'feeds_with_counters'
-    local cached_data, is_valid = self.cache:get(cache_key, { ttl = 60 })
+    local cached_data, is_valid =
+        self.cache:get(cache_key, { ttl = self.settings.api_cache_ttl_counters })
 
     if is_valid and cached_data then
         return cached_data.result, cached_data.error
@@ -106,7 +107,7 @@ function CacheService:getFeedsWithCounters(config)
 
     self.cache:set(cache_key, {
         data = { result = result, error = nil },
-        ttl = 60, -- Shorter TTL for counters
+        ttl = self.settings.api_cache_ttl_counters, -- Shorter TTL for counters
     })
 
     return result, nil
@@ -136,7 +137,8 @@ function CacheService:getCategories(config)
     end
 
     local cache_key = 'categories'
-    local cached_data, is_valid = self.cache:get(cache_key, { ttl = 120 })
+    local cached_data, is_valid =
+        self.cache:get(cache_key, { ttl = self.settings.api_cache_ttl_categories })
 
     if is_valid and cached_data then
         return cached_data.result, cached_data.error
@@ -147,7 +149,7 @@ function CacheService:getCategories(config)
 
     self.cache:set(cache_key, {
         data = { result = categories, error = err },
-        ttl = 120, -- 2 minutes TTL for categories
+        ttl = self.settings.api_cache_ttl_categories, -- 2 minutes TTL for categories
     })
 
     return categories, err
@@ -255,7 +257,7 @@ function CacheService:getUnreadCount(config)
     }
     local cache_key = self.miniflux_api:buildEntriesUrl(options) .. '_count'
 
-    local cached_data, is_valid = self.cache:get(cache_key, { ttl = 300 })
+    local cached_data, is_valid = self.cache:get(cache_key, { ttl = self.settings.api_cache_ttl })
     if is_valid then
         return cached_data, nil
     end
@@ -268,7 +270,7 @@ function CacheService:getUnreadCount(config)
     ---@cast result -nil
 
     local count = result.total or 0
-    self.cache:set(cache_key, { data = count, ttl = 300 })
+    self.cache:set(cache_key, { data = count, ttl = self.settings.api_cache_ttl })
 
     return count, nil
 end

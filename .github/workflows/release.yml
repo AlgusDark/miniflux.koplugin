@@ -55,7 +55,7 @@ jobs:
 
       - name: Build release artifact
         run: |
-          task build
+          task build-optimize
           echo "=== Checking build output ==="
           ls -la
           ls -la dist/ || echo "dist directory not found"

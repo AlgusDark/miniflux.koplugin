@@ -20,8 +20,7 @@ local EntriesView = require('browser/views/entries_view')
 ---@field miniflux_api MinifluxAPI Miniflux API
 ---@field download_dir string Download directory path
 ---@field entry_service EntryService Entry service instance
----@field feed_service FeedService Feed service instance
----@field category_service CategoryService Category service instance
+---@field collection_service CollectionService Collection service instance
 ---@field miniflux_plugin Miniflux Plugin instance for context management
 ---@field new fun(self: MinifluxBrowser, o: BrowserOptions): MinifluxBrowser Create new MinifluxBrowser instance
 local MinifluxBrowser = Browser:extend({})
@@ -35,8 +34,7 @@ function MinifluxBrowser:init()
     self.download_dir = self.download_dir
     self.miniflux_plugin = self.miniflux_plugin or error('miniflux_plugin required')
     self.entry_service = self.entry_service or error('entry_service required')
-    self.feed_service = self.feed_service or error('feed_service required')
-    self.category_service = self.category_service or error('category_service required')
+    self.collection_service = self.collection_service or error('collection_service required')
 
     -- Use cache service for all data access
     self.cache_service = self.cache_service or error('cache_service required')
@@ -397,13 +395,6 @@ function MinifluxBrowser:analyzeSelection(selected_items)
     return { has_local = has_local, has_remote = has_remote }
 end
 
----Check if any selected items are locally downloaded entries (legacy compatibility)
----@param selected_items table Array of selected item objects
----@return boolean True if at least one entry is locally downloaded
-function MinifluxBrowser:hasLocalEntries(selected_items)
-    return self:analyzeSelection(selected_items).has_local
-end
-
 ---Get selection actions available for RSS entries (implements Browser:getSelectionActions)
 ---@return table[] Array of action objects with text and callback properties
 function MinifluxBrowser:getSelectionActions()
@@ -628,7 +619,7 @@ function MinifluxBrowser:markSelectedAsRead(selected_items)
         success = false
         for i, item in ipairs(selected_items) do
             local feed_id = item.feed_data.id
-            local result = self.feed_service:markAsRead(feed_id)
+            local result = self.collection_service:markFeedAsRead(feed_id)
             if result then
                 success = true -- At least one succeeded, keep as true even if others fail
             end
@@ -638,7 +629,7 @@ function MinifluxBrowser:markSelectedAsRead(selected_items)
         success = false
         for i, item in ipairs(selected_items) do
             local category_id = item.category_data.id
-            local result = self.category_service:markAsRead(category_id)
+            local result = self.collection_service:markCategoryAsRead(category_id)
             if result then
                 success = true -- At least one succeeded, keep as true even if others fail
             end

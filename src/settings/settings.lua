@@ -14,7 +14,9 @@ local DEFAULTS = {
 
     -- API Cache settings
     api_cache_enabled = true,
-    api_cache_ttl = 300, -- 5 minutes in seconds
+    api_cache_ttl = 300, -- 5 minutes in seconds (default for feeds, counts)
+    api_cache_ttl_counters = 60, -- 1 minute for counters (more volatile)
+    api_cache_ttl_categories = 120, -- 2 minutes for categories (intermediate)
 
     -- Proxy Image Downloader settings
     proxy_image_downloader_enabled = false,
@@ -43,6 +45,8 @@ local DEFAULTS = {
 ---@field mark_as_read_on_open boolean Whether to automatically mark entries as read when opened
 ---@field api_cache_enabled boolean Whether API response caching is enabled
 ---@field api_cache_ttl number API cache TTL in seconds
+---@field api_cache_ttl_counters number API cache TTL for counters in seconds
+---@field api_cache_ttl_categories number API cache TTL for categories in seconds
 ---@field proxy_image_downloader_enabled boolean Whether proxy image downloader is enabled
 ---@field proxy_image_downloader_url string Proxy URL for image downloads
 ---@field proxy_image_downloader_token string Proxy API token for authentication
