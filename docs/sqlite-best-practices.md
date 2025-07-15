@@ -85,18 +85,48 @@ while stmt:step() == 101 do -- SQLITE_ROW
 end
 ```
 
-### 5. Use Prepared Statements Only When Necessary
+### 5. Consider `bindkv()` for Named Parameters
+
+If you do use prepared statements, consider `bindkv()` over `bind()` for better clarity:
+
+**✅ RECOMMENDED - Use bindkv() with named parameters:**
+```lua
+-- More readable and less error-prone
+local stmt = db:prepare('INSERT INTO entries (id, title, url) VALUES (:id, :title, :url)')
+stmt:bindkv({
+    id = entry.id,
+    title = entry.title,
+    url = entry.url
+})
+stmt:step()
+```
+
+**❌ AVOID - Positional bind() calls:**
+```lua
+-- Harder to maintain and prone to position errors
+local stmt = db:prepare('INSERT INTO entries (id, title, url) VALUES (?, ?, ?)')
+stmt:bind(1, entry.id)
+stmt:bind(2, entry.title)  -- May still be treated as nil!
+stmt:bind(3, entry.url)    -- May still be treated as nil!
+stmt:step()
+```
+
+**Note:** Even with `bindkv()`, the underlying string binding issues in lua-ljsqlite3 may persist. If you encounter "NOT NULL constraint" errors, fall back to `db:exec()` with proper escaping.
+
+### 6. Use Prepared Statements Only When Necessary
 
 Prepared statements work well for:
+- Repeated queries in loops where performance matters
 - Simple parameterized queries without complex data types
 - Queries where you're certain all values are non-nil
 
 But prefer `db:exec()` or `rowexec()` for:
-- INSERT operations with nullable columns
+- INSERT operations with nullable columns or string values
 - Queries returning single values
+- One-off queries where prepared statement overhead isn't worth it
 - Complex queries with mixed data types
 
-### 5. Database File Location
+### 7. Database File Location
 
 ```lua
 -- Always use DataStorage for database paths
@@ -105,7 +135,7 @@ local db_path = DataStorage:getSettingsDir() .. '/your_plugin.db'
 -- This resolves to: ~/.config/koreader/settings/your_plugin.db
 ```
 
-### 6. Database Initialization Pattern
+### 8. Database Initialization Pattern
 
 ```lua
 -- Set pragmas immediately after opening
@@ -156,8 +186,86 @@ local sql = string.format(
 db:exec(sql)
 ```
 
+## Available SQLite API Functions in KOReader
+
+Based on lua-ljsqlite3, these are the SQLite functions available in KOReader:
+
+### Database Connection Methods
+- `SQ3.open(path, mode)` - Open a database connection
+- `db:close()` - Close the database connection
+- `db:set_busy_timeout(ms)` - Set busy timeout in milliseconds
+- `db:prepare(sql)` - Prepare a SQL statement for execution
+- `db:exec(sql)` - Execute SQL commands (no result returned)
+- `db:execsql(sql)` - Execute SQL and return results as table
+- `db:rowexec(sql)` - Execute query expecting single row/value result
+
+### Prepared Statement Methods
+- `stmt:reset()` - Reset statement for reuse
+- `stmt:close()` - Close and free statement
+- `stmt:step()` - Execute statement step (returns SQLITE_ROW=101 or SQLITE_DONE=100)
+- `stmt:bind(index, value)` - Bind parameter by position (1-indexed)
+- `stmt:bindkv(table)` - Bind parameters by key-value table
+- `stmt:clearbind()` - Clear all parameter bindings
+- `stmt:resultset()` - Fetch all result rows as table
+- `stmt:rows()` - Iterator for result rows (use with caution)
+- `stmt:get_value(index)` - Get column value by index (0-indexed)
+
+### Utility Functions
+- `SQ3.blob(data)` - Create a blob object for binary data
+- `SQ3.trim(str)` - Trim whitespace from strings
+
+### Functions NOT Available
+Notable functions that are NOT exposed in KOReader's SQLite binding:
+- `bind_values()` - Must use individual `bind()` calls
+- `get_names()` - Cannot get column names directly
+- `get_types()` - Cannot get column types
+- Transaction control must be done via `exec()` with BEGIN/COMMIT/ROLLBACK
+
+## Should You Create a Wrapper?
+
+For most KOReader plugins, creating a wrapper is **overkill**. The best practices above handle the quirks adequately. However, consider a minimal utility module if you:
+
+1. Have many database operations across multiple files
+2. Need consistent error handling and logging
+3. Want to abstract the escape_sql pattern
+
+A minimal utility approach:
+
+```lua
+-- utils/sqlite_helper.lua
+local SQ3 = require('lua-ljsqlite3/init')
+
+local SqliteHelper = {}
+
+function SqliteHelper.escape_sql(str)
+    if str == nil then
+        return "NULL"
+    else
+        return "'" .. tostring(str):gsub("'", "''") .. "'"
+    end
+end
+
+function SqliteHelper.exec_formatted(db, sql, ...)
+    local args = {...}
+    local escaped_args = {}
+    for i, arg in ipairs(args) do
+        if type(arg) == "number" then
+            escaped_args[i] = tostring(arg)
+        else
+            escaped_args[i] = SqliteHelper.escape_sql(arg)
+        end
+    end
+    return db:exec(string.format(sql, unpack(escaped_args)))
+end
+
+return SqliteHelper
+```
+
+But for simple plugins, inline SQL formatting with proper escaping is perfectly fine and more transparent.
+
 ## References
 
 - KOReader's newsdownloader.koplugin uses similar patterns
 - The offline_first.md documentation shows rowexec() usage
 - Device:canUseWAL() pattern from coverbrowser plugin
+- lua-ljsqlite3 source: https://github.com/koreader/koreader-base/blob/master/thirdparty/lua-ljsqlite3/init.lua
