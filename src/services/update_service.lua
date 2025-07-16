@@ -17,37 +17,16 @@ local RELEASES_URL = GITHUB_API_BASE .. '/repos/' .. REPO_OWNER .. '/' .. REPO_N
 -- User agent for GitHub API (required)
 local USER_AGENT = 'KOReader-Miniflux-Plugin/1.0'
 
----Get current plugin version from _meta.lua
+---Get current plugin version from plugin instance
+---@param plugin_instance? table The Miniflux plugin instance (optional)
 ---@return string Current version
-function UpdateService.getCurrentVersion()
-    logger.info('[Miniflux:UpdateService] Attempting to get current version from _meta.lua')
-
-    local meta = nil
-    local success, err = pcall(function()
-        meta = require('_meta')
-    end)
-
-    if not success then
-        logger.warn('[Miniflux:UpdateService] Failed to require _meta.lua:', err)
-        logger.info('[Miniflux:UpdateService] Using fallback version: 0.0.1')
-        return '0.0.1'
+function UpdateService.getCurrentVersion(plugin_instance)
+    if plugin_instance and plugin_instance.version then
+        return plugin_instance.version
     end
 
-    if not meta then
-        logger.warn('[Miniflux:UpdateService] _meta.lua returned nil')
-        logger.info('[Miniflux:UpdateService] Using fallback version: 0.0.1')
-        return '0.0.1'
-    end
-
-    local version = meta.version
-    if not version then
-        logger.warn('[Miniflux:UpdateService] _meta.lua has no version field')
-        logger.info('[Miniflux:UpdateService] Using fallback version: 0.0.1')
-        return '0.0.1'
-    end
-
-    logger.info('[Miniflux:UpdateService] Found version in _meta.lua:', version)
-    return version
+    logger.warn('[Miniflux:UpdateService] Plugin instance or version not available, using fallback')
+    return '0.0.1'
 end
 
 ---Parse semantic version string into comparable numbers
@@ -213,8 +192,9 @@ function UpdateService.filterReleases(releases, include_beta)
 end
 
 ---Check for latest release on GitHub
+---@param plugin_instance? table The Miniflux plugin instance (optional)
 ---@return table|nil release_info, string|nil error
-function UpdateService.checkForUpdates()
+function UpdateService.checkForUpdates(plugin_instance)
     logger.info('[Miniflux:UpdateService] Starting update check process')
     logger.info('[Miniflux:UpdateService] Target repository:', REPO_OWNER .. '/' .. REPO_NAME)
 
@@ -253,17 +233,19 @@ function UpdateService.checkForUpdates()
     -- Get the latest release (first in filtered list, GitHub returns newest first)
     local latest_release = filtered_releases[1]
 
-    logger.info('[Miniflux:UpdateService] Getting current version...')
-    local current_version = UpdateService.getCurrentVersion()
+    local current_version = UpdateService.getCurrentVersion(plugin_instance)
     local latest_version = latest_release.tag_name
 
-    logger.info('[Miniflux:UpdateService] Version comparison:')
-    logger.info('[Miniflux:UpdateService]   Current version:', current_version)
-    logger.info('[Miniflux:UpdateService]   Latest version:', latest_version)
-    logger.info('[Miniflux:UpdateService]   Latest is prerelease:', latest_release.prerelease)
-
     local has_update = UpdateService.isNewerVersion(current_version, latest_version)
-    logger.info('[Miniflux:UpdateService] Update available:', has_update)
+    logger.info(
+        '[Miniflux:UpdateService] Version check:',
+        current_version,
+        '->',
+        latest_version,
+        '(update available:',
+        has_update,
+        ')'
+    )
 
     local update_info = {
         current_version = current_version,
@@ -307,16 +289,6 @@ function UpdateService.checkForUpdates()
         logger.warn('[Miniflux:UpdateService] Update available but no download URL found')
         return nil, _('Update available but download not found')
     end
-
-    logger.info('[Miniflux:UpdateService] Update check completed successfully')
-    logger.info('[Miniflux:UpdateService] Summary:')
-    logger.info('[Miniflux:UpdateService]   Current version:', current_version)
-    logger.info('[Miniflux:UpdateService]   Latest version:', latest_version)
-    logger.info('[Miniflux:UpdateService]   Update available:', tostring(update_info.has_update))
-    logger.info(
-        '[Miniflux:UpdateService]   Download available:',
-        tostring(update_info.download_url ~= nil)
-    )
 
     return update_info, nil
 end
@@ -402,22 +374,9 @@ end
 ---Get plugin directory path
 ---@return string Plugin directory path
 function UpdateService.getPluginPath()
-    -- KOReader plugins are typically in koreader/plugins/pluginname.koplugin
-    local plugin_path = debug.getinfo(1, 'S').source:match('@(.*/)')
-    if plugin_path then
-        -- Remove /src/ from the path to get plugin root
-        plugin_path = plugin_path:gsub('/src/$', '')
-        return plugin_path
-    end
-
-    -- Fallback: try to determine from current working directory
-    local cwd = lfs.currentdir()
-    if cwd and cwd:match('miniflux%.koplugin') then
-        return cwd
-    end
-
-    -- Last resort fallback
-    return '/tmp/miniflux.koplugin'
+    -- Use KOReader's standard plugin location
+    local DataStorage = require('datastorage')
+    return DataStorage:getFullDataDir() .. '/plugins/miniflux.koplugin'
 end
 
 ---Create backup of current plugin

@@ -251,9 +251,12 @@ function CheckUpdates.downloadAndInstall(update_info)
 end
 
 ---Check for updates and show result
----@param show_no_update boolean Whether to show message when no update is available
----@param settings? MinifluxSettings Optional settings instance to mark check as performed
-function CheckUpdates.checkForUpdates(show_no_update, settings)
+---@param options table Options table with show_no_update, settings, and plugin_instance
+function CheckUpdates.checkForUpdates(options)
+    local show_no_update = options.show_no_update
+    local settings = options.settings
+    local plugin_instance = options.plugin_instance
+
     if show_no_update == nil then
         show_no_update = true
     end
@@ -264,7 +267,7 @@ function CheckUpdates.checkForUpdates(show_no_update, settings)
         checking_notification = Notification:info(_('Checking for updates...'), { timeout = 2 })
     end
 
-    local update_info, error = UpdateService.checkForUpdates()
+    local update_info, error = UpdateService.checkForUpdates(plugin_instance)
 
     -- Mark check as performed if settings provided (for automatic checks)
     if settings then
@@ -286,8 +289,9 @@ function CheckUpdates.checkForUpdates(show_no_update, settings)
 end
 
 ---Get menu item for checking updates
+---@param plugin table The Miniflux plugin instance
 ---@return table Menu item configuration
-function CheckUpdates.getMenuItem()
+function CheckUpdates.getMenuItem(plugin)
     return {
         text = _('Check for Updates'),
         callback = function()
@@ -297,11 +301,17 @@ function CheckUpdates.getMenuItem()
             if not NetworkMgr:isOnline() then
                 -- Show Wi-Fi prompt instead of attempting update check
                 NetworkMgr:runWhenOnline(function()
-                    CheckUpdates.checkForUpdates(true)
+                    CheckUpdates.checkForUpdates({
+                        show_no_update = true,
+                        plugin_instance = plugin,
+                    })
                 end)
             else
                 -- Network is available, proceed with update check
-                CheckUpdates.checkForUpdates(true)
+                CheckUpdates.checkForUpdates({
+                    show_no_update = true,
+                    plugin_instance = plugin,
+                })
             end
         end,
     }
