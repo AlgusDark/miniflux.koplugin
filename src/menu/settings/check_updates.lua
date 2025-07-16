@@ -292,7 +292,18 @@ function CheckUpdates.getMenuItem()
     return {
         text = _('Check for Updates'),
         callback = function()
-            CheckUpdates.checkForUpdates(true)
+            local NetworkMgr = require('ui/network/manager')
+
+            -- Check network status first
+            if not NetworkMgr:isOnline() then
+                -- Show Wi-Fi prompt instead of attempting update check
+                NetworkMgr:runWhenOnline(function()
+                    CheckUpdates.checkForUpdates(true)
+                end)
+            else
+                -- Network is available, proceed with update check
+                CheckUpdates.checkForUpdates(true)
+            end
         end,
     }
 end
