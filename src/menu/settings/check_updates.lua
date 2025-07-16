@@ -253,26 +253,37 @@ end
 
 ---Check for updates and show result
 ---@param show_no_update boolean Whether to show message when no update is available
-function CheckUpdates.checkForUpdates(show_no_update)
+---@param settings? MinifluxSettings Optional settings instance to mark check as performed
+function CheckUpdates.checkForUpdates(show_no_update, settings)
     if show_no_update == nil then
         show_no_update = true
     end
 
-    -- Show checking message
-    local checking_notification = Notification:info(_('Checking for updates...'), { timeout = 2 })
+    -- Show checking message only for manual checks
+    local checking_notification
+    if show_no_update then
+        checking_notification = Notification:info(_('Checking for updates...'), { timeout = 2 })
+    end
 
-    UIManager:nextTick(function()
-        local update_info, error = UpdateService.checkForUpdates()
+    local update_info, error = UpdateService.checkForUpdates()
 
-        if error then
+    -- Mark check as performed if settings provided (for automatic checks)
+    if settings then
+        local UpdateSettings = require('menu/settings/update_settings')
+        UpdateSettings.markUpdateCheckPerformed(settings)
+    end
+
+    if error then
+        -- Only show error notification for manual checks
+        if show_no_update then
             Notification:error(_('Update check failed: ') .. error)
-            return
         end
+        return
+    end
 
-        if update_info and (update_info.has_update or show_no_update) then
-            CheckUpdates.showUpdateDialog(update_info)
-        end
-    end)
+    if update_info and (update_info.has_update or show_no_update) then
+        CheckUpdates.showUpdateDialog(update_info)
+    end
 end
 
 ---Get menu item for checking updates

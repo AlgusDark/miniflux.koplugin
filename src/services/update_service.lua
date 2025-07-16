@@ -4,6 +4,7 @@ local json = require('json')
 local lfs = require('libs/libkoreader-lfs')
 local _ = require('gettext')
 local logger = require('logger')
+local NetworkMgr = require('ui/network/manager')
 
 local UpdateService = {}
 
@@ -20,16 +21,6 @@ local RELEASES_URL = GITHUB_API_BASE
 
 -- User agent for GitHub API (required)
 local USER_AGENT = 'KOReader-Miniflux-Plugin/1.0'
-
----Check if network is available
----@return boolean
-function UpdateService.isNetworkAvailable()
-    local success, _ = pcall(function()
-        local response = http.request('http://httpbin.org/get')
-        return response ~= nil
-    end)
-    return success
-end
 
 ---Get current plugin version from _meta.lua
 ---@return string Current version
@@ -108,7 +99,7 @@ function UpdateService.makeGitHubRequest(url)
     logger.info('[Miniflux:UpdateService] Using User-Agent:', USER_AGENT)
     logger.info('[Miniflux:UpdateService] Repository:', REPO_OWNER .. '/' .. REPO_NAME)
 
-    if not UpdateService.isNetworkAvailable() then
+    if not NetworkMgr:isOnline() then
         logger.warn('[Miniflux:UpdateService] Network not available')
         return nil, _('Network not available')
     end
