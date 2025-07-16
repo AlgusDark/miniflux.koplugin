@@ -60,11 +60,19 @@ jobs:
           ls -la
           ls -la dist/ || echo "dist directory not found"
           ls -la dist/miniflux.koplugin/ || echo "miniflux.koplugin directory not found"
+          
+      - name: Create ZIP package
+        run: |
+          cd dist
+          zip -r miniflux.koplugin.zip miniflux.koplugin/
+          ls -la miniflux.koplugin.zip
+          echo "=== ZIP contents preview ==="
+          unzip -l miniflux.koplugin.zip | head -20
 
       - name: Get version from _meta.lua
         id: get_version
         run: |
-          VERSION=$(grep -E "version = ['\"]([^'\"]*)['\"]" src/_meta.lua | sed -E "s/version = ['\"]([^'\"]*)['\"].*/\1/")
+          VERSION=$(grep -E "version = ['\"]([^'\"]*)['\"]" src/_meta.lua | sed -E "s/version = ['\"]([^'\"]*)['\"].*/\1/" | tr -d ' ')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Validate tag matches version
