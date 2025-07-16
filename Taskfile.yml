@@ -1,12 +1,131 @@
-version: '3'
+version: "3"
 
 tasks:
+  # Code Quality Tasks
+  fmt:
+    desc: Format Lua code with StyLua
+    cmds:
+      - stylua --check src/
+      - echo "✅ Code formatting is correct"
+    silent: false
+
+  fmt-fix:
+    desc: Auto-fix Lua code formatting with StyLua
+    cmds:
+      - stylua src/
+      - echo "✅ Code formatted successfully"
+
+  lint:
+    desc: Run luacheck static analysis
+    cmds:
+      - luacheck src/
+      - echo "✅ No linting issues found"
+
+  lsp-check:
+    desc: Run lua-language-server diagnostics on entire workspace (like Neovim does)
+    cmds:
+      - lua-language-server --check=. --checklevel=Warning --configpath=.luarc.json
+      - echo "✅ No LSP diagnostics found"
+
+  check:
+    desc: Run all code quality checks (format + lint + lsp)
+    deps:
+      - fmt
+      - lint
+      - lsp-check
+    cmds:
+      - echo "✅ All code quality checks passed"
+
+  pre-commit:
+    desc: Run quality checks only on staged/changed files (for pre-commit hooks)
+    cmds:
+      - task: pre-commit-fmt
+      - task: pre-commit-lint
+      - task: pre-commit-lsp
+      - echo "✅ Pre-commit checks passed"
+
+  pre-commit-fmt:
+    desc: Check formatting only on staged files
+    silent: true
+    cmds:
+      - |
+        STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.lua$' || true)
+        if [ -n "$STAGED_FILES" ]; then
+          echo "📝 Checking formatting for staged files..."
+          echo "$STAGED_FILES" | xargs stylua --check
+          echo "✅ Staged files formatting is correct"
+        else
+          echo "ℹ️  No staged Lua files to check"
+        fi
+
+  pre-commit-lint:
+    desc: Run luacheck only on staged files
+    silent: true
+    cmds:
+      - |
+        STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.lua$' || true)
+        if [ -n "$STAGED_FILES" ]; then
+          echo "🔍 Linting staged files..."
+          echo "$STAGED_FILES" | xargs luacheck
+          echo "✅ Staged files passed linting"
+        else
+          echo "ℹ️  No staged Lua files to lint"
+        fi
+
+  pre-commit-lsp:
+    desc: Run LSP check (always checks entire workspace)
+    silent: true
+    cmds:
+      - |
+        STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.lua$' || true)
+        if [ -n "$STAGED_FILES" ]; then
+          echo "⚠️  Skipping LSP diagnostics in pre-commit (checks entire workspace)"
+          echo "   Run 'task lsp-check' manually to check with language server"
+        else
+          echo "ℹ️  No staged Lua files, skipping LSP check"
+        fi
+
+  pre-commit-fix:
+    desc: Auto-fix formatting on staged files and re-stage them
+    silent: true
+    cmds:
+      - |
+        STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.lua$' || true)
+        if [ -n "$STAGED_FILES" ]; then
+          echo "📝 Auto-fixing formatting for staged files..."
+          echo "$STAGED_FILES" | xargs stylua
+          echo "$STAGED_FILES" | xargs git add
+          echo "✅ Formatting fixed and files re-staged"
+        else
+          echo "ℹ️  No staged Lua files to fix"
+        fi
+
+  fix:
+    desc: Auto-fix all fixable issues
+    deps:
+      - fmt-fix
+    cmds:
+      - echo "✅ Auto-fixes applied"
   build:
     desc: Build release artifact
     cmds:
       - task: clean
       - task: copy-files
       - task: verify
+
+  build-optimized:
+    desc: Build optimized release artifact (removes comments)
+    cmds:
+      - task: clean
+      - task: copy-files
+      - task: remove-comments
+      - task: verify
+
+  remove-comments:
+    desc: Remove comments from dist files to reduce size
+    cmds:
+      - lua scripts/remove-comments.lua dist/miniflux.koplugin
+      - echo "✅ Comments removed from dist files"
 
   clean:
     desc: Clean build directory
@@ -15,18 +134,10 @@ tasks:
       - mkdir -p dist
 
   copy-files:
-    desc: Copy plugin files excluding development files
+    desc: Copy all files from src/ to build directory
     cmds:
-      - |
-        rsync -av \
-          --exclude='.git' \
-          --exclude='.github' \
-          --exclude='.gitignore' \
-          --exclude='typedefs' \
-          --exclude='scripts' \
-          --exclude='Taskfile.yml' \
-          --exclude='dist' \
-          . dist/miniflux.koplugin/
+      - mkdir -p dist/miniflux.koplugin
+      - cp -r src/* dist/miniflux.koplugin/
 
   verify:
     desc: Verify release artifact contents
@@ -34,21 +145,257 @@ tasks:
       - echo "=== Release artifact contents ==="
       - find dist -type f | sort
 
-  package:
-    desc: Create zip package (for local testing)
-    deps:
-      - build
+  # Release Task
+  release:
+    desc: "Create a release (usage: task release version=patch|minor|major [dry_run=true])"
+    silent: true
     cmds:
-      - cd dist && zip -r miniflux.koplugin.zip miniflux.koplugin/
-      - echo "Package created at dist/miniflux.koplugin.zip"
+      - task: _release-validate
+        vars:
+          version: "{{.version}}"
+          dry_run: "{{.dry_run}}"
+      - |
+        if [ "{{.dry_run}}" != "true" ]; then
+          echo "🔄 Running quality checks..."
+        fi
+      - |
+        if [ "{{.dry_run}}" != "true" ]; then
+          task check
+        fi
+      - task: _release-execute
+        vars:
+          version: "{{.version}}"
+          dry_run: "{{.dry_run}}"
 
-  test-build:
-    desc: Test build locally and extract to verify
-    deps:
-      - package
+  _release-validate:
+    internal: true
+    silent: true
     cmds:
-      - rm -rf test-extract
-      - mkdir test-extract
-      - cd test-extract && unzip ../dist/miniflux.koplugin.zip
-      - echo "=== Extracted files ==="
-      - find test-extract -type f | sort
+      - |
+        # Validate required parameters
+        if [ -z "{{.version}}" ]; then
+          echo "❌ Missing required parameter: version"
+          echo ""
+          echo "Usage:"
+          echo "  task release version=patch      # 0.1.0 → 0.1.1"
+          echo "  task release version=minor      # 0.1.0 → 0.2.0"
+          echo "  task release version=major      # 0.1.0 → 1.0.0"
+          echo "  task release version=1.5.3      # 0.1.0 → 1.5.3 (explicit)"
+          echo ""
+          echo "Options:"
+          echo "  dry_run=true                    # Preview without executing"
+          echo ""
+          echo "Examples:"
+          echo "  task release version=patch"
+          echo "  task release version=minor dry_run=true"
+          exit 1
+        fi
+        
+        # Check if version is semantic (patch/minor/major) or explicit (x.y.z)
+        if [[ "{{.version}}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          # Explicit version provided
+          EXPLICIT_VERSION="{{.version}}"
+          VERSION_TYPE="explicit"
+        else
+          # Validate semantic version parameter
+          case "{{.version}}" in
+            patch|minor|major)
+              VERSION_TYPE="semantic"
+              ;;
+            *)
+              echo "❌ Invalid version parameter: {{.version}}"
+              echo "Valid options: patch, minor, major, or explicit version (e.g., 1.2.3)"
+              exit 1
+              ;;
+          esac
+        fi
+        
+        # Get current version from _meta.lua
+        CURRENT=$(grep -o "version = '[^']*'" src/_meta.lua | sed "s/version = '\(.*\)'/\1/")
+        echo "📍 Current version: $CURRENT"
+        
+        # Calculate new version
+        if [ "$VERSION_TYPE" = "explicit" ]; then
+          NEW_VERSION="$EXPLICIT_VERSION"
+        else
+          # Parse version parts for semantic bumping
+          IFS='.' read -r major minor patch <<< "$CURRENT"
+          
+          # Calculate new version based on bump type
+          case "{{.version}}" in
+            major)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
+            minor)
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            patch)
+              patch=$((patch + 1))
+              ;;
+          esac
+          
+          NEW_VERSION="$major.$minor.$patch"
+        fi
+        
+        # Show what will happen
+        echo ""
+        echo "🚀 {{.version}} release: $CURRENT → $NEW_VERSION"
+        echo ""
+        # Get current branch for display
+        CURRENT_BRANCH=$(git branch --show-current)
+        echo "This will:"
+        echo "  • Run all quality checks (lint, format, LSP)"
+        echo "  • Create release branch: release/v$NEW_VERSION"
+        echo "  • Update src/_meta.lua version to $NEW_VERSION"
+        echo "  • Create commit: 'chore: bump version to $NEW_VERSION'"
+        echo "  • Push release branch and create PR to dev"
+        echo "  • When PR is merged, GitHub Actions will create release"
+        echo ""
+        
+        # Handle dry run
+        if [ "{{.dry_run}}" = "true" ]; then
+          echo "🔍 DRY RUN - No changes will be made"
+          echo ""
+          echo "To execute for real: task release version={{.version}}"
+          exit 0
+        fi
+        
+        # Confirmation prompt
+        printf "Are you sure you want to create this release? [y/N]: "
+        read -r confirm
+        case "$confirm" in
+          [yY]|[yY][eE][sS])
+            echo "✅ Proceeding with release..."
+            ;;
+          *)
+            echo "❌ Release cancelled"
+            exit 1
+            ;;
+        esac
+
+  _release-execute:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        if [ "{{.dry_run}}" = "true" ]; then
+          exit 0
+        fi
+        
+        # Calculate new version (same logic as validation)
+        if [[ "{{.version}}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          NEW_VERSION="{{.version}}"
+        else
+          # Get current version and bump semantically
+          CURRENT=$(grep -o "version = '[^']*'" src/_meta.lua | sed "s/version = '\(.*\)'/\1/")
+          IFS='.' read -r major minor patch <<< "$CURRENT"
+          
+          case "{{.version}}" in
+            major)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
+            minor)
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            patch)
+              patch=$((patch + 1))
+              ;;
+          esac
+          
+          NEW_VERSION="$major.$minor.$patch"
+        fi
+        
+        # Create release branch
+        RELEASE_BRANCH="release/v$NEW_VERSION"
+        echo "🌿 Creating release branch: $RELEASE_BRANCH"
+        git checkout -b "$RELEASE_BRANCH"
+        
+        # Update _meta.lua
+        echo "📝 Updating src/_meta.lua to $NEW_VERSION..."
+        sed -i.bak "s/version = '[^']*'/version = '$NEW_VERSION'/" src/_meta.lua
+        rm -f src/_meta.lua.bak
+        
+        # Commit changes
+        echo "📝 Creating commit..."
+        git add src/_meta.lua
+        git commit -m "chore: bump version to $NEW_VERSION"
+        
+        # Push release branch
+        echo "📤 Pushing release branch: $RELEASE_BRANCH"
+        git push -u origin "$RELEASE_BRANCH"
+        
+        # Create PR using GitHub CLI
+        echo "🔄 Creating Pull Request..."
+        gh pr create \
+          --title "Release v$NEW_VERSION" \
+          --body "Automated version bump to $NEW_VERSION from release task. Ready for release to dev branch." \
+          --base dev \
+          --head "$RELEASE_BRANCH"
+        
+        echo ""
+        echo "✅ Release PR created successfully!"
+        echo "📝 Version updated to: $NEW_VERSION"
+        echo "🌿 Branch: $RELEASE_BRANCH"
+        echo "🔄 Pull Request created to dev branch"
+        echo "🔗 Check: https://github.com/$(git config --get remote.origin.url | sed 's/.*github.com[:/]\([^.]*\).*/\1/')/pulls"
+
+  release-undo:
+    desc: "Undo the last release (before pushing to remote)"
+    silent: true
+    cmds:
+      - |
+        echo "🔍 Checking for unpushed release commits..."
+        
+        # Check if there are any unpushed commits
+        UNPUSHED=$(git log origin/main..HEAD --oneline | grep "chore: bump version to" | head -1)
+        if [ -z "$UNPUSHED" ]; then
+          echo "❌ No unpushed version bump commits found"
+          echo "This command only works if you haven't pushed the release yet"
+          exit 1
+        fi
+        
+        # Extract version from the commit message
+        VERSION=$(echo "$UNPUSHED" | sed 's/.*chore: bump version to \([0-9.]*\).*/\1/')
+        TAG="v$VERSION"
+        
+        echo "📍 Found unpushed release: $TAG"
+        echo "Commit: $UNPUSHED"
+        echo ""
+        echo "This will:"
+        echo "  • Delete local tag: $TAG"
+        echo "  • Reset commit: Remove version bump commit"
+        echo "  • Restore _meta.lua to previous version"
+        echo ""
+        printf "Are you sure you want to undo this release? [y/N]: "
+        read -r confirm
+        case "$confirm" in
+          [yY]|[yY][eE][sS])
+            echo "✅ Undoing release..."
+            ;;
+          *)
+            echo "❌ Undo cancelled"
+            exit 1
+            ;;
+        esac
+        
+        # Delete the local tag if it exists
+        if git tag | grep -q "^$TAG$"; then
+          echo "🏷️  Deleting local tag: $TAG"
+          git tag -d "$TAG"
+        fi
+        
+        # Reset the last commit (the version bump)
+        echo "⏪ Resetting version bump commit"
+        git reset --hard HEAD~1
+        
+        echo ""
+        echo "✅ Release $TAG has been undone!"
+        echo "📝 Your _meta.lua has been restored to the previous version"
+        echo "💡 You can now make corrections and create a new release"
+

@@ -1,20 +1,53 @@
 {
-  "$schema": "https://raw.githubusercontent.com/sumneko/vscode-lua/master/setting/schema.json",
+  "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
   "workspace": {
-    "library": [
-      "./typedefs"
-    ],
-    "checkThirdParty": false
+    "library": ["./typedefs", "./src"],
+    "checkThirdParty": true,
+    "ignoreSubmodules": true
   },
   "completion": {
-    "requireSeparator": "/"
+    "requireSeparator": "/",
+    "callSnippet": "Both"
   },
   "diagnostics": {
+    "unusedLocalExclude": ["_*"],
     "globals": [
-      "require"
-    ]
+      "require",
+      "_",
+      "UIManager",
+      "BookList",
+      "WidgetContainer",
+      "InfoMessage",
+      "ButtonDialog",
+      "ConfirmBox",
+      "DataStorage",
+      "LuaSettings",
+      "CacheSQLite",
+      "DocSettings",
+      "Dispatcher",
+      "FFIUtil",
+      "util",
+      "lfs",
+      "logger",
+      "dbg",
+      "htmlparser"
+    ],
+    "disable": ["undefined-global", "lowercase-global"]
   },
   "runtime": {
-    "version": "Lua 5.1"
+    "version": "Lua 5.1",
+    "path": ["?.lua", "?/init.lua", "src/?.lua", "src/?/init.lua"]
+  },
+  "format": {
+    "enable": false
+  },
+  "hint": {
+    "enable": true,
+    "paramType": true,
+    "setType": true
+  },
+  "telemetry": {
+    "enable": false
   }
-} 
+}
+

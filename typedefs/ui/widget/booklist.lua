@@ -86,6 +86,10 @@
 ---@field search_mode boolean Whether in search mode
 ---@field search_string string Search query
 ---@field sort_by string Current sort field
+---@field page number Current page number
+---@field perpage number Items per page
+---@field itemnumber number Current selected item number
+---@field item_table table[] Current items being displayed
 local BookList = {}
 
 ---Available collation methods for sorting books
