@@ -358,7 +358,11 @@ function Miniflux:checkForAutomaticUpdates()
     end
 
     local CheckUpdates = require('menu/settings/check_updates')
-    CheckUpdates.checkForUpdates(false, self.settings) -- Don't show "no update" dialog, pass settings to mark check as performed
+    CheckUpdates.checkForUpdates({
+        show_no_update = false,
+        settings = self.settings,
+        plugin_instance = self,
+    })
 end
 
 ---Handle widget close event - ensure proper cleanup

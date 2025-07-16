@@ -1,7 +1,8 @@
 local UIManager = require('ui/uimanager')
 local ConfirmBox = require('ui/widget/confirmbox')
 local Notification = require('utils/notification')
-local ProgressWidget = require('ui/widget/progresswidget')
+local InfoMessage = require('ui/widget/infomessage')
+local Trapper = require('ui/trapper')
 local util = require('util')
 local lfs = require('libs/libkoreader-lfs')
 local _ = require('gettext')
@@ -91,31 +92,28 @@ function CheckUpdates.performUpdate(update_info)
         return
     end
 
-    -- Show progress dialog
-    local progress_widget = ProgressWidget:new({
-        title = _('Downloading Update'),
-        text = string.format(_('Downloading %s...'), update_info.latest_version),
-        percentage = 0,
-        width = math.floor(UIManager.screen:getWidth() * 0.8),
-        height = math.floor(UIManager.screen:getHeight() * 0.3),
-    })
-    UIManager:show(progress_widget)
-
-    -- Download in background
-    UIManager:nextTick(function()
-        CheckUpdates.downloadAndInstall(update_info, progress_widget)
+    -- Use Trapper to handle progress updates
+    Trapper:wrap(function()
+        CheckUpdates.downloadAndInstall(update_info)
     end)
 end
 
 ---Download and install the update
 ---@param update_info table Update information
----@param progress_widget ProgressWidget Progress dialog to update
-function CheckUpdates.downloadAndInstall(update_info, progress_widget)
+function CheckUpdates.downloadAndInstall(update_info)
     local temp_dir = '/tmp/miniflux_update'
     local zip_path = temp_dir .. '/update.zip'
 
     -- Create temp directory
     os.execute('mkdir -p "' .. temp_dir .. '"')
+
+    -- Show initial progress
+    local initial_message = string.format(_('Downloading %s...'), update_info.latest_version)
+    if not Trapper:info(initial_message) then
+        -- User dismissed, cancel update
+        os.execute('rm -rf "' .. temp_dir .. '"')
+        return
+    end
 
     -- Track download progress
     local downloaded_bytes = 0
@@ -125,17 +123,15 @@ function CheckUpdates.downloadAndInstall(update_info, progress_widget)
         downloaded_bytes = downloaded_bytes + chunk_size
         local percentage = math.min(math.floor((downloaded_bytes / total_bytes) * 100), 100)
 
-        UIManager:nextTick(function()
-            progress_widget:setPercentage(percentage)
-            progress_widget:setText(
-                string.format(
-                    _('Downloaded %d%% (%s / %s)'),
-                    percentage,
-                    util.getFriendlySize(downloaded_bytes),
-                    util.getFriendlySize(total_bytes)
-                )
-            )
-        end)
+        local progress_message = string.format(
+            _('Downloaded %d%% (%s / %s)'),
+            percentage,
+            util.getFriendlySize(downloaded_bytes),
+            util.getFriendlySize(total_bytes)
+        )
+
+        -- Update progress, skip dismiss check for frequent updates
+        Trapper:info(progress_message, true, true)
     end
 
     -- Download the update
@@ -146,22 +142,23 @@ function CheckUpdates.downloadAndInstall(update_info, progress_widget)
     })
 
     if not download_success then
-        UIManager:close(progress_widget)
+        Trapper:clear()
         Notification:error(_('Download failed: ') .. (download_error or _('Unknown error')))
         os.execute('rm -rf "' .. temp_dir .. '"')
         return
     end
 
     -- Update progress for extraction
-    UIManager:nextTick(function()
-        progress_widget:setPercentage(100)
-        progress_widget:setText(_('Extracting update...'))
-    end)
+    if not Trapper:info(_('Extracting update...')) then
+        -- User dismissed, cancel update
+        os.execute('rm -rf "' .. temp_dir .. '"')
+        return
+    end
 
     -- Create backup before installation
     local backup_path, backup_error = UpdateService.createBackup()
     if not backup_path then
-        UIManager:close(progress_widget)
+        Trapper:clear()
         Notification:error(_('Backup failed: ') .. (backup_error or _('Unknown error')))
         os.execute('rm -rf "' .. temp_dir .. '"')
         return
@@ -170,7 +167,7 @@ function CheckUpdates.downloadAndInstall(update_info, progress_widget)
     -- Extract to temp directory
     local extract_success, extract_error = UpdateService.extractZip(zip_path, temp_dir)
     if not extract_success then
-        UIManager:close(progress_widget)
+        Trapper:clear()
         Notification:error(_('Extraction failed: ') .. (extract_error or _('Unknown error')))
         os.execute('rm -rf "' .. temp_dir .. '"')
         return
@@ -189,16 +186,18 @@ function CheckUpdates.downloadAndInstall(update_info, progress_widget)
     end
 
     if not lfs.attributes(plugin_dir, 'mode') then
-        UIManager:close(progress_widget)
+        Trapper:clear()
         Notification:error(_('Invalid update package: plugin directory not found'))
         os.execute('rm -rf "' .. temp_dir .. '"')
         return
     end
 
     -- Install the update
-    UIManager:nextTick(function()
-        progress_widget:setText(_('Installing update...'))
-    end)
+    if not Trapper:info(_('Installing update...')) then
+        -- User dismissed, cancel update
+        os.execute('rm -rf "' .. temp_dir .. '"')
+        return
+    end
 
     local plugin_path = UpdateService.getPluginPath()
     local install_cmd =
@@ -208,7 +207,7 @@ function CheckUpdates.downloadAndInstall(update_info, progress_widget)
     if install_result ~= 0 then
         -- Installation failed, restore backup
         local restore_success = UpdateService.restoreBackup(backup_path)
-        UIManager:close(progress_widget)
+        Trapper:clear()
 
         if restore_success then
             Notification:error(_('Installation failed. Plugin restored to previous version.'))
@@ -225,9 +224,9 @@ function CheckUpdates.downloadAndInstall(update_info, progress_widget)
 
     -- Clean up
     os.execute('rm -rf "' .. temp_dir .. '"')
-    os.execute('rm -rf "' .. backup_path .. '"')
+    UpdateService.cleanupBackup(backup_path)
 
-    UIManager:close(progress_widget)
+    Trapper:clear()
 
     -- Show success message and prompt for restart
     UIManager:show(ConfirmBox:new({
@@ -252,9 +251,12 @@ function CheckUpdates.downloadAndInstall(update_info, progress_widget)
 end
 
 ---Check for updates and show result
----@param show_no_update boolean Whether to show message when no update is available
----@param settings? MinifluxSettings Optional settings instance to mark check as performed
-function CheckUpdates.checkForUpdates(show_no_update, settings)
+---@param options table Options table with show_no_update, settings, and plugin_instance
+function CheckUpdates.checkForUpdates(options)
+    local show_no_update = options.show_no_update
+    local settings = options.settings
+    local plugin_instance = options.plugin_instance
+
     if show_no_update == nil then
         show_no_update = true
     end
@@ -265,7 +267,7 @@ function CheckUpdates.checkForUpdates(show_no_update, settings)
         checking_notification = Notification:info(_('Checking for updates...'), { timeout = 2 })
     end
 
-    local update_info, error = UpdateService.checkForUpdates()
+    local update_info, error = UpdateService.checkForUpdates(plugin_instance)
 
     -- Mark check as performed if settings provided (for automatic checks)
     if settings then
@@ -287,8 +289,9 @@ function CheckUpdates.checkForUpdates(show_no_update, settings)
 end
 
 ---Get menu item for checking updates
+---@param plugin table The Miniflux plugin instance
 ---@return table Menu item configuration
-function CheckUpdates.getMenuItem()
+function CheckUpdates.getMenuItem(plugin)
     return {
         text = _('Check for Updates'),
         callback = function()
@@ -298,11 +301,17 @@ function CheckUpdates.getMenuItem()
             if not NetworkMgr:isOnline() then
                 -- Show Wi-Fi prompt instead of attempting update check
                 NetworkMgr:runWhenOnline(function()
-                    CheckUpdates.checkForUpdates(true)
+                    CheckUpdates.checkForUpdates({
+                        show_no_update = true,
+                        plugin_instance = plugin,
+                    })
                 end)
             else
                 -- Network is available, proceed with update check
-                CheckUpdates.checkForUpdates(true)
+                CheckUpdates.checkForUpdates({
+                    show_no_update = true,
+                    plugin_instance = plugin,
+                })
             end
         end,
     }
