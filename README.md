@@ -101,6 +101,71 @@ Browse your Miniflux server content directly from KOReader:
 - **NavigationService**: Context-aware entry navigation
 - **Files Utilities**: File operations and storage management
 
+## Development
+
+### Nix Development Environment (Recommended)
+
+This project provides a complete Nix flake for reproducible development:
+
+```bash
+# With direnv (automatic)
+direnv allow
+
+# Manual activation  
+nix develop
+
+# Available tools: lua, luacheck, stylua, busted, task, git
+```
+
+### Manual Setup
+
+If not using Nix, install these tools manually:
+
+```bash
+# Install tools
+cargo install stylua
+luarocks install luacheck
+luarocks install busted
+```
+
+### Code Quality Tools
+
+- **StyLua**: Code formatter (single quotes, 4 spaces, 100 chars)
+- **Luacheck**: Static analysis and linting  
+- **LuaLS**: Type checking with LuaCATS annotations
+- **Busted**: Testing framework (when tests are added)
+
+### Quick Commands
+
+```bash
+# Check code quality
+task check
+
+# Auto-fix formatting
+task fmt-fix
+
+# Set up git hooks
+.githooks/setup.sh
+
+# Build plugin
+task build
+```
+
+### Pre-commit Hooks
+
+Git hooks automatically run code quality checks before commits. To enable:
+
+```bash
+.githooks/setup.sh
+```
+
+### Code Style
+
+- **Indentation**: 4 spaces
+- **Line length**: 100 characters  
+- **Quotes**: Single quotes preferred
+- **Comments**: LuaCATS type annotations required for public APIs
+
 ## Contributing
 
 Contributions are welcome! Please feel free to:
@@ -108,6 +173,8 @@ Contributions are welcome! Please feel free to:
 - Submit pull requests for improvements
 - Help with testing on different devices
 - Contribute to documentation
+
+**Before submitting**: Run `task check` to ensure code quality standards.
 
 ## License
 
