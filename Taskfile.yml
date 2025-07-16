@@ -248,11 +248,11 @@ tasks:
         CURRENT_BRANCH=$(git branch --show-current)
         echo "This will:"
         echo "  • Run all quality checks (lint, format, LSP)"
+        echo "  • Create release branch: release/v$NEW_VERSION"
         echo "  • Update src/_meta.lua version to $NEW_VERSION"
         echo "  • Create commit: 'chore: bump version to $NEW_VERSION'"
-        echo "  • Create and push tag: v$NEW_VERSION"
-        echo "  • Push to current branch: $CURRENT_BRANCH"
-        echo "  • Trigger GitHub Actions automated release"
+        echo "  • Push release branch and create PR to dev"
+        echo "  • When PR is merged, GitHub Actions will create release"
         echo ""
         
         # Handle dry run
@@ -311,30 +311,39 @@ tasks:
           NEW_VERSION="$major.$minor.$patch"
         fi
         
+        # Create release branch
+        RELEASE_BRANCH="release/v$NEW_VERSION"
+        echo "🌿 Creating release branch: $RELEASE_BRANCH"
+        git checkout -b "$RELEASE_BRANCH"
+        
         # Update _meta.lua
         echo "📝 Updating src/_meta.lua to $NEW_VERSION..."
         sed -i.bak "s/version = '[^']*'/version = '$NEW_VERSION'/" src/_meta.lua
         rm -f src/_meta.lua.bak
         
-        # Commit and tag
+        # Commit changes
         echo "📝 Creating commit..."
         git add src/_meta.lua
         git commit -m "chore: bump version to $NEW_VERSION"
         
-        echo "🏷️  Creating and pushing tag v$NEW_VERSION..."
-        git tag "v$NEW_VERSION"
+        # Push release branch
+        echo "📤 Pushing release branch: $RELEASE_BRANCH"
+        git push -u origin "$RELEASE_BRANCH"
         
-        # Push to current branch instead of hardcoding main
-        CURRENT_BRANCH=$(git branch --show-current)
-        echo "📤 Pushing to branch: $CURRENT_BRANCH"
-        git push origin "$CURRENT_BRANCH"
-        git push origin "v$NEW_VERSION"
+        # Create PR using GitHub CLI
+        echo "🔄 Creating Pull Request..."
+        gh pr create \
+          --title "Release v$NEW_VERSION" \
+          --body "Automated version bump to $NEW_VERSION from release task. Ready for release to dev branch." \
+          --base dev \
+          --head "$RELEASE_BRANCH"
         
         echo ""
-        echo "✅ Release v$NEW_VERSION created successfully!"
-        echo "📤 Pushed to branch: $CURRENT_BRANCH"
-        echo "🚀 GitHub Actions will create the release automatically"
-        echo "🔗 Check: https://github.com/$(git config --get remote.origin.url | sed 's/.*github.com[:/]\([^.]*\).*/\1/')/actions"
+        echo "✅ Release PR created successfully!"
+        echo "📝 Version updated to: $NEW_VERSION"
+        echo "🌿 Branch: $RELEASE_BRANCH"
+        echo "🔄 Pull Request created to dev branch"
+        echo "🔗 Check: https://github.com/$(git config --get remote.origin.url | sed 's/.*github.com[:/]\([^.]*\).*/\1/')/pulls"
 
   release-undo:
     desc: "Undo the last release (before pushing to remote)"
