@@ -357,12 +357,8 @@ function Miniflux:checkForAutomaticUpdates()
         return
     end
 
-    -- Perform automatic update check in background
-    UIManager:nextTick(function()
-        local CheckUpdates = require('menu/settings/check_updates')
-        CheckUpdates.checkForUpdates(false) -- Don't show "no update" dialog for automatic checks
-        UpdateSettings.markUpdateCheckPerformed(self.settings)
-    end)
+    local CheckUpdates = require('menu/settings/check_updates')
+    CheckUpdates.checkForUpdates(false, self.settings) -- Don't show "no update" dialog, pass settings to mark check as performed
 end
 
 ---Handle widget close event - ensure proper cleanup
