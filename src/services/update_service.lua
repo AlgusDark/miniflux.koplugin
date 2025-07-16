@@ -12,12 +12,7 @@ local UpdateService = {}
 local GITHUB_API_BASE = 'https://api.github.com'
 local REPO_OWNER = 'AlgusDark' -- Update this to match your GitHub username
 local REPO_NAME = 'miniflux.koplugin'
-local RELEASES_URL = GITHUB_API_BASE
-    .. '/repos/'
-    .. REPO_OWNER
-    .. '/'
-    .. REPO_NAME
-    .. '/releases/latest'
+local RELEASES_URL = GITHUB_API_BASE .. '/repos/' .. REPO_OWNER .. '/' .. REPO_NAME .. '/releases'
 
 -- User agent for GitHub API (required)
 local USER_AGENT = 'KOReader-Miniflux-Plugin/1.0'
@@ -56,17 +51,24 @@ function UpdateService.getCurrentVersion()
 end
 
 ---Parse semantic version string into comparable numbers
----@param version string Version string like "1.2.3"
----@return table {major, minor, patch}
+---@param version string Version string like "1.2.3" or "1.2.3-dev"
+---@return table {major, minor, patch, is_prerelease}
 function UpdateService.parseVersion(version)
     -- Remove 'v' prefix if present
     local clean_version = version:gsub('^v', '')
 
-    local major, minor, patch = clean_version:match('(%d+)%.(%d+)%.(%d+)')
+    -- Check for pre-release suffix (e.g., "-dev", "-beta", "-alpha")
+    local is_prerelease = clean_version:match('%-') ~= nil
+
+    -- Extract base version (remove suffix)
+    local base_version = clean_version:gsub('%-.*$', '')
+
+    local major, minor, patch = base_version:match('(%d+)%.(%d+)%.(%d+)')
     return {
         major = tonumber(major) or 0,
         minor = tonumber(minor) or 0,
         patch = tonumber(patch) or 0,
+        is_prerelease = is_prerelease,
     }
 end
 
@@ -78,13 +80,23 @@ function UpdateService.isNewerVersion(current, latest)
     local current_parts = UpdateService.parseVersion(current)
     local latest_parts = UpdateService.parseVersion(latest)
 
+    -- Compare major.minor.patch first
     if latest_parts.major > current_parts.major then
         return true
     elseif latest_parts.major == current_parts.major then
         if latest_parts.minor > current_parts.minor then
             return true
         elseif latest_parts.minor == current_parts.minor then
-            return latest_parts.patch > current_parts.patch
+            if latest_parts.patch > current_parts.patch then
+                return true
+            elseif latest_parts.patch == current_parts.patch then
+                -- Same base version: stable > pre-release
+                if current_parts.is_prerelease and not latest_parts.is_prerelease then
+                    return true -- stable version is newer than pre-release
+                end
+                -- Pre-release to pre-release or stable to stable: no update
+                return false
+            end
         end
     end
 
@@ -173,34 +185,82 @@ function UpdateService.makeGitHubRequest(url)
     return parsed_json, nil
 end
 
+---Filter releases based on beta setting
+---@param releases table Array of release objects from GitHub API
+---@param include_beta boolean Whether to include pre-releases
+---@return table Filtered releases array
+function UpdateService.filterReleases(releases, include_beta)
+    if include_beta then
+        logger.info('[Miniflux:UpdateService] Including beta releases in filter')
+        return releases -- Include all releases
+    else
+        logger.info('[Miniflux:UpdateService] Excluding beta releases from filter')
+        local stable_releases = {}
+        for _, release in ipairs(releases) do
+            if not release.prerelease then
+                table.insert(stable_releases, release)
+            end
+        end
+        logger.info(
+            '[Miniflux:UpdateService] Found',
+            #stable_releases,
+            'stable releases out of',
+            #releases,
+            'total'
+        )
+        return stable_releases
+    end
+end
+
 ---Check for latest release on GitHub
 ---@return table|nil release_info, string|nil error
 function UpdateService.checkForUpdates()
     logger.info('[Miniflux:UpdateService] Starting update check process')
     logger.info('[Miniflux:UpdateService] Target repository:', REPO_OWNER .. '/' .. REPO_NAME)
 
-    local release_data, error = UpdateService.makeGitHubRequest(RELEASES_URL)
+    local releases_data, error = UpdateService.makeGitHubRequest(RELEASES_URL)
     if error then
         logger.warn('[Miniflux:UpdateService] GitHub API request failed:', error)
         return nil, error
     end
 
-    if not release_data or not release_data.tag_name then
-        logger.warn('[Miniflux:UpdateService] Invalid release data from GitHub')
-        logger.warn('[Miniflux:UpdateService] release_data is nil:', release_data == nil)
-        if release_data then
-            logger.warn('[Miniflux:UpdateService] Missing tag_name field in release data')
+    if not releases_data or type(releases_data) ~= 'table' or #releases_data == 0 then
+        logger.warn('[Miniflux:UpdateService] Invalid releases data from GitHub')
+        logger.warn('[Miniflux:UpdateService] releases_data is nil:', releases_data == nil)
+        if releases_data then
+            logger.warn('[Miniflux:UpdateService] releases_data type:', type(releases_data))
+            logger.warn('[Miniflux:UpdateService] releases_data length:', #releases_data)
         end
-        return nil, _('Invalid release information from GitHub')
+        return nil, _('No releases found on GitHub')
     end
+
+    logger.info('[Miniflux:UpdateService] Found', #releases_data, 'total releases')
+
+    -- Get beta setting from settings
+    local Settings = require('settings/settings')
+    local settings = Settings:new()
+    local include_beta = settings.auto_update_include_beta
+    logger.info('[Miniflux:UpdateService] Include beta releases:', include_beta)
+
+    -- Filter releases based on beta setting
+    local filtered_releases = UpdateService.filterReleases(releases_data, include_beta)
+
+    if #filtered_releases == 0 then
+        logger.warn('[Miniflux:UpdateService] No suitable releases found after filtering')
+        return nil, _('No suitable releases found')
+    end
+
+    -- Get the latest release (first in filtered list, GitHub returns newest first)
+    local latest_release = filtered_releases[1]
 
     logger.info('[Miniflux:UpdateService] Getting current version...')
     local current_version = UpdateService.getCurrentVersion()
-    local latest_version = release_data.tag_name
+    local latest_version = latest_release.tag_name
 
     logger.info('[Miniflux:UpdateService] Version comparison:')
     logger.info('[Miniflux:UpdateService]   Current version:', current_version)
     logger.info('[Miniflux:UpdateService]   Latest version:', latest_version)
+    logger.info('[Miniflux:UpdateService]   Latest is prerelease:', latest_release.prerelease)
 
     local has_update = UpdateService.isNewerVersion(current_version, latest_version)
     logger.info('[Miniflux:UpdateService] Update available:', has_update)
@@ -209,9 +269,9 @@ function UpdateService.checkForUpdates()
         current_version = current_version,
         latest_version = latest_version,
         has_update = has_update,
-        release_name = release_data.name or latest_version,
-        release_notes = release_data.body or _('No release notes available'),
-        published_at = release_data.published_at,
+        release_name = latest_release.name or latest_version,
+        release_notes = latest_release.body or _('No release notes available'),
+        published_at = latest_release.published_at,
         download_url = nil,
         download_size = nil,
     }
@@ -222,9 +282,9 @@ function UpdateService.checkForUpdates()
 
     -- Find the plugin ZIP file in assets
     logger.info('[Miniflux:UpdateService] Looking for download assets...')
-    if release_data.assets then
-        logger.info('[Miniflux:UpdateService] Found', #release_data.assets, 'assets')
-        for i, asset in ipairs(release_data.assets) do
+    if latest_release.assets then
+        logger.info('[Miniflux:UpdateService] Found', #latest_release.assets, 'assets')
+        for i, asset in ipairs(latest_release.assets) do
             logger.info('[Miniflux:UpdateService] Asset', i .. ':', asset.name or 'unnamed')
             if asset.name and asset.name:match('%.koplugin%.zip$') then
                 logger.info('[Miniflux:UpdateService] Found plugin ZIP:', asset.name)

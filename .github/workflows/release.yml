@@ -64,7 +64,7 @@ jobs:
       - name: Get version from _meta.lua
         id: get_version
         run: |
-          VERSION=$(grep -o 'version = "[^"]*"' src/_meta.lua | sed 's/version = "\(.*\)"/\1/')
+          VERSION=$(grep -E "version = ['\"]([^'\"]*)['\"]" src/_meta.lua | sed -E "s/version = ['\"]([^'\"]*)['\"].*/\1/")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Validate tag matches version
