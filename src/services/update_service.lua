@@ -424,10 +424,17 @@ end
 ---@return string|nil backup_path, string|nil error
 function UpdateService.createBackup()
     local plugin_path = UpdateService.getPluginPath()
-    local backup_path = plugin_path .. '.backup'
 
-    -- Remove existing backup
-    os.execute('rm -rf "' .. backup_path .. '"')
+    -- Use KOReader's cache directory for backups with timestamp
+    local DataStorage = require('datastorage')
+    local cache_dir = DataStorage:getDataDir() .. '/cache'
+    local backup_path = cache_dir .. '/miniflux_plugin_backup'
+
+    -- Create cache directory if it doesn't exist
+    lfs.mkdir(cache_dir)
+
+    -- Clean up old backups (keep system clean)
+    UpdateService.cleanupOldBackups()
 
     -- Create new backup
     local cp_cmd = string.format('cp -r "%s" "%s"', plugin_path, backup_path)
@@ -438,6 +445,19 @@ function UpdateService.createBackup()
     end
 
     return backup_path, nil
+end
+
+---Clean up old backup files to prevent cache bloat
+function UpdateService.cleanupOldBackups()
+    local DataStorage = require('datastorage')
+    local cache_dir = DataStorage:getDataDir() .. '/cache'
+
+    -- Remove existing backup (only keep one at a time)
+    local backup_path = cache_dir .. '/miniflux_plugin_backup'
+    os.execute('rm -rf "' .. backup_path .. '"')
+
+    -- Clean up any old timestamped backups (from previous versions)
+    os.execute('rm -rf "' .. cache_dir .. '/miniflux_plugin_backup_*"')
 end
 
 ---Restore from backup
@@ -458,6 +478,14 @@ function UpdateService.restoreBackup(backup_path)
     end
 
     return true, nil
+end
+
+---Clean up backup after successful update
+---@param backup_path string Path to backup directory to remove
+function UpdateService.cleanupBackup(backup_path)
+    if backup_path and backup_path ~= '' then
+        os.execute('rm -rf "' .. backup_path .. '"')
+    end
 end
 
 return UpdateService
