@@ -65,7 +65,7 @@ function Menu.build(plugin)
                     CopyCss.getMenuItem(plugin),
 
                     -- === UPDATE SETTINGS ===
-                    UpdateSettings.getMenuItem(plugin.settings),
+                    UpdateSettings.getMenuItem(plugin),
 
                     -- === DEBUG ===
                     ExportLogs.getMenuItem(),

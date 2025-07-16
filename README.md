@@ -151,6 +151,42 @@ task fmt-fix
 task build
 ```
 
+### Development Setup with KOReader
+
+For development testing, create a symlink to the built plugin:
+
+#### macOS
+```bash
+# Build the plugin first
+task build
+
+# Create symlink to KOReader plugins directory
+ln -s /path/to/miniflux.koplugin/dist/miniflux.koplugin ~/.config/koreader/plugins/miniflux.koplugin
+
+# Run KOReader with debug logging
+/System/Volumes/Data/Applications/KOReader.app/Contents/MacOS/koreader -d
+
+# Filter logs for Miniflux-specific messages
+/System/Volumes/Data/Applications/KOReader.app/Contents/MacOS/koreader -d 2>&1 | grep -E "Miniflux"
+```
+
+#### Linux
+```bash
+# Build the plugin first
+task build
+
+# Create symlink to KOReader plugins directory
+ln -s /path/to/miniflux.koplugin/dist/miniflux.koplugin ~/.config/koreader/plugins/miniflux.koplugin
+
+# Run KOReader with debug logging
+koreader -d
+
+# Filter logs for Miniflux-specific messages
+koreader -d 2>&1 | grep -E "Miniflux"
+```
+
+**Note**: Always use the `dist/miniflux.koplugin` directory for the symlink as it contains the built plugin with the correct flat structure.
+
 ### Pre-commit Hooks
 
 Git hooks automatically run code quality checks before commits. To enable:
