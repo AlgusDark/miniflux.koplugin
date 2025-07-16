@@ -70,27 +70,29 @@ function UpdateSettings.showFrequencyDialog(settings, callback)
 end
 
 ---Get the menu item for update settings configuration
----@param settings MinifluxSettings Settings instance
+---@param plugin table The Miniflux plugin instance
 ---@return table Menu item configuration
-function UpdateSettings.getMenuItem(settings)
+function UpdateSettings.getMenuItem(plugin)
     return {
         text = _('Updates'),
         keep_menu_open = true,
         sub_item_table_func = function()
-            return UpdateSettings.getSubMenu(settings)
+            return UpdateSettings.getSubMenu(plugin)
         end,
     }
 end
 
 ---Get update settings submenu items
----@param settings MinifluxSettings Settings instance
+---@param plugin table The Miniflux plugin instance
 ---@return table[] Update settings menu items
-function UpdateSettings.getSubMenu(settings)
+function UpdateSettings.getSubMenu(plugin)
     local CheckUpdates = require('menu/settings/check_updates')
+
+    local settings = plugin.settings
 
     return {
         -- Check for updates action
-        CheckUpdates.getMenuItem(),
+        CheckUpdates.getMenuItem(plugin),
 
         -- Enable auto-update toggle
         {

@@ -7,4 +7,3 @@ return {
     version = '0.0.4',
     author = 'Algus Dark',
 }
--- another test
