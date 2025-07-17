@@ -1,105 +1,80 @@
 # Miniflux Plugin for KOReader
 
-A comprehensive RSS reader plugin that integrates Miniflux with KOReader, allowing you to read RSS entries offline on your e-reader device.
+A KOReader plugin allows you to read RSS entries online/offline on your e-reader device.
 
 ## Features
 
 Browse your Miniflux server content directly from KOReader:
-- **Offline Reading**: Download entries with images for offline access
-- **Context-Aware Navigation**: Navigate between entries with intelligent next/previous
-- **Feed Management**: Browse feeds, categories, and entries
-- **Status Synchronization**: Mark entries as read/unread with server sync
-- **E-ink Optimized**: Efficient image downloading and display for e-readers
+
+- **Online/Offline Reading**: Browse feeds, categories, and entries online or offline. You can download entries individually or in batch.
+- **Context-Aware Navigation**: Navigate between entries with next/previous actions after finishing reading an entry.
+- **Status Synchronization**: Mark entries as read/unread. Don't worry if you aren't online, the system will keep an eye on it and you can sync it later or the system will remind you when you go online again.
+- **E-ink Optimized**: Efficient image downloading and display for e-readers. You can proxy the images to be transformed for e-ink optimization so you can resize them to fit your reader.
 
 ## Installation
 
-1. Download the plugin files to your KOReader plugins directory
-2. Enable the plugin in KOReader's Plugin Manager
-3. Configure your Miniflux server settings
+1. Download the [latest release from this repository](https://github.com/AlgusDark/miniflux.koplugin/releases/latest)
+2. Unzip and copy the **miniflux.koplugin** folder into KOReader's plugin folder
+3. Activate the plugin
 
 ## Usage
 
-1. **Setup**: Configure your Miniflux server URL and credentials in plugin settings
-2. **Browse**: Access feeds, categories, and entries from the plugin menu
-3. **Download**: Select entries to download for offline reading
-4. **Read**: Open downloaded entries with full offline access
-5. **Sync**: Status changes sync automatically with your Miniflux server
+1. **Setup**: Configure your Miniflux server URL and credentials in the settings
+2. **Browse**: Access feeds, categories, and entries from the "read entries" menu
+3. **Read**: Select an entry and it will start downloading it. The entry will be opened after successfully downloaded.
+4. **Download**: Tap hold an entry to enter into selection mode and batch download entries.
+5. **Sync**: Status changes sync automatically with your Miniflux server. If in offline mode, it will queue the status for the next time you are online.
 
 ## Development Status
 
-### ✅ Core Features (Completed)
+### ✅ Core Features
+
 - [x] **Feed and Category Browsing**
   - [x] List all feeds and categories from Miniflux server
-  - [x] Navigate feed hierarchies and category organization
+  - [x] Navigate feed and category organization
 - [x] **Entry Management**
-  - [x] Browse entries by feed, category, or global unread
+  - [x] Browse entries by feed, category, or unreads
   - [x] Download entries with text and images for offline reading
   - [x] Context-aware navigation (next/previous within current view)
 - [x] **Status Management**
   - [x] Mark entries as read/unread without deleting local files
   - [x] Auto-mark as read when opening entry
-  - [ ] Batch mark as read when offline (TODO: queue status updates)
+  - [x] Batch mark as read when offline
 - [x] **Offline Support**
   - [x] Full offline reading of downloaded entries
-  - [x] Fallback navigation when server is unavailable
   - [x] Local file management and organization
 
-### 🚧 Storage Management (Planned)
-- [ ] **Bulk Entry Deletion**
-  - [ ] Delete all entries with confirmation dialog
+### 🚧 Storage Management
+
+- [x] **Bulk Entry Deletion**
+  - [x] Delete selected entries
   - [ ] Delete by date range (1 week, 1 month, 3 months, 6 months)
   - [ ] Storage space reporting and cleanup
 - [ ] **Selective Image Management**
   - [ ] Delete all images while preserving entry text
-  - [ ] Smart cleanup of failed/broken image downloads
   - [ ] Image storage statistics and usage breakdown
-- [ ] **Advanced Cleanup**
-  - [ ] Remove orphaned images with no corresponding entries
-  - [ ] Detect and remove corrupted image files
-  - [ ] Option to exclude favorited/bookmarked entries from deletion
 
-### 🔄 Background Operations (Planned)
+### 🔄 Background Operations
+
 - [ ] **Intelligent Prefetching**
   - [ ] Configurable prefetch count (download N entries ahead)
-  - [ ] Context-aware prefetching based on current browsing context
-  - [ ] Bandwidth management (WiFi-only, pause during active downloads)
-  - [ ] Smart cancellation when navigating away from context
 - [ ] **Image Recovery**
-  - [ ] Scan entries for missing/failed images
   - [ ] Selective re-download of missing images only
-  - [ ] Batch image recovery with progress tracking
-  - [ ] Enhanced HTML regeneration with complete images
 
-### 📊 Enhanced Reading Experience (Future)
-- [ ] **Reading Analytics**
-  - [ ] Track reading time per entry and session
-  - [ ] Progress indicators for long entries
-  - [ ] Reading history with completion status
-  - [ ] Daily/weekly reading statistics
+### 📊 Enhanced Reading Experience
+
 - [ ] **Search and Organization**
-  - [ ] Full-text search within downloaded entries
-  - [ ] Filter by feed, category, date range, read status
-  - [ ] Bookmark/favorite system for important entries
-  - [ ] Personal tag system for organization
-- [ ] **Sync and Backup**
-  - [ ] Export reading data and annotations
-  - [ ] Backup entry metadata and reading progress
-  - [ ] Cross-device reading status synchronization
-  - [ ] OPML import/export for feed management
+  - [ ] Full-text search
+  - [ ] Starred entries
 
 ## Technical Details
 
 ### Architecture
+
 - **Modular Design**: Separate services for API, entries, navigation, and storage
 - **Error Handling**: Comprehensive error management with user-friendly messages
 - **Offline-First**: Graceful degradation when server is unavailable
 - **E-ink Optimized**: Efficient image processing and display for e-readers
-
-### Key Components
-- **MinifluxAPI**: Server communication and data fetching
-- **EntryService**: Entry downloading and management
-- **NavigationService**: Context-aware entry navigation
-- **Files Utilities**: File operations and storage management
 
 ## Development
 
@@ -111,10 +86,10 @@ This project provides a complete Nix flake for reproducible development:
 # With direnv (automatic)
 direnv allow
 
-# Manual activation  
+# Manual activation
 nix develop
 
-# Available tools: lua, luacheck, stylua, busted, task, git
+# Available tools: lua, luacheck, stylua, task
 ```
 
 ### Manual Setup
@@ -125,15 +100,13 @@ If not using Nix, install these tools manually:
 # Install tools
 cargo install stylua
 luarocks install luacheck
-luarocks install busted
 ```
 
 ### Code Quality Tools
 
-- **StyLua**: Code formatter (single quotes, 4 spaces, 100 chars)
-- **Luacheck**: Static analysis and linting  
+- **StyLua**: Code formatter
+- **Luacheck**: Static analysis and linting
 - **LuaLS**: Type checking with LuaCATS annotations
-- **Busted**: Testing framework (when tests are added)
 
 ### Quick Commands
 
@@ -143,12 +116,6 @@ task check
 
 # Auto-fix formatting
 task fmt-fix
-
-# Set up git hooks
-.githooks/setup.sh
-
-# Build plugin
-task build
 ```
 
 ### Development Setup with KOReader
@@ -156,6 +123,7 @@ task build
 For development testing, create a symlink to the built plugin:
 
 #### macOS
+
 ```bash
 # Build the plugin first
 task build
@@ -170,48 +138,11 @@ ln -s /path/to/miniflux.koplugin/dist/miniflux.koplugin ~/.config/koreader/plugi
 /System/Volumes/Data/Applications/KOReader.app/Contents/MacOS/koreader -d 2>&1 | grep -E "Miniflux"
 ```
 
-#### Linux
-```bash
-# Build the plugin first
-task build
-
-# Create symlink to KOReader plugins directory
-ln -s /path/to/miniflux.koplugin/dist/miniflux.koplugin ~/.config/koreader/plugins/miniflux.koplugin
-
-# Run KOReader with debug logging
-koreader -d
-
-# Filter logs for Miniflux-specific messages
-koreader -d 2>&1 | grep -E "Miniflux"
-```
-
-**Note**: Always use the `dist/miniflux.koplugin` directory for the symlink as it contains the built plugin with the correct flat structure.
-
-### Pre-commit Hooks
-
-Git hooks automatically run code quality checks before commits. To enable:
-
-```bash
-.githooks/setup.sh
-```
-
-### Code Style
-
-- **Indentation**: 4 spaces
-- **Line length**: 100 characters  
-- **Quotes**: Single quotes preferred
-- **Comments**: LuaCATS type annotations required for public APIs
-
 ## Contributing
 
 Contributions are welcome! Please feel free to:
+
 - Report bugs and suggest features
 - Submit pull requests for improvements
 - Help with testing on different devices
 - Contribute to documentation
-
-**Before submitting**: Run `task check` to ensure code quality standards.
-
-## License
-
-This plugin is part of the KOReader project and follows the same licensing terms.

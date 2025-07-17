@@ -3,8 +3,14 @@ name: Create Release Artifact
 on:
   push:
     branches: [main, dev]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
   pull_request:
     branches: [main, dev]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
 
 permissions:
   contents: write
@@ -60,7 +66,7 @@ jobs:
           ls -la
           ls -la dist/ || echo "dist directory not found"
           ls -la dist/miniflux.koplugin/ || echo "miniflux.koplugin directory not found"
-          
+
       - name: Create ZIP package
         run: |
           cd dist
