@@ -344,6 +344,72 @@ tasks:
         echo "🌿 Branch: $RELEASE_BRANCH"
         echo "🔄 Pull Request created to dev branch"
         echo "🔗 Check: https://github.com/$(git config --get remote.origin.url | sed 's/.*github.com[:/]\([^.]*\).*/\1/')/pulls"
+        echo ""
+        echo "📋 Next steps:"
+        echo "  1. Merge the PR to dev branch"
+        echo "  2. Merge dev to main to create the release"
+        echo "  3. Dev will auto-sync with main via GitHub Actions"
+        echo "  4. If auto-sync fails, run: task sync-dev"
+
+  sync-dev:
+    desc: "Sync dev branch with main branch"
+    silent: true
+    cmds:
+      - |
+        echo "🔄 Syncing dev branch with main..."
+        
+        # Get current branch
+        CURRENT_BRANCH=$(git branch --show-current)
+        echo "📍 Currently on: $CURRENT_BRANCH"
+        
+        # Fetch latest changes
+        echo "📥 Fetching latest changes..."
+        git fetch origin
+        
+        # Check if dev branch exists
+        if ! git ls-remote --heads origin dev | grep -q dev; then
+          echo "❌ Dev branch does not exist remotely"
+          exit 1
+        fi
+        
+        # Switch to dev branch
+        echo "🌿 Switching to dev branch..."
+        git checkout dev
+        git pull origin dev
+        
+        # Get commit hashes
+        MAIN_COMMIT=$(git rev-parse origin/main)
+        DEV_COMMIT=$(git rev-parse HEAD)
+        
+        echo "📍 Main is at: $MAIN_COMMIT"
+        echo "📍 Dev is at: $DEV_COMMIT"
+        
+        # Check if already up to date
+        if [ "$MAIN_COMMIT" = "$DEV_COMMIT" ]; then
+          echo "✅ Dev branch is already up to date with main"
+        elif git merge-base --is-ancestor dev origin/main; then
+          echo "🚀 Fast-forwarding dev to main..."
+          git merge origin/main --ff-only
+          git push origin dev
+          echo "✅ Dev branch successfully synced with main"
+        else
+          echo "⚠️  Dev branch has diverged from main"
+          echo "📊 Commits on dev not in main:"
+          git log --oneline origin/main..dev
+          echo ""
+          echo "📊 Commits on main not in dev:"
+          git log --oneline dev..origin/main
+          echo ""
+          echo "🔧 Manual intervention required - dev branch cannot be fast-forwarded"
+          echo "💡 Consider rebasing dev on main or resolving conflicts manually"
+          exit 1
+        fi
+        
+        # Return to original branch if it wasn't dev
+        if [ "$CURRENT_BRANCH" != "dev" ]; then
+          echo "🔄 Returning to $CURRENT_BRANCH..."
+          git checkout "$CURRENT_BRANCH"
+        fi
 
   release-undo:
     desc: "Undo the last release (before pushing to remote)"
