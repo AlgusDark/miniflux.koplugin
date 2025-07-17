@@ -1,0 +1,76 @@
+name: Sync Dev Branch
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  sync-dev:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for proper merging
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync dev branch with main
+        run: |
+          echo "🔄 Syncing dev branch with main..."
+          
+          # Check if dev branch exists
+          if ! git ls-remote --heads origin dev | grep -q dev; then
+            echo "❌ Dev branch does not exist remotely"
+            exit 1
+          fi
+          
+          # Get current main commit
+          MAIN_COMMIT=$(git rev-parse HEAD)
+          echo "📍 Main is at: $MAIN_COMMIT"
+          
+          # Check out dev branch
+          git checkout -b dev origin/dev
+          DEV_COMMIT=$(git rev-parse HEAD)
+          echo "📍 Dev is at: $DEV_COMMIT"
+          
+          # Check if dev is already up to date
+          if [ "$MAIN_COMMIT" = "$DEV_COMMIT" ]; then
+            echo "✅ Dev branch is already up to date with main"
+            exit 0
+          fi
+          
+          # Check if dev can be fast-forwarded to main
+          if git merge-base --is-ancestor dev main; then
+            echo "🚀 Fast-forwarding dev to main..."
+            git merge main --ff-only
+            
+            # Push the updated dev branch
+            git push origin dev
+            echo "✅ Dev branch successfully synced with main"
+          else
+            echo "⚠️  Dev branch has diverged from main"
+            echo "📊 Commits on dev not in main:"
+            git log --oneline main..dev
+            echo ""
+            echo "📊 Commits on main not in dev:"
+            git log --oneline dev..main
+            echo ""
+            echo "🔧 Manual intervention required - dev branch cannot be fast-forwarded"
+            echo "💡 Consider rebasing dev on main or resolving conflicts manually"
+            exit 1
+          fi
+
+      - name: Notify sync result
+        if: success()
+        run: |
+          echo "🎉 Dev branch sync completed successfully!"
+          echo "Both dev and main branches are now synchronized."
