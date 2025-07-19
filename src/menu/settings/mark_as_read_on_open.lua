@@ -52,7 +52,6 @@ end
 ---@return nil
 function MarkAsReadOnOpen.updateSetting(options)
     options.settings.mark_as_read_on_open = options.new_value
-    options.settings:save()
 
     local notification = Notification:success(options.message, { timeout = 2 })
 

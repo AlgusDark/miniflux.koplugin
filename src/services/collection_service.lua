@@ -9,22 +9,19 @@ local Notification = require('utils/notification')
 -- Replaces the duplicate FeedService and CategoryService with a single parameterized implementation.
 ---@class CollectionService
 ---@field settings MinifluxSettings Settings instance
----@field cache_service CacheService Cache service for data access and invalidation
 ---@field miniflux_api MinifluxAPI API client for collection operations
 local CollectionService = {}
 
 ---@class CollectionServiceDeps
----@field cache_service CacheService
 ---@field settings MinifluxSettings
 ---@field miniflux_api MinifluxAPI
 
 ---Create a new CollectionService instance
----@param deps CollectionServiceDeps Dependencies containing cache service and settings
+---@param deps CollectionServiceDeps Dependencies containing settings and API
 ---@return CollectionService
 function CollectionService:new(deps)
     local instance = {
         settings = deps.settings,
-        cache_service = deps.cache_service,
         miniflux_api = deps.miniflux_api,
     }
     setmetatable(instance, self)
@@ -99,7 +96,8 @@ function CollectionService:markAsRead(collection_type, collection_id)
         queue:remove(collection_id)
 
         -- Invalidate all caches IMMEDIATELY so counts update
-        self.cache_service:invalidateAll()
+        local MinifluxEvent = require('utils/event')
+        MinifluxEvent.broadcastEvent('MinifluxCacheInvalidate', {})
 
         -- Show simple success notification (no dialog)
         Notification:success(success_message)

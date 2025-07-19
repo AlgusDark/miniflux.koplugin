@@ -63,7 +63,6 @@ function ProxyImageDownloader.showDialog(settings)
                             end
                             -- Auto-enable if URL is provided, disable if empty
                             settings.proxy_image_downloader_enabled = fields[1] and fields[1] ~= ''
-                            settings:save()
                             Notification:success(_('Settings saved'))
                             UIManager:close(config_dialog)
                         end,

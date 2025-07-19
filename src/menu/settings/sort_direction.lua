@@ -65,7 +65,6 @@ function SortDirection.updateSetting(config)
     local touchmenu_instance = config.touchmenu_instance
 
     settings.direction = new_direction
-    settings:save()
 
     local notification = Notification:success(_('Sort direction updated'), { timeout = 2 })
 

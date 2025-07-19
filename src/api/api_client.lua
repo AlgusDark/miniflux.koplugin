@@ -14,11 +14,11 @@ local logger = require('logger')
 -- with specialized API modules. It provides convenient HTTP methods and manages
 -- the connection to the Miniflux server.
 ---@class APIClient
----@field settings MinifluxSettings Settings instance for configuration
+---@field getSettings fun(): {server_address: string, api_token: string} Settings getter function
 local APIClient = {}
 
 ---@class APIClientConfig
----@field settings MinifluxSettings Settings instance containing server address and API token
+---@field getSettings fun(): {server_address: string, api_token: string} Settings getter function
 
 ---@class ApiDialogConfig
 ---@field loading? {text?: string, timeout?: number|nil} Loading notification (timeout=nil for manual close)
@@ -47,14 +47,14 @@ local APIClient = {}
 ---@field dialogs? ApiDialogConfig Dialog configuration for loading/error/success messages
 
 ---Create a new API instance
----@param config APIClientConfig Configuration table with settings
+---@param config APIClientConfig Configuration table with settings getter function
 ---@return APIClient
 function APIClient:new(config)
     local instance = {}
     setmetatable(instance, self)
     self.__index = self
 
-    instance.settings = config.settings
+    instance.getSettings = config.getSettings
 
     return instance
 end
@@ -109,8 +109,9 @@ function APIClient:makeRequest(method, endpoint, config)
     config = config or {}
     local dialogs = config.dialogs
 
-    local server_address = self.settings.server_address
-    local api_token = self.settings.api_token
+    local settings = self.getSettings()
+    local server_address = settings.server_address
+    local api_token = settings.api_token
 
     if not server_address or not api_token or server_address == '' or api_token == '' then
         if dialogs and dialogs.error then
