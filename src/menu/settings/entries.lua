@@ -51,7 +51,6 @@ function Entries.showDialog(settings, refresh_callback)
                         local new_limit = tonumber(limit_dialog:getInputText())
                         if new_limit and new_limit > 0 then
                             settings.limit = new_limit
-                            settings:save()
                             UIManager:close(limit_dialog)
                             Notification:success(_('Entries limit saved'))
                             -- Refresh the menu to show updated limit

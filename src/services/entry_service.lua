@@ -23,7 +23,6 @@ local DownloadCache = require('utils/download_cache')
 ---@field settings MinifluxSettings Settings instance
 ---@field miniflux_api MinifluxAPI Miniflux API instance
 ---@field miniflux_plugin Miniflux Plugin instance for context management
----@field cache_service CacheService Cache service for data access and invalidation
 ---@field entry_subprocesses table<number, number> Map of entry_id to subprocess PID
 local EntryService = {}
 
@@ -31,17 +30,15 @@ local EntryService = {}
 ---@field settings MinifluxSettings
 ---@field miniflux_api MinifluxAPI
 ---@field miniflux_plugin Miniflux
----@field cache_service CacheService
 
 ---Create a new EntryService instance
----@param deps EntryServiceDeps Dependencies containing settings, API, plugin, and cache service
+---@param deps EntryServiceDeps Dependencies containing settings, API, and plugin
 ---@return EntryService
 function EntryService:new(deps)
     local instance = {
         settings = deps.settings,
         miniflux_api = deps.miniflux_api,
         miniflux_plugin = deps.miniflux_plugin,
-        cache_service = deps.cache_service,
         entry_subprocesses = {}, -- Track subprocesses per entry
     }
     setmetatable(instance, self)
@@ -533,7 +530,8 @@ function EntryService:markEntriesAsRead(entry_ids)
         Notification:success(_('Successfully marked ') .. #entry_ids .. _(' entries as read'))
 
         -- Invalidate caches so next navigation shows updated counts
-        self.cache_service:invalidateAll()
+        local MinifluxEvent = require('utils/event')
+        MinifluxEvent.broadcastEvent('MinifluxCacheInvalidate', {})
 
         return true
     else
@@ -588,7 +586,8 @@ function EntryService:markEntriesAsUnread(entry_ids)
         Notification:success(_('Successfully marked ') .. #entry_ids .. _(' entries as unread'))
 
         -- Invalidate caches so next navigation shows updated counts
-        self.cache_service:invalidateAll()
+        local MinifluxEvent = require('utils/event')
+        MinifluxEvent.broadcastEvent('MinifluxCacheInvalidate', {})
 
         return true
     else
@@ -704,7 +703,8 @@ function EntryService:changeEntryStatus(entry_id, opts)
         self:removeFromQueue(entry_id)
 
         -- Invalidate caches so next navigation shows updated counts
-        self.cache_service:invalidateAll()
+        local MinifluxEvent = require('utils/event')
+        MinifluxEvent.broadcastEvent('MinifluxCacheInvalidate', {})
 
         return true
     end
@@ -932,7 +932,6 @@ function EntryService:spawnUpdateStatus(entry_id, opts)
     end
 
     -- Step 2: Background API call in subprocess (non-blocking)
-    local FFIUtil = require('ffi/util')
     local NetworkMgr = require('ui/network/manager')
 
     -- Extract settings data for subprocess (separate memory space)
@@ -941,7 +940,6 @@ function EntryService:spawnUpdateStatus(entry_id, opts)
 
     local pid = FFIUtil.runInSubProcess(function()
         -- Import required modules in subprocess
-        local APIClient = require('api/api_client')
         local MinifluxAPI = require('api/miniflux_api')
         local EntryEntity = require('entities/entry_entity')
         local logger = require('logger')
@@ -952,9 +950,11 @@ function EntryService:spawnUpdateStatus(entry_id, opts)
             api_token = api_token,
         }
 
-        -- Create API client instances
-        local api_client = APIClient:new({ settings = subprocess_settings })
-        local miniflux_api = MinifluxAPI:new({ api_client = api_client })
+        local miniflux_api = MinifluxAPI:new({
+            getSettings = function()
+                return subprocess_settings
+            end,
+        })
 
         -- Check network connectivity
         local NetworkMgr = require('ui/network/manager')

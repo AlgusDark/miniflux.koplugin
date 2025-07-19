@@ -45,7 +45,6 @@ function UpdateSettings.showFrequencyDialog(settings, callback)
             text = button_text,
             callback = function()
                 settings.auto_update_check_frequency = option.value
-                settings:save()
 
                 Notification:success(string.format(_('Update frequency set to: %s'), option.text))
 
@@ -102,7 +101,6 @@ function UpdateSettings.getSubMenu(plugin)
             end,
             callback = function()
                 settings.auto_update_enabled = not settings.auto_update_enabled
-                settings:save()
 
                 local status_text = settings.auto_update_enabled and _('Auto-update enabled')
                     or _('Auto-update disabled')
@@ -194,7 +192,6 @@ function UpdateSettings.getSubMenu(plugin)
             end,
             callback = function()
                 settings.auto_update_include_beta = not settings.auto_update_include_beta
-                settings:save()
 
                 local status_text = settings.auto_update_include_beta and _('Beta releases enabled')
                     or _('Beta releases disabled')
@@ -210,7 +207,6 @@ end
 ---@return nil
 function UpdateSettings.updateAutoUpdateSetting(options)
     options.settings.auto_update_enabled = options.new_value
-    options.settings:save()
 
     local status_text = options.new_value and _('Auto-update enabled') or _('Auto-update disabled')
 
@@ -228,7 +224,6 @@ end
 ---@return nil
 function UpdateSettings.updateFrequencySetting(options)
     options.settings.auto_update_check_frequency = options.new_frequency
-    options.settings:save()
 
     local notification = Notification:success(options.message, { timeout = 2 })
 
@@ -244,7 +239,6 @@ end
 ---@return nil
 function UpdateSettings.updateBetaSetting(options)
     options.settings.auto_update_include_beta = options.new_value
-    options.settings:save()
 
     local status_text = options.new_value and _('Beta releases enabled')
         or _('Beta releases disabled')
@@ -270,7 +264,6 @@ function UpdateSettings.createMenuItems(settings)
             end,
             callback = function()
                 settings.auto_update_enabled = not settings.auto_update_enabled
-                settings:save()
 
                 local status_text = settings.auto_update_enabled and _('Auto-update enabled')
                     or _('Auto-update disabled')
@@ -288,7 +281,6 @@ function UpdateSettings.createMenuItems(settings)
                     end,
                     callback = function()
                         settings.auto_update_check_frequency = 'manual'
-                        settings:save()
                         Notification:success(_('Update frequency: Manual only'))
                     end,
                 },
@@ -299,7 +291,6 @@ function UpdateSettings.createMenuItems(settings)
                     end,
                     callback = function()
                         settings.auto_update_check_frequency = 'daily'
-                        settings:save()
                         Notification:success(_('Update frequency: Daily'))
                     end,
                 },
@@ -310,7 +301,6 @@ function UpdateSettings.createMenuItems(settings)
                     end,
                     callback = function()
                         settings.auto_update_check_frequency = 'weekly'
-                        settings:save()
                         Notification:success(_('Update frequency: Weekly'))
                     end,
                 },
@@ -321,7 +311,6 @@ function UpdateSettings.createMenuItems(settings)
                     end,
                     callback = function()
                         settings.auto_update_check_frequency = 'monthly'
-                        settings:save()
                         Notification:success(_('Update frequency: Monthly'))
                     end,
                 },
@@ -334,7 +323,6 @@ function UpdateSettings.createMenuItems(settings)
             end,
             callback = function()
                 settings.auto_update_include_beta = not settings.auto_update_include_beta
-                settings:save()
 
                 local status_text = settings.auto_update_include_beta and _('Beta releases enabled')
                     or _('Beta releases disabled')
@@ -379,7 +367,6 @@ end
 ---@param settings MinifluxSettings Settings instance
 function UpdateSettings.markUpdateCheckPerformed(settings)
     settings.auto_update_last_check = os.time()
-    settings:save()
 end
 
 return UpdateSettings

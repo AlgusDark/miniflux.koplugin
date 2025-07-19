@@ -92,7 +92,16 @@ end
 function MinifluxSettings:__newindex(key, value)
     -- Handle settings
     if DEFAULTS[key] ~= nil then
+        local old_value = self.settings:readSetting(key, DEFAULTS[key])
         self.settings:saveSetting(key, value)
+
+        -- Broadcast settings change event
+        local MinifluxEvent = require('utils/event')
+        MinifluxEvent.broadcastEvent('MinifluxSettingsChanged', {
+            key = key,
+            old_value = old_value,
+            new_value = value,
+        })
     else
         -- For unknown keys, set them directly on the object
         rawset(self, key, value)

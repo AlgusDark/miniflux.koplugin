@@ -46,14 +46,17 @@
 -- Miniflux-specific endpoint knowledge and request building.
 ---@class MinifluxAPI
 ---@field api_client APIClient Generic HTTP API client
+---@field getSettings fun(): {server_address: string, api_token: string} Settings getter function
 local MinifluxAPI = {}
 
 ---Create a new MinifluxAPI instance
----@param deps {api_client: APIClient} Dependencies table with API client
+---@param deps {getSettings: fun(): {server_address: string, api_token: string}} Dependencies with settings getter
 ---@return MinifluxAPI
 function MinifluxAPI:new(deps)
+    local APIClient = require('api/api_client')
     local instance = {
-        api_client = deps.api_client,
+        getSettings = deps.getSettings,
+        api_client = APIClient:new({ getSettings = deps.getSettings }),
     }
     setmetatable(instance, self)
     self.__index = self
@@ -68,7 +71,8 @@ end
 ---@param options? ApiOptions Query options for filtering and sorting
 ---@return string url Full URL with query parameters
 function MinifluxAPI:buildEntriesUrl(options)
-    local base_url = self.api_client.settings.server_address .. '/v1/entries'
+    local settings = self.getSettings()
+    local base_url = settings.server_address .. '/v1/entries'
     if not options then
         return base_url
     end

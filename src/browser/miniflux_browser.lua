@@ -16,7 +16,6 @@ local EntriesView = require('browser/views/entries_view')
 -- Extends Browser with Miniflux-specific functionality.
 -- Handles RSS feeds, categories, and entries from Miniflux API.
 ---@class MinifluxBrowser : Browser
----@field cache_service CacheService Cache service for data access
 ---@field settings MinifluxSettings Plugin settings
 ---@field miniflux_api MinifluxAPI Miniflux API
 ---@field download_dir string Download directory path
@@ -36,11 +35,12 @@ function MinifluxBrowser:init()
     self.miniflux_api = self.miniflux_api or {}
     self.download_dir = self.download_dir
     self.miniflux_plugin = self.miniflux_plugin or error('miniflux_plugin required')
-    self.entry_service = self.entry_service or error('entry_service required')
-    self.collection_service = self.collection_service or error('collection_service required')
 
-    -- Use cache service for all data access
-    self.cache_service = self.cache_service or error('cache_service required')
+    -- Initialize services container
+    self.services = self.services or error('services required')
+    -- Keep individual references for backward compatibility
+    self.entry_service = self.services.entry
+    self.collection_service = self.services.collection
 
     -- Initialize Browser parent (handles generic setup)
     Browser.init(self)
@@ -146,9 +146,6 @@ function MinifluxBrowser:toggleHideReadEntries()
     -- Toggle the setting
     self.settings.hide_read_entries = not self.settings.hide_read_entries
 
-    -- Save the setting to disk
-    self.settings:save()
-
     -- Show notification about the change
     local Notification = require('utils/notification')
     local status_text = self.settings.hide_read_entries and _('Now showing unread entries only')
@@ -207,9 +204,9 @@ function MinifluxBrowser:refreshWithCacheInvalidation()
     -- Show loading notification
     local loading_notification = Notification:info(_('Refreshing...'))
 
-    -- Invalidate all repository caches globally
-    -- Invalidate all caches (counts, feeds, categories)
-    self.cache_service:invalidateAll()
+    -- Invalidate all caches via event system
+    local MinifluxEvent = require('utils/event')
+    MinifluxEvent.broadcastEvent('MinifluxCacheInvalidate', {})
 
     -- Refresh current view with fresh data
     self:refreshCurrentViewData()
@@ -240,7 +237,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
     return {
         main = function()
             return MainView.show({
-                cache_service = self.cache_service,
+                cache_service = self.miniflux_plugin.cache_service,
                 settings = self.settings,
                 onSelectUnread = function()
                     self:goForward({ from = 'main', to = 'unread_entries' })
@@ -258,7 +255,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         end,
         feeds = function()
             return FeedsView.show({
-                cache_service = self.cache_service,
+                cache_service = self.miniflux_plugin.cache_service,
                 settings = self.settings,
                 page_state = nav_config.page_state,
                 onSelectItem = function(feed_id)
@@ -272,7 +269,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         end,
         categories = function()
             return CategoriesView.show({
-                cache_service = self.cache_service,
+                cache_service = self.miniflux_plugin.cache_service,
                 settings = self.settings,
                 page_state = nav_config.page_state,
                 onSelectItem = function(category_id)
@@ -286,7 +283,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         end,
         feed_entries = function()
             return EntriesView.show({
-                cache_service = self.cache_service,
+                cache_service = self.miniflux_plugin.cache_service,
                 settings = self.settings,
                 entry_type = 'feed',
                 id = nav_config.context and nav_config.context.feed_id,
@@ -302,7 +299,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         end,
         category_entries = function()
             return EntriesView.show({
-                cache_service = self.cache_service,
+                cache_service = self.miniflux_plugin.cache_service,
                 settings = self.settings,
                 entry_type = 'category',
                 id = nav_config.context and nav_config.context.category_id,
@@ -319,7 +316,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         unread_entries = function()
             local UnreadEntriesView = require('browser/views/unread_entries_view')
             return UnreadEntriesView.show({
-                cache_service = self.cache_service,
+                cache_service = self.miniflux_plugin.cache_service,
                 settings = self.settings,
                 page_state = nav_config.page_state,
                 onSelectItem = function(entry_data)

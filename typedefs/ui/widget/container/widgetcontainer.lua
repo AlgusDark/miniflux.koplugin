@@ -23,6 +23,7 @@ It handles event propagation and painting (with different alignments) for its ch
 ---@field ui table UI manager reference
 ---@field path string Plugin path
 ---@field extend fun(self: WidgetContainer, o: table): WidgetContainer Extend widget container
+---@field new fun(self: WidgetContainer, o: table): WidgetContainer Create new widget container
 local WidgetContainer = {}
 
 return WidgetContainer

@@ -1,4 +1,5 @@
 local CacheStore = require('utils/cache_store')
+local EventListener = require('ui/widget/eventlistener')
 local logger = require('logger')
 
 -- **Cache Service** - Replaces repository pattern with simple caching
@@ -9,31 +10,18 @@ local logger = require('logger')
 -- - Cache invalidation patterns (count updates)
 -- - E-ink device optimizations (entry arrays NOT cached)
 -- - All existing TTL values and behavior
----@class CacheService
+---@class CacheService : EventListener
 ---@field miniflux_api MinifluxAPI Direct API access
 ---@field settings MinifluxSettings Settings for TTL and cache control
 ---@field cache CacheStore Shared cache store for all data types
-local CacheService = {}
+local CacheService = EventListener:extend({})
 
----@class CacheServiceDeps
----@field miniflux_api MinifluxAPI
----@field settings MinifluxSettings
-
----Create new cache service instance
----@param deps CacheServiceDeps Dependencies
----@return CacheService
-function CacheService:new(deps)
-    local instance = {
-        miniflux_api = deps.miniflux_api,
-        settings = deps.settings,
-        cache = CacheStore:new({
-            default_ttl = deps.settings.api_cache_ttl,
-            db_name = 'miniflux_cache.sqlite',
-        }),
-    }
-    setmetatable(instance, self)
-    self.__index = self
-    return instance
+function CacheService:init()
+    logger.dbg('[Miniflux:CacheService] Calling init')
+    self.cache = CacheStore:new({
+        default_ttl = self.settings.api_cache_ttl,
+        db_name = 'miniflux_cache.sqlite',
+    })
 end
 
 -- =============================================================================
@@ -315,6 +303,30 @@ function CacheService:getCacheStats()
     end
 
     return self.cache:getStats()
+end
+
+-- =============================================================================
+-- EVENT HANDLERS (for event-driven cache invalidation)
+-- =============================================================================
+
+---Handle settings change events
+---@param event table Event data containing key, old_value, new_value
+function CacheService:onMinifluxSettingsChanged(event)
+    local key = event.key
+    logger.dbg('[Miniflux:CacheService] Settings changed:', key)
+
+    -- Invalidate cache on relevant setting changes
+    if key == 'order' or key == 'direction' or key == 'limit' or key == 'hide_read_entries' then
+        logger.info('[Miniflux:CacheService] Invalidating cache due to setting change:', key)
+        self:invalidateAll()
+    end
+end
+
+---Handle cache invalidation events from services
+---@param event table Event data
+function CacheService:onMinifluxCacheInvalidate(event)
+    logger.info('[Miniflux:CacheService] Cache invalidation event received')
+    self:invalidateAll()
 end
 
 return CacheService
