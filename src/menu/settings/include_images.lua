@@ -51,7 +51,6 @@ end
 ---@return nil
 function IncludeImages.updateSetting(options)
     options.settings.include_images = options.new_value
-    options.settings:save()
 
     local notification = Notification:success(options.message, { timeout = 2 })
 

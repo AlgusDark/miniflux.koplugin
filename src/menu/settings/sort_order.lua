@@ -112,7 +112,6 @@ function SortOrder.updateSetting(opts)
     local touchmenu_instance = opts.touchmenu_instance
 
     settings.order = new_order
-    settings:save()
 
     local notification = Notification:success(_('Sort order updated'), { timeout = 2 })
 

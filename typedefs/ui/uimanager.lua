@@ -30,6 +30,8 @@
 ---@field preventStandby fun(self: UIManager): nil Prevent device standby/sleep
 ---@field allowStandby fun(self: UIManager): nil Allow device standby/sleep
 ---@field restartKOReader fun(self: UIManager): nil Restart KOReader application
+---@field broadcastEvent fun(self: UIManager, event: table): nil Broadcast event to widgets
+---@field sendEvent fun(self: UIManager, event: table): nil Send event to widgets
 local UIManager = {}
 
 return UIManager

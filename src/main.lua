@@ -13,13 +13,9 @@ local Dispatcher = require('dispatcher')
 local _ = require('gettext')
 local logger = require('logger')
 
-local APIClient = require('api/api_client')
 local MinifluxAPI = require('api/miniflux_api')
 local MinifluxSettings = require('settings/settings')
 local Menu = require('menu/menu')
-local EntryService = require('services/entry_service')
-local CollectionService = require('services/collection_service')
-local QueueService = require('services/queue_service')
 local EntryEntity = require('entities/entry_entity')
 local KeyHandlerService = require('services/key_handler_service')
 local ReaderLinkService = require('services/readerlink_service')
@@ -30,8 +26,8 @@ local UpdateSettings = require('menu/settings/update_settings')
 ---@field is_doc_only boolean Whether plugin is document-only
 ---@field download_dir string Full path to download directory
 ---@field settings MinifluxSettings Settings instance
----@field api_client APIClient Generic API client instance
----@field miniflux_api MinifluxAPI Miniflux-specific API instance
+---@field api MinifluxAPI Miniflux-specific API instance
+---@field cache_service CacheService Miniflux data layer
 ---@field entry_service EntryService Entry service instance
 ---@field collection_service CollectionService Collection service instance
 ---@field queue_service QueueService Unified queue management service instance
@@ -51,6 +47,24 @@ local Miniflux = WidgetContainer:extend({
     subprocesses_collect_interval = 10,
 })
 
+---Register a module with the plugin for event handling (following ReaderUI pattern)
+---@param name string Module name
+---@param module table Module instance
+function Miniflux:registerModule(name, module)
+    if name then
+        self[name] = module -- Direct property access like ReaderUI
+        module.name = 'miniflux_' .. name
+    end
+    table.insert(self, module) -- Add to widget hierarchy
+end
+
+---Handle FlushSettings event from UIManager
+function Miniflux:onFlushSettings()
+    logger.dbg('[Miniflux:Main] Handling FlushSettings event')
+    logger.info(self.settings)
+    self.settings:save()
+end
+
 ---Initialize the plugin by setting up all components
 ---@return nil
 function Miniflux:init()
@@ -66,35 +80,35 @@ function Miniflux:init()
 
     self.settings = MinifluxSettings:new()
 
-    self.api_client = APIClient:new({
-        settings = self.settings,
+    self.api = MinifluxAPI:new({
+        getSettings = function()
+            return {
+                server_address = self.settings.server_address,
+                api_token = self.settings.api_token,
+            }
+        end,
     })
-    self.miniflux_api = MinifluxAPI:new({ api_client = self.api_client })
 
+    -- Create cache service early (data access layer)
     local CacheService = require('services/cache_service')
 
-    self.cache_service = CacheService:new({
-        miniflux_api = self.miniflux_api,
-        settings = self.settings,
-    })
+    -- Register cache service as module for event handling
+    self:registerModule(
+        'cache_service',
+        CacheService:new({
+            miniflux_api = self.api,
+            settings = self.settings,
+        })
+    )
 
-    self.entry_service = EntryService:new({
-        settings = self.settings,
-        miniflux_api = self.miniflux_api,
-        miniflux_plugin = self,
-        cache_service = self.cache_service,
-    })
+    -- Replace manual service creation with services factory
+    local Services = require('services/services')
+    self.services = Services.build(self)
 
-    self.collection_service = CollectionService:new({
-        cache_service = self.cache_service,
-        settings = self.settings,
-        miniflux_api = self.miniflux_api,
-    })
-
-    self.queue_service = QueueService:new({
-        entry_service = self.entry_service,
-        miniflux_api = self.miniflux_api,
-    })
+    -- Keep backward compatibility - individual service references
+    self.entry_service = self.services.entry
+    self.collection_service = self.services.collection
+    self.queue_service = self.services.queue
 
     if self.ui and self.ui.document then
         logger.dbg('[Miniflux:Main] Initializing KeyHandlerService for document context')
@@ -180,13 +194,15 @@ function Miniflux:createBrowser()
     local browser = MinifluxBrowser:new({
         title = _('Miniflux'),
         settings = self.settings,
-        miniflux_api = self.miniflux_api,
+        miniflux_api = self.api,
         download_dir = self.download_dir,
-        entry_service = self.entry_service,
-        collection_service = self.collection_service,
-        cache_service = self.cache_service,
+        services = self.services,
         miniflux_plugin = self, -- Pass plugin reference for context management
     })
+
+    -- Register browser as module for event handling
+    self:registerModule('browser', browser)
+
     return browser
 end
 

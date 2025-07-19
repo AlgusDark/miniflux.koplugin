@@ -53,7 +53,7 @@ function Menu.build(plugin)
                 sub_item_table = {
                     -- === CONNECTION SETTINGS ===
                     ServerConfig.getMenuItem(plugin.settings),
-                    TestConnection.getMenuItem(plugin.miniflux_api),
+                    TestConnection.getMenuItem(plugin.api),
 
                     -- === DISPLAY SETTINGS ===
                     Entries.getMenuItem(plugin.settings),

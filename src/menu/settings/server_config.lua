@@ -61,7 +61,6 @@ function ServerConfig.showDialog(settings)
                         if fields[2] and fields[2] ~= '' then
                             settings.api_token = fields[2]
                         end
-                        settings:save()
                         Notification:success(_('Settings saved'))
                         UIManager:close(settings_dialog)
                     end,
