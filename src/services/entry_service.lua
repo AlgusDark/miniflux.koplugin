@@ -21,7 +21,9 @@ local DownloadCache = require('utils/download_cache')
 -- Handles UI coordination, navigation, workflows, and queue management.
 ---@class EntryService
 ---@field settings MinifluxSettings Settings instance
----@field data_repository DataRepository Data access layer
+---@field feeds Feeds Feeds domain module
+---@field categories Categories Categories domain module
+---@field entries Entries Entries domain module
 ---@field miniflux_api MinifluxAPI API instance for direct operations (status updates, etc.)
 ---@field miniflux_plugin Miniflux Plugin instance for context management
 ---@field entry_subprocesses table<number, number> Map of entry_id to subprocess PID
@@ -29,17 +31,21 @@ local EntryService = {}
 
 ---@class EntryServiceDeps
 ---@field settings MinifluxSettings
----@field data_repository DataRepository
+---@field feeds Feeds
+---@field categories Categories
+---@field entries Entries
 ---@field miniflux_api MinifluxAPI
 ---@field miniflux_plugin Miniflux
 
 ---Create a new EntryService instance
----@param deps EntryServiceDeps Dependencies containing settings, repository, API, and plugin
+---@param deps EntryServiceDeps Dependencies containing settings, domain modules, API, and plugin
 ---@return EntryService
 function EntryService:new(deps)
     local instance = {
         settings = deps.settings,
-        data_repository = deps.data_repository,
+        feeds = deps.feeds,
+        categories = deps.categories,
+        entries = deps.entries,
         miniflux_api = deps.miniflux_api,
         miniflux_plugin = deps.miniflux_plugin,
         entry_subprocesses = {}, -- Track subprocesses per entry
@@ -58,7 +64,7 @@ end
 ---@param config? table Optional configuration
 ---@return MinifluxEntry[]|nil entries, Error|nil error
 function EntryService:getUnreadEntries(config)
-    return self.data_repository:getUnreadEntries(config)
+    return self.entries:getUnreadEntries(config)
 end
 
 ---Get entries by feed for feed entries view
@@ -66,7 +72,7 @@ end
 ---@param config? table Optional configuration
 ---@return MinifluxEntry[]|nil entries, Error|nil error
 function EntryService:getEntriesByFeed(feed_id, config)
-    return self.data_repository:getEntriesByFeed(feed_id, config)
+    return self.feeds:getEntriesByFeed(feed_id, config)
 end
 
 ---Get entries by category for category entries view
@@ -74,7 +80,7 @@ end
 ---@param config? table Optional configuration
 ---@return MinifluxEntry[]|nil entries, Error|nil error
 function EntryService:getEntriesByCategory(category_id, config)
-    return self.data_repository:getEntriesByCategory(category_id, config)
+    return self.categories:getEntriesByCategory(category_id, config)
 end
 
 -- =============================================================================

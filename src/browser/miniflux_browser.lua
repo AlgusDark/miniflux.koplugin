@@ -21,7 +21,6 @@ local EntriesView = require('browser/views/entries_view')
 ---@field miniflux_api MinifluxAPI Miniflux API
 ---@field download_dir string Download directory path
 ---@field entry_service EntryService Entry service instance
----@field collection_service CollectionService Collection service instance
 ---@field miniflux_plugin Miniflux Plugin instance for context management
 ---@field new fun(self: MinifluxBrowser, o: BrowserOptions): MinifluxBrowser Create new MinifluxBrowser instance
 local MinifluxBrowser = Browser:extend({})
@@ -36,7 +35,6 @@ function MinifluxBrowser:init()
 
     -- Initialize services container
     self.entry_service = self.miniflux.services.entry
-    self.collection_service = self.miniflux.services.collection
 
     -- Initialize Browser parent (handles generic setup)
     Browser.init(self)
@@ -233,8 +231,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
     return {
         main = function()
             return MainView.show({
-                entry_service = self.entry_service,
-                collection_service = self.collection_service,
+                miniflux = self.miniflux,
                 settings = self.settings,
                 onSelectUnread = function()
                     self:goForward({ from = 'main', to = 'unread_entries' })
@@ -252,7 +249,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         end,
         feeds = function()
             return FeedsView.show({
-                collection_service = self.collection_service,
+                miniflux = self.miniflux,
                 settings = self.settings,
                 page_state = nav_config.page_state,
                 onSelectItem = function(feed_id)
@@ -266,7 +263,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         end,
         categories = function()
             return CategoriesView.show({
-                collection_service = self.collection_service,
+                miniflux = self.miniflux,
                 settings = self.settings,
                 page_state = nav_config.page_state,
                 onSelectItem = function(category_id)
@@ -628,7 +625,7 @@ function MinifluxBrowser:markSelectedAsRead(selected_items)
         success = false
         for _, item in ipairs(selected_items) do
             local feed_id = item.feed_data.id
-            local result = self.collection_service:markFeedAsRead(feed_id)
+            local result = self.miniflux.feeds:markAsRead(feed_id)
             if result then
                 success = true -- At least one succeeded, keep as true even if others fail
             end
@@ -638,7 +635,7 @@ function MinifluxBrowser:markSelectedAsRead(selected_items)
         success = false
         for _, item in ipairs(selected_items) do
             local category_id = item.category_data.id
-            local result = self.collection_service:markCategoryAsRead(category_id)
+            local result = self.miniflux.categories:markAsRead(category_id)
             if result then
                 success = true -- At least one succeeded, keep as true even if others fail
             end
