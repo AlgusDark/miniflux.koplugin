@@ -7,11 +7,6 @@ local MinifluxSettings = require('settings/settings')
 --
 -- Repository that combines data access and caching responsibilities.
 -- Maintains all current functionality:
--- - Browser navigation performance (cached counts)
--- - Cache invalidation patterns (count updates)
--- - E-ink device optimizations (entry arrays NOT cached)
--- - All existing TTL values and behavior
--- - Event-driven cache invalidation
 ---@class DataRepository : EventListener
 ---@field miniflux_api MinifluxAPI Direct API access
 ---@field settings MinifluxSettings Settings for TTL and cache control
@@ -26,6 +21,30 @@ function DataRepository:init()
     })
 end
 
+---Generic cache-or-fetch helper
+---@param cache_key string Cache key to use
+---@param ttl number Cache TTL in seconds
+---@param fetch_fn function Function that returns result, error
+---@return any|nil result, Error|nil error
+function DataRepository:fetchWithCache(cache_key, ttl, fetch_fn)
+    local cached_data, is_valid = self.cache:get(cache_key, { ttl = ttl })
+
+    if is_valid and cached_data then
+        return cached_data.result, cached_data.error
+    end
+
+    -- Cache miss - fetch from API
+    local result, err = fetch_fn()
+
+    -- Cache result (even errors to avoid repeated failures)
+    self.cache:set(cache_key, {
+        data = { result = result, error = err },
+        ttl = ttl,
+    })
+
+    return result, err
+end
+
 -- =============================================================================
 -- FEED OPERATIONS
 -- =============================================================================
@@ -34,76 +53,32 @@ end
 ---@param config? table Optional configuration with dialogs
 ---@return MinifluxFeed[]|nil result, Error|nil error
 function DataRepository:getFeeds(config)
-    if not self.settings.api_cache_enabled then
+    return self:fetchWithCache('feeds', self.settings.api_cache_ttl, function()
         return self.miniflux_api:getFeeds(config)
-    end
-
-    local cache_key = 'feeds'
-    local cached_data, is_valid = self.cache:get(cache_key, { ttl = self.settings.api_cache_ttl })
-
-    if is_valid and cached_data then
-        return cached_data.result, cached_data.error
-    end
-
-    -- Cache miss - fetch from API
-    local feeds, err = self.miniflux_api:getFeeds(config)
-
-    -- Cache result (even errors to avoid repeated failures)
-    self.cache:set(cache_key, {
-        data = { result = feeds, error = err },
-        ttl = self.settings.api_cache_ttl,
-    })
-
-    return feeds, err
+    end)
 end
 
 ---Get feeds with counters (cached separately with shorter TTL)
 ---@param config? table Optional configuration with dialogs
 ---@return {feeds: MinifluxFeed[], counters: MinifluxFeedCounters}|nil result, Error|nil error
 function DataRepository:getFeedsWithCounters(config)
-    if not self.settings.api_cache_enabled then
-        local feeds, err = self:getFeeds(config)
-        if err then
-            return nil, err
+    return self:fetchWithCache(
+        'feeds_with_counters',
+        self.settings.api_cache_ttl_counters,
+        function()
+            local feeds, err = self:getFeeds(config)
+            if err then
+                return nil, err
+            end
+
+            local counters, counters_err = self.miniflux_api:getFeedCounters()
+            if counters_err then
+                counters = { reads = {}, unreads = {} }
+            end
+
+            return { feeds = feeds, counters = counters }, nil
         end
-
-        local counters, counters_err = self.miniflux_api:getFeedCounters()
-        if counters_err then
-            counters = { reads = {}, unreads = {} }
-        end
-
-        return { feeds = feeds, counters = counters }, nil
-    end
-
-    local cache_key = 'feeds_with_counters'
-    local cached_data, is_valid =
-        self.cache:get(cache_key, { ttl = self.settings.api_cache_ttl_counters })
-
-    if is_valid and cached_data then
-        logger.dbg('[Miniflux:DataRepository] Cache hit: feeds_with_counters')
-        return cached_data.result, cached_data.error
-    end
-
-    -- Cache miss - build result
-    logger.dbg('[Miniflux:DataRepository] Cache miss: feeds_with_counters, fetching from API')
-    local feeds, err = self:getFeeds(config)
-    if err then
-        return nil, err
-    end
-
-    local counters, counters_err = self.miniflux_api:getFeedCounters()
-    if counters_err then
-        counters = { reads = {}, unreads = {} }
-    end
-
-    local result = { feeds = feeds, counters = counters }
-
-    self.cache:set(cache_key, {
-        data = { result = result, error = nil },
-        ttl = self.settings.api_cache_ttl_counters, -- Shorter TTL for counters
-    })
-
-    return result, nil
+    )
 end
 
 ---Get feed count (uses cached feeds)
@@ -125,27 +100,9 @@ end
 ---@param config? table Optional configuration with dialogs
 ---@return MinifluxCategory[]|nil result, Error|nil error
 function DataRepository:getCategories(config)
-    if not self.settings.api_cache_enabled then
+    return self:fetchWithCache('categories', self.settings.api_cache_ttl_categories, function()
         return self.miniflux_api:getCategories(true, config) -- include counts
-    end
-
-    local cache_key = 'categories'
-    local cached_data, is_valid =
-        self.cache:get(cache_key, { ttl = self.settings.api_cache_ttl_categories })
-
-    if is_valid and cached_data then
-        return cached_data.result, cached_data.error
-    end
-
-    -- Cache miss - fetch from API
-    local categories, err = self.miniflux_api:getCategories(true, config)
-
-    self.cache:set(cache_key, {
-        data = { result = categories, error = err },
-        ttl = self.settings.api_cache_ttl_categories, -- 2 minutes TTL for categories
-    })
-
-    return categories, err
+    end)
 end
 
 ---Get category count (uses cached categories)
@@ -227,21 +184,43 @@ function DataRepository:getEntriesByCategory(category_id, config)
     return result.entries or {}, nil
 end
 
+---Get all collections counts for main view in a single call
+---@param config? table Optional configuration
+---@return {unread_count: number, feeds_count: number, categories_count: number}|nil counts, Error|nil error
+function DataRepository:getCollectionsCounts(config)
+    -- Get unread count
+    local unread_count, unread_err = self:getUnreadCount(config)
+    if unread_err then
+        return nil, unread_err
+    end
+    ---@cast unread_count -nil
+
+    -- Get feeds count
+    local feeds_count, feeds_err = self:getFeedCount(config)
+    if feeds_err then
+        return nil, feeds_err
+    end
+    ---@cast feeds_count -nil
+
+    -- Get categories count
+    local categories_count, categories_err = self:getCategoryCount(config)
+    if categories_err then
+        return nil, categories_err
+    end
+    ---@cast categories_count -nil
+
+    return {
+        unread_count = unread_count,
+        feeds_count = feeds_count,
+        categories_count = categories_count,
+    }
+end
+
 ---Get unread count (cached - critical for main menu performance)
 ---@param config? table Optional configuration
 ---@return number|nil count, Error|nil error
 function DataRepository:getUnreadCount(config)
-    if not self.settings.api_cache_enabled then
-        local options = { limit = 1, status = { 'unread' } }
-        local result, err = self.miniflux_api:getEntries(options, config)
-        if err then
-            return nil, err
-        end
-        ---@cast result -nil
-        return result.total or 0, nil
-    end
-
-    -- Use URL-based cache key for consistency (preserves current behavior)
+    -- Use URL-based cache key for consistency
     local options = {
         order = self.settings.order,
         direction = self.settings.direction,
@@ -250,22 +229,14 @@ function DataRepository:getUnreadCount(config)
     }
     local cache_key = self.miniflux_api:buildEntriesUrl(options) .. '_count'
 
-    local cached_data, is_valid = self.cache:get(cache_key, { ttl = self.settings.api_cache_ttl })
-    if is_valid then
-        return cached_data, nil
-    end
-
-    -- Cache miss - fetch count
-    local result, err = self.miniflux_api:getEntries(options, config)
-    if err then
-        return nil, err
-    end
-    ---@cast result -nil
-
-    local count = result.total or 0
-    self.cache:set(cache_key, { data = count, ttl = self.settings.api_cache_ttl })
-
-    return count, nil
+    return self:fetchWithCache(cache_key, self.settings.api_cache_ttl, function()
+        local result, err = self.miniflux_api:getEntries(options, config)
+        if err then
+            return nil, err
+        end
+        ---@cast result -nil
+        return result.total or 0, nil
+    end)
 end
 
 -- =============================================================================
@@ -277,9 +248,6 @@ end
 ---@return boolean success
 function DataRepository:invalidateAll()
     logger.info('[Miniflux:DataRepository] Invalidating all cache')
-    if not self.settings.api_cache_enabled then
-        return true
-    end
 
     self.cache:clear()
     return true
@@ -290,21 +258,8 @@ end
 ---@return boolean success
 function DataRepository:invalidate(cache_key)
     logger.dbg('[Miniflux:DataRepository] Invalidating cache key:', cache_key)
-    if not self.settings.api_cache_enabled then
-        return true
-    end
 
     return self.cache:remove(cache_key)
-end
-
----Get cache statistics
----@return {count: number, size: number}
-function DataRepository:getCacheStats()
-    if not self.settings.api_cache_enabled then
-        return { count = 0, size = 0 }
-    end
-
-    return self.cache:getStats()
 end
 
 -- =============================================================================
