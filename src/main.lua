@@ -27,9 +27,10 @@ local UpdateSettings = require('menu/settings/update_settings')
 ---@field download_dir string Full path to download directory
 ---@field settings MinifluxSettings Settings instance
 ---@field api MinifluxAPI Miniflux-specific API instance
----@field data_repository DataRepository Miniflux data access layer
+---@field feeds Feeds Feeds domain module
+---@field categories Categories Categories domain module
+---@field entries Entries Entries domain module
 ---@field entry_service EntryService Entry service instance
----@field collection_service CollectionService Collection service instance
 ---@field queue_service QueueService Unified queue management service instance
 ---@field key_handler_service KeyHandlerService Key handler service instance
 ---@field readerlink_service ReaderLinkService ReaderLink enhancement service instance
@@ -88,17 +89,14 @@ function Miniflux:init()
         end,
     })
 
-    -- Create data repository early (data access layer)
-    local DataRepository = require('repositories/data_repository')
+    -- Register domain modules using vertical slice architecture
+    local Feeds = require('domains/feeds/feeds')
+    local Categories = require('domains/categories/categories')
+    local Entries = require('domains/entries/entries')
 
-    -- Register data repository as module for event handling
-    self:registerModule(
-        'data_repository',
-        DataRepository:new({
-            miniflux_api = self.api,
-            settings = self.settings,
-        })
-    )
+    self:registerModule('feeds', Feeds:new({ miniflux = self }))
+    self:registerModule('categories', Categories:new({ miniflux = self }))
+    self:registerModule('entries', Entries:new({ miniflux = self }))
 
     -- Replace manual service creation with services factory
     local Services = require('services/services')
@@ -106,7 +104,6 @@ function Miniflux:init()
 
     -- Keep backward compatibility - individual service references
     self.entry_service = self.services.entry
-    self.collection_service = self.services.collection
     self.queue_service = self.services.queue
 
     local MinifluxBrowser = require('browser/miniflux_browser')

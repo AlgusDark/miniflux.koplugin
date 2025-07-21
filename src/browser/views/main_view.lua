@@ -13,7 +13,7 @@ local EntryEntity = require('entities/entry_entity')
 
 local MainView = {}
 
----@alias MainViewConfig {entry_service: EntryService, collection_service: CollectionService, settings: MinifluxSettings, onSelectUnread: function, onSelectFeeds: function, onSelectCategories: function, onSelectLocal: function}
+---@alias MainViewConfig {miniflux: Miniflux, settings: MinifluxSettings, onSelectUnread: function, onSelectFeeds: function, onSelectCategories: function, onSelectLocal: function}
 
 ---Complete main view component (React-style) - returns view data for browser rendering
 ---@param config MainViewConfig
@@ -29,12 +29,9 @@ function MainView.show(config)
 
     local counts = nil
     if is_online then
-        -- Try to load online data if connected
+        -- Try to load online data if connected using loader pattern
         local _error_msg
-        counts, _error_msg = MainView.loadData({
-            entry_service = config.entry_service,
-            collection_service = config.collection_service,
-        })
+        counts, _error_msg = MainView.loadData(config.miniflux)
         if not counts then
             -- Fall back to offline mode instead of showing error
             is_online = false
@@ -70,29 +67,43 @@ function MainView.show(config)
     }
 end
 
----Load initial data needed for main screen (internal helper)
----@param config {entry_service: EntryService, collection_service: CollectionService}
+---Load initial data needed for main screen using domain loader pattern
+---@param miniflux Miniflux Plugin instance with domain modules
 ---@return table|nil result, string|nil error
-function MainView.loadData(config)
-    local collection_service = config.collection_service
-
+function MainView.loadData(miniflux)
     local Notification = require('utils/notification')
     local loading_notification = Notification:info(_('Loading...'))
 
-    -- Get all collections counts in a single call
-    local collections_counts, collections_err = collection_service:getCollectionsCounts()
-    if collections_err then
+    -- Get unread count from entries domain
+    local unread_count, unread_err = miniflux.entries:getUnreadCount()
+    if unread_err then
         loading_notification:close()
-        return nil, collections_err.message
+        return nil, unread_err.message
     end
-    ---@cast collections_counts -nil
+    ---@cast unread_count -nil
+
+    -- Get feeds count from feeds domain
+    local feeds_count, feeds_err = miniflux.feeds:getFeedCount()
+    if feeds_err then
+        loading_notification:close()
+        return nil, feeds_err.message
+    end
+    ---@cast feeds_count -nil
+
+    -- Get categories count from categories domain
+    local categories_count, categories_err = miniflux.categories:getCategoryCount()
+    if categories_err then
+        loading_notification:close()
+        return nil, categories_err.message
+    end
+    ---@cast categories_count -nil
 
     loading_notification:close()
 
     return {
-        unread_count = collections_counts.unread_count or 0,
-        feeds_count = collections_counts.feeds_count or 0,
-        categories_count = collections_counts.categories_count or 0,
+        unread_count = unread_count or 0,
+        feeds_count = feeds_count or 0,
+        categories_count = categories_count or 0,
     }
 end
 

@@ -2,27 +2,22 @@ local Services = {}
 
 -- Import all service classes
 local EntryService = require('services/entry_service')
-local CollectionService = require('services/collection_service')
 local QueueService = require('services/queue_service')
 
 ---Build all services with proper dependency order
----@param miniflux Miniflux Plugin instance containing settings, api, and data_repository
----@return table Services container with entry, collection, queue services
+---@param miniflux Miniflux Plugin instance containing settings, api, and domain modules
+---@return table Services container with entry and queue services
 function Services.build(miniflux)
     local services = {}
 
-    -- Phase 1: Business services (use repository pattern)
+    -- Phase 1: Business services (use domain modules)
     services.entry = EntryService:new({
         settings = miniflux.settings,
-        data_repository = miniflux.data_repository,
+        feeds = miniflux.feeds,
+        categories = miniflux.categories,
+        entries = miniflux.entries,
         miniflux_api = miniflux.api,
         miniflux_plugin = miniflux,
-    })
-
-    services.collection = CollectionService:new({
-        settings = miniflux.settings,
-        data_repository = miniflux.data_repository,
-        miniflux_api = miniflux.api,
     })
 
     -- Phase 2: Services dependent on other services
