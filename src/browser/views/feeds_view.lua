@@ -12,14 +12,14 @@ local _ = require('gettext')
 
 local FeedsView = {}
 
----@alias FeedsViewConfig {collection_service: CollectionService, settings: MinifluxSettings, page_state?: number, onSelectItem: function}
+---@alias FeedsViewConfig {miniflux: Miniflux, settings: MinifluxSettings, page_state?: number, onSelectItem: function}
 
 ---Complete feeds view component (React-style) - returns view data for rendering
 ---@param config FeedsViewConfig
 ---@return table|nil View data for browser rendering, or nil on error
 function FeedsView.show(config)
     -- Fetch data with API-level dialog management
-    local result, err = config.collection_service:getFeedsWithCounters({
+    local result, err = config.miniflux.feeds:getFeedsWithCounters({
         dialogs = {
             loading = { text = _('Fetching feeds...') },
             error = { text = _('Failed to fetch feeds'), timeout = 5 },
