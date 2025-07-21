@@ -7,15 +7,6 @@ local logger = require('logger')
 -- This module provides a generic key-value cache with TTL support that can be used
 -- by any RSS provider. Uses SQLite with compression and LRU eviction.
 --
--- PERFORMANCE INSIGHTS FOR E-INK DEVICES:
--- ✓ Small metadata (feeds, categories, counts) - cache reliably in SQLite
--- ✗ Large entry arrays (1.5-3MB) - causes CacheSQLite type conversion errors
--- ✗ Entry arrays change frequently - provide less caching benefit than metadata
--- ✓ Current 33KB database size shows optimal usage with small objects only
---
--- RECOMMENDATION: Only cache small, stable metadata objects. Let entry arrays
--- be fetched fresh from API to avoid memory pressure on e-ink devices.
---
 -- Example usage:
 --   local cache = CacheStore:new()
 --   cache:set("feeds_list", {data = feeds, ttl = 300})
@@ -45,7 +36,7 @@ function CacheStore:new(config)
     local cache_size = config.cache_size or (10 * 1024 * 1024) -- 10MB default
 
     local cache_instance = CacheSQLite:new({
-        slots = 500, -- LRU slot count (newsdownloader pattern)
+        slots = 500, -- LRU slot count
         size = cache_size, -- Total cache size in bytes
         db_path = db_path, -- SQLite database file path
     })

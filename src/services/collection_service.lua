@@ -63,6 +63,13 @@ function CollectionService:getCategoryCount(config)
     return self.data_repository:getCategoryCount(config)
 end
 
+---Get all collections counts for main view in a single call
+---@param config? table Optional configuration
+---@return {unread_count: number, feeds_count: number, categories_count: number}|nil counts, Error|nil error
+function CollectionService:getCollectionsCounts(config)
+    return self.data_repository:getCollectionsCounts(config)
+end
+
 -- =============================================================================
 -- BUSINESS OPERATIONS (workflows and orchestration)
 -- =============================================================================

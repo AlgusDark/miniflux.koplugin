@@ -74,42 +74,25 @@ end
 ---@param config {entry_service: EntryService, collection_service: CollectionService}
 ---@return table|nil result, string|nil error
 function MainView.loadData(config)
-    local entry_service = config.entry_service
     local collection_service = config.collection_service
 
     local Notification = require('utils/notification')
     local loading_notification = Notification:info(_('Loading...'))
 
-    -- Get unread count
-    local unread_count, unread_err = entry_service:getUnreadCount()
-    if unread_err then
+    -- Get all collections counts in a single call
+    local collections_counts, collections_err = collection_service:getCollectionsCounts()
+    if collections_err then
         loading_notification:close()
-        return nil, unread_err.message
+        return nil, collections_err.message
     end
-    ---@cast unread_count -nil
-
-    -- Get feeds count
-    local feeds_count, feeds_err = collection_service:getFeedCount()
-    if feeds_err then
-        loading_notification:close()
-        return nil, feeds_err.message
-    end
-    ---@cast feeds_count -nil
-
-    -- Get categories count
-    local categories_count, categories_err = collection_service:getCategoryCount()
-    if categories_err then
-        loading_notification:close()
-        return nil, categories_err.message
-    end
-    ---@cast categories_count -nil
+    ---@cast collections_counts -nil
 
     loading_notification:close()
 
     return {
-        unread_count = unread_count or 0,
-        feeds_count = feeds_count or 0,
-        categories_count = categories_count or 0,
+        unread_count = collections_counts.unread_count or 0,
+        feeds_count = collections_counts.feeds_count or 0,
+        categories_count = collections_counts.categories_count or 0,
     }
 end
 
