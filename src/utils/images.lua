@@ -72,7 +72,7 @@ function Images.discoverImages(content, base_url)
     local img_elements = root:select('img')
 
     if img_elements then
-        for i, img_element in ipairs(img_elements) do
+        for _, img_element in ipairs(img_elements) do
             local attrs = img_element.attributes or {}
             local src = attrs.src
 
@@ -315,7 +315,6 @@ end
 function Images.processHtmlImages(content, opts)
     -- Extract parameters from opts
     local seen_images = opts.seen_images
-    local include_images = opts.include_images
     local base_url = opts.base_url
 
     -- Always process images to update src to local filenames
@@ -375,7 +374,7 @@ end
 function Images.createDownloadSummary(include_images, images)
     local images_downloaded = 0
     if include_images then
-        for i, img in ipairs(images) do
+        for _, img in ipairs(images) do
             if img.downloaded then
                 images_downloaded = images_downloaded + 1
             end

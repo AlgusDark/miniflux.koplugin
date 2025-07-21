@@ -27,8 +27,7 @@ function Menu.build(plugin)
                 text = _('Read entries'),
                 help_text = _('Browse RSS entries'),
                 callback = function()
-                    local browser = plugin:createBrowser()
-                    browser:open()
+                    plugin.browser:open()
                 end,
             },
             {

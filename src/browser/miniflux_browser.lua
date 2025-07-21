@@ -16,6 +16,7 @@ local EntriesView = require('browser/views/entries_view')
 -- Extends Browser with Miniflux-specific functionality.
 -- Handles RSS feeds, categories, and entries from Miniflux API.
 ---@class MinifluxBrowser : Browser
+---@field miniflux Miniflux Miniflux plugin instance
 ---@field settings MinifluxSettings Plugin settings
 ---@field miniflux_api MinifluxAPI Miniflux API
 ---@field download_dir string Download directory path
@@ -31,16 +32,11 @@ function MinifluxBrowser:init()
     logger.dbg('[Miniflux:Browser] Initializing MinifluxBrowser')
 
     -- Initialize Miniflux-specific dependencies
-    self.settings = self.settings or {}
-    self.miniflux_api = self.miniflux_api or {}
-    self.download_dir = self.download_dir
-    self.miniflux_plugin = self.miniflux_plugin or error('miniflux_plugin required')
+    self.settings = self.miniflux.settings
 
     -- Initialize services container
-    self.services = self.services or error('services required')
-    -- Keep individual references for backward compatibility
-    self.entry_service = self.services.entry
-    self.collection_service = self.services.collection
+    self.entry_service = self.miniflux.services.entry
+    self.collection_service = self.miniflux.services.collection
 
     -- Initialize Browser parent (handles generic setup)
     Browser.init(self)
@@ -206,7 +202,7 @@ function MinifluxBrowser:refreshWithCacheInvalidation()
 
     -- Invalidate all caches via event system
     local MinifluxEvent = require('utils/event')
-    MinifluxEvent.broadcastEvent('MinifluxCacheInvalidate', {})
+    MinifluxEvent:broadcastMinifluxInvalidateCache()
 
     -- Refresh current view with fresh data
     self:refreshCurrentViewData()
@@ -237,7 +233,8 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
     return {
         main = function()
             return MainView.show({
-                cache_service = self.miniflux_plugin.cache_service,
+                entry_service = self.entry_service,
+                collection_service = self.collection_service,
                 settings = self.settings,
                 onSelectUnread = function()
                     self:goForward({ from = 'main', to = 'unread_entries' })
@@ -255,7 +252,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         end,
         feeds = function()
             return FeedsView.show({
-                cache_service = self.miniflux_plugin.cache_service,
+                collection_service = self.collection_service,
                 settings = self.settings,
                 page_state = nav_config.page_state,
                 onSelectItem = function(feed_id)
@@ -269,7 +266,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         end,
         categories = function()
             return CategoriesView.show({
-                cache_service = self.miniflux_plugin.cache_service,
+                collection_service = self.collection_service,
                 settings = self.settings,
                 page_state = nav_config.page_state,
                 onSelectItem = function(category_id)
@@ -283,7 +280,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         end,
         feed_entries = function()
             return EntriesView.show({
-                cache_service = self.miniflux_plugin.cache_service,
+                entry_service = self.entry_service,
                 settings = self.settings,
                 entry_type = 'feed',
                 id = nav_config.context and nav_config.context.feed_id,
@@ -299,7 +296,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         end,
         category_entries = function()
             return EntriesView.show({
-                cache_service = self.miniflux_plugin.cache_service,
+                entry_service = self.entry_service,
                 settings = self.settings,
                 entry_type = 'category',
                 id = nav_config.context and nav_config.context.category_id,
@@ -316,7 +313,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         unread_entries = function()
             local UnreadEntriesView = require('browser/views/unread_entries_view')
             return UnreadEntriesView.show({
-                cache_service = self.miniflux_plugin.cache_service,
+                entry_service = self.entry_service,
                 settings = self.settings,
                 page_state = nav_config.page_state,
                 onSelectItem = function(entry_data)
@@ -387,7 +384,7 @@ function MinifluxBrowser:analyzeSelection(selected_items)
     local EntryEntity = require('entities/entry_entity')
     local lfs = require('libs/libkoreader-lfs')
 
-    for i, item in ipairs(selected_items) do
+    for _, item in ipairs(selected_items) do
         local entry_data = item.entry_data
         if entry_data then
             local html_file = EntryEntity.getEntryHtmlPath(entry_data.id)
@@ -461,7 +458,7 @@ function MinifluxBrowser:getSelectionActions()
         end
 
         -- Add file operation buttons to actions
-        for i, button in ipairs(file_ops) do
+        for _, button in ipairs(file_ops) do
             table.insert(actions, button)
         end
 
@@ -513,7 +510,7 @@ function MinifluxBrowser:showSelectionActionsDialog()
     if actions_enabled then
         local available_actions = self:getSelectionActions()
 
-        for i, action in ipairs(available_actions) do
+        for _, action in ipairs(available_actions) do
             table.insert(selection_actions, {
                 text = action.text,
                 enabled = actions_enabled,
@@ -622,14 +619,14 @@ function MinifluxBrowser:markSelectedAsRead(selected_items)
     if item_type == 'entry' then
         -- Extract entry IDs and use existing EntryService
         local entry_ids = {}
-        for i, item in ipairs(selected_items) do
+        for _, item in ipairs(selected_items) do
             table.insert(entry_ids, item.entry_data.id)
         end
         success = self.entry_service:markEntriesAsRead(entry_ids)
     elseif item_type == 'feed' then
         -- TODO: Implement batch notifications - show loading, track success/failed feeds, show summary
         success = false
-        for i, item in ipairs(selected_items) do
+        for _, item in ipairs(selected_items) do
             local feed_id = item.feed_data.id
             local result = self.collection_service:markFeedAsRead(feed_id)
             if result then
@@ -639,7 +636,7 @@ function MinifluxBrowser:markSelectedAsRead(selected_items)
     elseif item_type == 'category' then
         -- TODO: Implement batch notifications - show loading, track success/failed categories, show summary
         success = false
-        for i, item in ipairs(selected_items) do
+        for _, item in ipairs(selected_items) do
             local category_id = item.category_data.id
             local result = self.collection_service:markCategoryAsRead(category_id)
             if result then
@@ -680,7 +677,7 @@ function MinifluxBrowser:markSelectedAsUnread(selected_items)
 
     -- Extract entry IDs
     local entry_ids = {}
-    for i, item in ipairs(selected_items) do
+    for _, item in ipairs(selected_items) do
         table.insert(entry_ids, item.entry_data.id)
     end
 
@@ -708,7 +705,7 @@ function MinifluxBrowser:downloadSelectedEntries(selected_items)
 
     -- Extract entry data from selected items
     local entry_data_list = {}
-    for i, item in ipairs(selected_items) do
+    for _, item in ipairs(selected_items) do
         table.insert(entry_data_list, item.entry_data)
     end
 
@@ -739,7 +736,7 @@ function MinifluxBrowser:deleteSelectedEntries(selected_items)
     local local_entries = {}
     local EntryEntity = require('entities/entry_entity')
 
-    for i, item in ipairs(selected_items) do
+    for _, item in ipairs(selected_items) do
         local entry_data = item.entry_data
         if entry_data then
             -- Check if entry is locally downloaded by verifying HTML file exists
@@ -795,7 +792,7 @@ function MinifluxBrowser:performBatchDelete(local_entries)
     local success_count = 0
 
     -- Delete each entry
-    for i, entry_data in ipairs(local_entries) do
+    for _, entry_data in ipairs(local_entries) do
         local success = self.entry_service:deleteLocalEntry(entry_data.id)
         if success then
             success_count = success_count + 1
@@ -866,12 +863,12 @@ function MinifluxBrowser:updateItemTableStatus(selected_items, opts)
 
         -- Create lookup table for faster searching
         local ids_to_update = {}
-        for i, item in ipairs(selected_items) do
+        for _, item in ipairs(selected_items) do
             ids_to_update[item.entry_data.id] = true
         end
 
         -- Selective updates - only rebuild changed items (O(k) where k = selected items)
-        for i, item in ipairs(self.item_table) do
+        for _, item in ipairs(self.item_table) do
             if item.entry_data and item.entry_data.id and ids_to_update[item.entry_data.id] then
                 -- Update underlying data
                 item.entry_data.status = new_status
@@ -886,7 +883,7 @@ function MinifluxBrowser:updateItemTableStatus(selected_items, opts)
         end
     elseif item_type == 'feed' then
         -- Update feed unread count to 0 for visual feedback
-        for i, item in ipairs(self.item_table) do
+        for _, item in ipairs(self.item_table) do
             if item.feed_data and item.feed_data.id == selected_items[1].feed_data.id then
                 item.feed_data.unread_count = 0
                 -- Update display text if it includes count
@@ -897,7 +894,7 @@ function MinifluxBrowser:updateItemTableStatus(selected_items, opts)
         end
     elseif item_type == 'category' then
         -- Update category unread count to 0 for visual feedback
-        for i, item in ipairs(self.item_table) do
+        for _, item in ipairs(self.item_table) do
             if
                 item.category_data
                 and item.category_data.id == selected_items[1].category_data.id

@@ -27,7 +27,7 @@ local UpdateSettings = require('menu/settings/update_settings')
 ---@field download_dir string Full path to download directory
 ---@field settings MinifluxSettings Settings instance
 ---@field api MinifluxAPI Miniflux-specific API instance
----@field cache_service CacheService Miniflux data layer
+---@field data_repository DataRepository Miniflux data access layer
 ---@field entry_service EntryService Entry service instance
 ---@field collection_service CollectionService Collection service instance
 ---@field queue_service QueueService Unified queue management service instance
@@ -47,7 +47,7 @@ local Miniflux = WidgetContainer:extend({
     subprocesses_collect_interval = 10,
 })
 
----Register a module with the plugin for event handling (following ReaderUI pattern)
+---Register a module with the plugin for event handling
 ---@param name string Module name
 ---@param module table Module instance
 function Miniflux:registerModule(name, module)
@@ -61,7 +61,6 @@ end
 ---Handle FlushSettings event from UIManager
 function Miniflux:onFlushSettings()
     logger.dbg('[Miniflux:Main] Handling FlushSettings event')
-    logger.info(self.settings)
     self.settings:save()
 end
 
@@ -89,13 +88,13 @@ function Miniflux:init()
         end,
     })
 
-    -- Create cache service early (data access layer)
-    local CacheService = require('services/cache_service')
+    -- Create data repository early (data access layer)
+    local DataRepository = require('repositories/data_repository')
 
-    -- Register cache service as module for event handling
+    -- Register data repository as module for event handling
     self:registerModule(
-        'cache_service',
-        CacheService:new({
+        'data_repository',
+        DataRepository:new({
             miniflux_api = self.api,
             settings = self.settings,
         })
@@ -109,6 +108,12 @@ function Miniflux:init()
     self.entry_service = self.services.entry
     self.collection_service = self.services.collection
     self.queue_service = self.services.queue
+
+    local MinifluxBrowser = require('browser/miniflux_browser')
+    self.browser = MinifluxBrowser:new({
+        title = _('Miniflux'),
+        miniflux = self,
+    })
 
     if self.ui and self.ui.document then
         logger.dbg('[Miniflux:Main] Initializing KeyHandlerService for document context')
@@ -183,27 +188,7 @@ end
 ---Handle the read entries dispatcher event
 ---@return nil
 function Miniflux:onReadMinifluxEntries()
-    local browser = self:createBrowser()
-    browser:open()
-end
-
----Create and return a new browser instance (BookList-based)
----@return MinifluxBrowser Browser instance
-function Miniflux:createBrowser()
-    local MinifluxBrowser = require('browser/miniflux_browser')
-    local browser = MinifluxBrowser:new({
-        title = _('Miniflux'),
-        settings = self.settings,
-        miniflux_api = self.api,
-        download_dir = self.download_dir,
-        services = self.services,
-        miniflux_plugin = self, -- Pass plugin reference for context management
-    })
-
-    -- Register browser as module for event handling
-    self:registerModule('browser', browser)
-
-    return browser
+    self.browser:open()
 end
 
 ---Override ReaderStatus EndOfBook behavior to handle miniflux entries
@@ -303,7 +288,6 @@ function Miniflux:collectSubprocesses()
             UIManager:scheduleIn(self.subprocesses_collect_interval, function()
                 self:collectSubprocesses()
             end)
-        else
         end
     end
 end

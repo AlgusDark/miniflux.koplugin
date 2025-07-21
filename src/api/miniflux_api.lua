@@ -85,7 +85,7 @@ function MinifluxAPI:buildEntriesUrl(options)
         -- If all statuses are requested (unread + read), omit parameter for default behavior
         local has_unread = false
         local has_read = false
-        for i, status in ipairs(options.status) do
+        for _, status in ipairs(options.status) do
             if status == 'unread' then
                 has_unread = true
             elseif status == 'read' then
@@ -95,7 +95,7 @@ function MinifluxAPI:buildEntriesUrl(options)
 
         -- Only add status parameters if not requesting all entries
         if not (has_unread and has_read and #options.status == 2) then
-            for i, status in ipairs(options.status) do
+            for _, status in ipairs(options.status) do
                 table.insert(query_parts, 'status=' .. tostring(status))
             end
         end

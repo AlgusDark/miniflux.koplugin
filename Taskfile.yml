@@ -16,9 +16,9 @@ tasks:
       - echo "✅ Code formatted successfully"
 
   lint:
-    desc: Run luacheck static analysis
+    desc: Run selene static analysis
     cmds:
-      - luacheck src/
+      - selene src/
       - echo "✅ No linting issues found"
 
   lsp-check:
@@ -59,14 +59,14 @@ tasks:
         fi
 
   pre-commit-lint:
-    desc: Run luacheck only on staged files
+    desc: Run selene only on staged files
     silent: true
     cmds:
       - |
         STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.lua$' || true)
         if [ -n "$STAGED_FILES" ]; then
           echo "🔍 Linting staged files..."
-          echo "$STAGED_FILES" | xargs luacheck
+          echo "$STAGED_FILES" | xargs selene
           echo "✅ Staged files passed linting"
         else
           echo "ℹ️  No staged Lua files to lint"

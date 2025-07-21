@@ -89,7 +89,7 @@ direnv allow
 # Manual activation
 nix develop
 
-# Available tools: lua, luacheck, stylua, task
+# Available tools: lua, selene, stylua, task
 ```
 
 ### Manual Setup
@@ -98,14 +98,13 @@ If not using Nix, install these tools manually:
 
 ```bash
 # Install tools
-cargo install stylua
-luarocks install luacheck
+cargo install stylua selene
 ```
 
 ### Code Quality Tools
 
 - **StyLua**: Code formatter
-- **Luacheck**: Static analysis and linting
+- **Selene**: Static analysis and linting
 - **LuaLS**: Type checking with LuaCATS annotations
 
 ### Quick Commands

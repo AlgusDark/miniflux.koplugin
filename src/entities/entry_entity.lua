@@ -369,7 +369,7 @@ function EntryEntity.showCancellationDialog(context)
 
     -- Build button table for ButtonDialog
     local dialog_buttons = { {} }
-    for i, btn in ipairs(dialog_config.buttons) do
+    for _, btn in ipairs(dialog_config.buttons) do
         table.insert(dialog_buttons[1], {
             text = btn.text,
             callback = function()
@@ -601,7 +601,6 @@ function EntryEntity.getLocalEntries(opts)
                 local metadata = EntryEntity.loadMetadata(entry_id)
                 if metadata then
                     table.insert(entries, metadata)
-                else
                 end
             end
         end
@@ -692,10 +691,7 @@ local function sortEntries(entries, opts)
         local a_val, b_val
 
         -- Extract comparison values based on order setting
-        if order == 'published_at' then
-            a_val = a.published_at or ''
-            b_val = b.published_at or ''
-        elseif order == 'id' then
+        if order == 'id' then
             a_val = a.id or 0
             b_val = b.id or 0
         elseif order == 'title' then

@@ -1,7 +1,6 @@
 local UIManager = require('ui/uimanager')
 local ConfirmBox = require('ui/widget/confirmbox')
 local Notification = require('utils/notification')
-local InfoMessage = require('ui/widget/infomessage')
 local Trapper = require('ui/trapper')
 local util = require('util')
 local lfs = require('libs/libkoreader-lfs')
@@ -259,12 +258,6 @@ function CheckUpdates.checkForUpdates(options)
 
     if show_no_update == nil then
         show_no_update = true
-    end
-
-    -- Show checking message only for manual checks
-    local checking_notification
-    if show_no_update then
-        checking_notification = Notification:info(_('Checking for updates...'), { timeout = 2 })
     end
 
     local update_info, error = UpdateService.checkForUpdates(plugin_instance)

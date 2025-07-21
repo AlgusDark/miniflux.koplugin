@@ -175,10 +175,8 @@ function KeyHandlerService:showImageViewer(image)
         key_events = {
             -- Map all page turn keys to close the image viewer
             -- This overrides the default zoom behavior to provide consistent navigation
-            CloseRPgFwd = { { 'RPgFwd' }, event = 'Close' }, -- Right page forward
-            CloseLPgFwd = { { 'LPgFwd' }, event = 'Close' }, -- Left page forward
-            CloseRPgBack = { { 'RPgBack' }, event = 'Close' }, -- Right page back
-            CloseLPgBack = { { 'LPgBack' }, event = 'Close' }, -- Left page back
+            ClosePgFwd = { Device.input.group.PgFwd, event = 'Close' }, -- Page forward
+            ClosePgBack = { Device.input.group.PgBack, event = 'Close' }, -- Page back
         },
     })
 
@@ -243,22 +241,14 @@ function KeyHandlerService:enhanceDialogWithKeys(dialog, entry_info)
     -- Each key event maps a physical key to an event name that triggers a handler function
 
     -- Navigate to previous entry (logical "back" direction)
-    dialog.key_events.NavigatePreviousRPgBack = {
-        { 'RPgBack' }, -- Right page back button
-        event = 'NavigatePrevious',
-    }
-    dialog.key_events.NavigatePreviousLPgBack = {
-        { 'LPgBack' }, -- Left page back button
+    dialog.key_events.NavigatePrevious = {
+        Device.input.group.PgBack, -- Page back buttons
         event = 'NavigatePrevious',
     }
 
     -- Navigate to next entry (logical "forward" direction)
-    dialog.key_events.NavigateNextRPgFwd = {
-        { 'RPgFwd' }, -- Right page forward button
-        event = 'NavigateNext',
-    }
-    dialog.key_events.NavigateNextLPgFwd = {
-        { 'LPgFwd' }, -- Left page forward button
+    dialog.key_events.NavigateNext = {
+        Device.input.group.PgFwd, -- Page forward buttons
         event = 'NavigateNext',
     }
 
@@ -267,6 +257,7 @@ function KeyHandlerService:enhanceDialogWithKeys(dialog, entry_info)
     local stored_entry_info = entry_info
 
     -- Add event handlers
+    -- selene: allow(shadowing)
     function dialog:onNavigatePrevious()
         UIManager:close(self)
         local Navigation = require('services/navigation_service')
@@ -280,6 +271,7 @@ function KeyHandlerService:enhanceDialogWithKeys(dialog, entry_info)
         return true
     end
 
+    -- selene: allow(shadowing)
     function dialog:onNavigateNext()
         UIManager:close(self)
         local Navigation = require('services/navigation_service')

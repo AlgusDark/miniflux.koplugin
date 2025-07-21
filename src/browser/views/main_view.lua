@@ -13,7 +13,7 @@ local EntryEntity = require('entities/entry_entity')
 
 local MainView = {}
 
----@alias MainViewConfig {cache_service: CacheService, settings: MinifluxSettings, onSelectUnread: function, onSelectFeeds: function, onSelectCategories: function, onSelectLocal: function}
+---@alias MainViewConfig {entry_service: EntryService, collection_service: CollectionService, settings: MinifluxSettings, onSelectUnread: function, onSelectFeeds: function, onSelectCategories: function, onSelectLocal: function}
 
 ---Complete main view component (React-style) - returns view data for browser rendering
 ---@param config MainViewConfig
@@ -31,7 +31,10 @@ function MainView.show(config)
     if is_online then
         -- Try to load online data if connected
         local _error_msg
-        counts, _error_msg = MainView.loadData({ cache_service = config.cache_service })
+        counts, _error_msg = MainView.loadData({
+            entry_service = config.entry_service,
+            collection_service = config.collection_service,
+        })
         if not counts then
             -- Fall back to offline mode instead of showing error
             is_online = false
@@ -68,16 +71,17 @@ function MainView.show(config)
 end
 
 ---Load initial data needed for main screen (internal helper)
----@param config {cache_service: CacheService}
+---@param config {entry_service: EntryService, collection_service: CollectionService}
 ---@return table|nil result, string|nil error
 function MainView.loadData(config)
-    local cache_service = config.cache_service
+    local entry_service = config.entry_service
+    local collection_service = config.collection_service
 
     local Notification = require('utils/notification')
     local loading_notification = Notification:info(_('Loading...'))
 
     -- Get unread count
-    local unread_count, unread_err = cache_service:getUnreadCount()
+    local unread_count, unread_err = entry_service:getUnreadCount()
     if unread_err then
         loading_notification:close()
         return nil, unread_err.message
@@ -85,7 +89,7 @@ function MainView.loadData(config)
     ---@cast unread_count -nil
 
     -- Get feeds count
-    local feeds_count, feeds_err = cache_service:getFeedCount()
+    local feeds_count, feeds_err = collection_service:getFeedCount()
     if feeds_err then
         loading_notification:close()
         return nil, feeds_err.message
@@ -93,7 +97,7 @@ function MainView.loadData(config)
     ---@cast feeds_count -nil
 
     -- Get categories count
-    local categories_count, categories_err = cache_service:getCategoryCount()
+    local categories_count, categories_err = collection_service:getCategoryCount()
     if categories_err then
         loading_notification:close()
         return nil, categories_err.message
