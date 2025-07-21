@@ -1,23 +1,25 @@
 local CacheStore = require('utils/cache_store')
 local EventListener = require('ui/widget/eventlistener')
 local logger = require('logger')
+local MinifluxSettings = require('settings/settings')
 
--- **Cache Service** - Replaces repository pattern with simple caching
+-- **Data Repository** - Unified data access layer with caching
 --
--- This service eliminates the 4-layer repository abstraction and provides
--- direct API calls with simple caching. Maintains all current functionality:
+-- Repository that combines data access and caching responsibilities.
+-- Maintains all current functionality:
 -- - Browser navigation performance (cached counts)
 -- - Cache invalidation patterns (count updates)
 -- - E-ink device optimizations (entry arrays NOT cached)
 -- - All existing TTL values and behavior
----@class CacheService : EventListener
+-- - Event-driven cache invalidation
+---@class DataRepository : EventListener
 ---@field miniflux_api MinifluxAPI Direct API access
 ---@field settings MinifluxSettings Settings for TTL and cache control
 ---@field cache CacheStore Shared cache store for all data types
-local CacheService = EventListener:extend({})
+local DataRepository = EventListener:extend({})
 
-function CacheService:init()
-    logger.dbg('[Miniflux:CacheService] Calling init')
+function DataRepository:init()
+    logger.dbg('[Miniflux:DataRepository] Calling init')
     self.cache = CacheStore:new({
         default_ttl = self.settings.api_cache_ttl,
         db_name = 'miniflux_cache.sqlite',
@@ -25,13 +27,13 @@ function CacheService:init()
 end
 
 -- =============================================================================
--- FEED OPERATIONS (replaces FeedRepository)
+-- FEED OPERATIONS
 -- =============================================================================
 
 ---Get all feeds (cached)
 ---@param config? table Optional configuration with dialogs
 ---@return MinifluxFeed[]|nil result, Error|nil error
-function CacheService:getFeeds(config)
+function DataRepository:getFeeds(config)
     if not self.settings.api_cache_enabled then
         return self.miniflux_api:getFeeds(config)
     end
@@ -58,7 +60,7 @@ end
 ---Get feeds with counters (cached separately with shorter TTL)
 ---@param config? table Optional configuration with dialogs
 ---@return {feeds: MinifluxFeed[], counters: MinifluxFeedCounters}|nil result, Error|nil error
-function CacheService:getFeedsWithCounters(config)
+function DataRepository:getFeedsWithCounters(config)
     if not self.settings.api_cache_enabled then
         local feeds, err = self:getFeeds(config)
         if err then
@@ -78,12 +80,12 @@ function CacheService:getFeedsWithCounters(config)
         self.cache:get(cache_key, { ttl = self.settings.api_cache_ttl_counters })
 
     if is_valid and cached_data then
-        logger.dbg('[Miniflux:CacheService] Cache hit: feeds_with_counters')
+        logger.dbg('[Miniflux:DataRepository] Cache hit: feeds_with_counters')
         return cached_data.result, cached_data.error
     end
 
     -- Cache miss - build result
-    logger.dbg('[Miniflux:CacheService] Cache miss: feeds_with_counters, fetching from API')
+    logger.dbg('[Miniflux:DataRepository] Cache miss: feeds_with_counters, fetching from API')
     local feeds, err = self:getFeeds(config)
     if err then
         return nil, err
@@ -107,7 +109,7 @@ end
 ---Get feed count (uses cached feeds)
 ---@param config? table Optional configuration
 ---@return number|nil count, Error|nil error
-function CacheService:getFeedCount(config)
+function DataRepository:getFeedCount(config)
     local feeds, err = self:getFeeds(config)
     if err then
         return nil, err
@@ -116,13 +118,13 @@ function CacheService:getFeedCount(config)
 end
 
 -- =============================================================================
--- CATEGORY OPERATIONS (replaces CategoryRepository)
+-- CATEGORY OPERATIONS
 -- =============================================================================
 
 ---Get all categories with counts (cached)
 ---@param config? table Optional configuration with dialogs
 ---@return MinifluxCategory[]|nil result, Error|nil error
-function CacheService:getCategories(config)
+function DataRepository:getCategories(config)
     if not self.settings.api_cache_enabled then
         return self.miniflux_api:getCategories(true, config) -- include counts
     end
@@ -149,7 +151,7 @@ end
 ---Get category count (uses cached categories)
 ---@param config? table Optional configuration
 ---@return number|nil count, Error|nil error
-function CacheService:getCategoryCount(config)
+function DataRepository:getCategoryCount(config)
     local categories, err = self:getCategories(config)
     if err then
         return nil, err
@@ -158,13 +160,13 @@ function CacheService:getCategoryCount(config)
 end
 
 -- =============================================================================
--- ENTRY OPERATIONS (replaces EntryRepository)
+-- ENTRY OPERATIONS
 -- =============================================================================
 
 ---Get unread entries (NOT cached - preserves current behavior)
 ---@param config? table Optional configuration
 ---@return MinifluxEntry[]|nil entries, Error|nil error
-function CacheService:getUnreadEntries(config)
+function DataRepository:getUnreadEntries(config)
     local options = {
         status = { 'unread' },
         order = self.settings.order,
@@ -185,7 +187,7 @@ end
 ---@param feed_id number Feed ID
 ---@param config? table Optional configuration
 ---@return MinifluxEntry[]|nil entries, Error|nil error
-function CacheService:getEntriesByFeed(feed_id, config)
+function DataRepository:getEntriesByFeed(feed_id, config)
     local options = {
         feed_id = feed_id,
         order = self.settings.order,
@@ -207,7 +209,7 @@ end
 ---@param category_id number Category ID
 ---@param config? table Optional configuration
 ---@return MinifluxEntry[]|nil entries, Error|nil error
-function CacheService:getEntriesByCategory(category_id, config)
+function DataRepository:getEntriesByCategory(category_id, config)
     local options = {
         category_id = category_id,
         order = self.settings.order,
@@ -228,7 +230,7 @@ end
 ---Get unread count (cached - critical for main menu performance)
 ---@param config? table Optional configuration
 ---@return number|nil count, Error|nil error
-function CacheService:getUnreadCount(config)
+function DataRepository:getUnreadCount(config)
     if not self.settings.api_cache_enabled then
         local options = { limit = 1, status = { 'unread' } }
         local result, err = self.miniflux_api:getEntries(options, config)
@@ -267,14 +269,14 @@ function CacheService:getUnreadCount(config)
 end
 
 -- =============================================================================
--- CACHE MANAGEMENT (preserves all invalidation patterns)
+-- CACHE MANAGEMENT
 -- =============================================================================
 
 ---Invalidate all cached data
 ---Critical for count updates after status changes
 ---@return boolean success
-function CacheService:invalidateAll()
-    logger.info('[Miniflux:CacheService] Invalidating all cache')
+function DataRepository:invalidateAll()
+    logger.info('[Miniflux:DataRepository] Invalidating all cache')
     if not self.settings.api_cache_enabled then
         return true
     end
@@ -286,8 +288,8 @@ end
 ---Invalidate specific cache key
 ---@param cache_key string Cache key to invalidate
 ---@return boolean success
-function CacheService:invalidate(cache_key)
-    logger.dbg('[Miniflux:CacheService] Invalidating cache key:', cache_key)
+function DataRepository:invalidate(cache_key)
+    logger.dbg('[Miniflux:DataRepository] Invalidating cache key:', cache_key)
     if not self.settings.api_cache_enabled then
         return true
     end
@@ -297,7 +299,7 @@ end
 
 ---Get cache statistics
 ---@return {count: number, size: number}
-function CacheService:getCacheStats()
+function DataRepository:getCacheStats()
     if not self.settings.api_cache_enabled then
         return { count = 0, size = 0 }
     end
@@ -306,27 +308,28 @@ function CacheService:getCacheStats()
 end
 
 -- =============================================================================
--- EVENT HANDLERS (for event-driven cache invalidation)
+-- EVENT HANDLERS
 -- =============================================================================
 
----Handle settings change events
----@param event table Event data containing key, old_value, new_value
-function CacheService:onMinifluxSettingsChanged(event)
-    local key = event.key
-    logger.dbg('[Miniflux:CacheService] Settings changed:', key)
+local invalidating_keys = {
+    [MinifluxSettings.Key.ORDER] = true,
+    [MinifluxSettings.Key.DIRECTION] = true,
+    [MinifluxSettings.Key.LIMIT] = true,
+    [MinifluxSettings.Key.HIDE_READ_ENTRIES] = true,
+}
 
-    -- Invalidate cache on relevant setting changes
-    if key == 'order' or key == 'direction' or key == 'limit' or key == 'hide_read_entries' then
-        logger.info('[Miniflux:CacheService] Invalidating cache due to setting change:', key)
+function DataRepository:onMinifluxSettingsChanged(payload)
+    local key = payload.key
+
+    if invalidating_keys[key] then
+        logger.info('[Miniflux:DataRepository] Invalidating cache due to setting change:', key)
         self:invalidateAll()
     end
 end
 
----Handle cache invalidation events from services
----@param event table Event data
-function CacheService:onMinifluxCacheInvalidate(event)
-    logger.info('[Miniflux:CacheService] Cache invalidation event received')
+function DataRepository:onMinifluxCacheInvalidate()
+    logger.info('[Miniflux:DataRepository] Cache invalidation event received')
     self:invalidateAll()
 end
 
-return CacheService
+return DataRepository

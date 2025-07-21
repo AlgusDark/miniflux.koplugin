@@ -32,7 +32,9 @@
       "dbg",
       "htmlparser"
     ],
-    "disable": ["undefined-global", "lowercase-global"]
+    "disable": ["undefined-global", "lowercase-global",
+            "unused-local",
+            "redefined-local"]
   },
   "runtime": {
     "version": "Lua 5.1",

@@ -158,7 +158,6 @@ function MetadataPreserver.wrapReaderClose(reader_ui)
             end
 
             -- Check if there's a pending queue entry that might indicate recent user action
-            local Files = require('utils/files')
             local miniflux_dir = EntryEntity.getDownloadDir()
             local queue_file = miniflux_dir .. 'status_queue.lua'
             local lfs = require('libs/libkoreader-lfs')

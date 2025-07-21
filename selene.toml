@@ -1,0 +1,87 @@
+# Selene Configuration for KOReader Plugin Development
+
+std = "lua51"  # KOReader uses Lua 5.1
+
+exclude = [
+    "dist/*",
+    "typedefs/*",
+    "improvements/*",
+    ".luarocks/*",
+    "spec/*",
+    "*.spec.lua",
+]
+
+[config]
+# Global variables allowed (KOReader framework)
+globals = [
+    # KOReader UI framework
+    "UIManager",
+    "BookList", 
+    "WidgetContainer",
+    "InfoMessage",
+    "ButtonDialog",
+    "ConfirmBox",
+    "MultiInputDialog",
+    "ButtonDialogTitle",
+    "TitleBar",
+    "ImageViewer",
+    "IconButton",
+    "FrameContainer",
+    "VerticalGroup",
+    "TextWidget",
+    "IconWidget",
+    "EventListener",
+
+    # KOReader system
+    "DataStorage",
+    "LuaSettings",
+    "CacheSQLite",
+    "DocSettings",
+    "Dispatcher",
+    "FFIUtil",
+
+    # KOReader utilities
+    "util",
+    "lfs",
+    "logger",
+    "dbg",
+
+    # Localization
+    "_", # gettext function
+
+    # Third-party libraries (from koreader-base thirdparty)
+    "htmlparser",
+]
+
+# Read-only globals (matching .luacheckrc read_globals)
+read_only_globals = [
+    "require",
+    "pcall", "xpcall",
+    "pairs", "ipairs",
+    "tostring", "tonumber",
+    "string", "table", "math", "os", "io",
+    "type", "getmetatable", "setmetatable",
+    "rawget", "rawset", "rawequal", "rawlen",
+    "next", "select",
+    "unpack", # Lua 5.1
+]
+
+# Lint rules configuration
+[rules]
+# Core issues to catch - keep these warnings active
+unused_variable = "warn"
+unused_argument = "warn"
+unused_loop_variable = "warn"
+undefined_variable = "warn"
+shadowing = "warn"
+empty_block = "warn"
+
+mixed_table = "allow"  # KOReader key_events inherently use mixed tables
+inconsistent_table_style = "allow"  # KOReader mixes table styles
+
+# Ignore unused variables/arguments with underscore prefix (standard convention)
+[config.unused_variable]
+ignore_pattern = "^_"
+
+[config.unused_argument] 
+ignore_pattern = "^_"

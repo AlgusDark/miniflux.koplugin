@@ -56,6 +56,26 @@ local DEFAULTS = {
 ---@field auto_update_last_check number Timestamp of last update check
 local MinifluxSettings = {}
 
+---@enum MinifluxSettingsKeys
+---| "server_address"
+---| "api_token"
+---| "limit"
+---| "order"
+---| "direction"
+---| "hide_read_entries"
+---| "include_images"
+---| "mark_as_read_on_open"
+MinifluxSettings.Key = {
+    SERVER_ADDRESS = 'server_address',
+    API_TOKEN = 'api_token',
+    LIMIT = 'limit',
+    ORDER = 'order',
+    DIRECTION = 'direction',
+    HIDE_READ_ENTRIES = 'hide_read_entries',
+    INCLUDE_IMAGES = 'include_images',
+    MARK_AS_READ_ON_OPEN = 'mark_as_read_on_open',
+}
+
 ---Create a new MinifluxSettings instance
 ---@return MinifluxSettings
 function MinifluxSettings:new()
@@ -87,7 +107,7 @@ function MinifluxSettings:__index(key)
 end
 
 ---Handle property writing with auto-save
----@param key string Property name
+---@param key MinifluxSettingsKeys Property name
 ---@param value any Property value
 function MinifluxSettings:__newindex(key, value)
     -- Handle settings
@@ -97,7 +117,7 @@ function MinifluxSettings:__newindex(key, value)
 
         -- Broadcast settings change event
         local MinifluxEvent = require('utils/event')
-        MinifluxEvent.broadcastEvent('MinifluxSettingsChanged', {
+        MinifluxEvent:broadcastMinifluxSettingsChange({
             key = key,
             old_value = old_value,
             new_value = value,

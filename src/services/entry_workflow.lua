@@ -491,7 +491,7 @@ function EntryWorkflow.execute(deps)
         local success_count = 0
         local failed_count = 0
 
-        for i, img in ipairs(images) do
+        for _, img in ipairs(images) do
             if img.downloaded then
                 success_count = success_count + 1
             else

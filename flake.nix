@@ -13,7 +13,6 @@
         
         # Simple Lua environment with essential packages only
         luaEnv = pkgs.lua5_1.withPackages (ps: with ps; [
-          luacheck
           busted
           # htmlparser installed via luarocks locally when needed
         ]);
@@ -21,10 +20,11 @@
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             # Lua development essentials
-            luaEnv                      # lua5_1 + luacheck + busted
+            luaEnv                      # lua5_1 + busted
             lua51Packages.luarocks      # Use Lua 5.1 specific luarocks
             lua-language-server         # LSP for IDE diagnostics
             stylua                      # Lua code formatter
+            selene                      # Modern Lua linter (Rust-based)
             
             # Build tools (use system git, rsync, zip)
             go-task
@@ -32,7 +32,7 @@
 
           shellHook = ''
             echo "🎯 Miniflux KOReader Plugin Development Environment"
-            echo "📦 Lua 5.1 + luacheck + busted + luarocks + lua-language-server + stylua"
+            echo "📦 Lua 5.1 + busted + luarocks + lua-language-server + stylua + selene"
             echo "✨ Complete development toolchain ready!"
             
             # Ensure htmlparser is available
@@ -48,7 +48,6 @@
 
           # Environment variables for development
           STYLUA_CONFIG_PATH = "./stylua.toml";
-          LUACHECK_CONFIG = "./.luacheckrc";
         };
       });
 }

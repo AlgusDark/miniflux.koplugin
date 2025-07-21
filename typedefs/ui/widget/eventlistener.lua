@@ -23,7 +23,7 @@
 ---- Class inheritance system with metatable prototype chains
 ---- Automatic event handler resolution
 ---- Foundation for all widget event handling
----@class EventListener
+---@class EventListener : MinifluxEventListener
 ---@field init function|nil Initialization function
 ---@field [string] function Dynamic event handler methods (onTap, onHold, etc.)
 local EventListener = {}

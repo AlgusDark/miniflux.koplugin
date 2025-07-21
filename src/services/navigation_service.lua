@@ -47,13 +47,6 @@ function Navigation.getContextAwareOptions(opts)
         -- Use context.id if available (browsing specific category), otherwise use entry's category
         local category_id = context.id or (entry_metadata.category and entry_metadata.category.id)
         options.category_id = category_id
-    elseif context and context.type == 'unread' then
-        -- For unread context, always filter by unread status only
-        -- This ensures navigation stays within unread entries
-    elseif context and context.type == 'local' then
-        -- Local context detected - this will be handled in the main navigation function
-        -- Just continue with normal options building for now
-    else
     end
     -- For "global" type or nil context, no additional filtering (browse all entries)
 
@@ -138,11 +131,9 @@ function Navigation.navigateToEntry(entry_info, config)
                     '[Miniflux:NavigationService] Failed to load metadata for entry:',
                     target_entry_id
                 )
-                local Notification = require('utils/notification')
                 Notification:error(_('Failed to open target entry'))
             end
         else
-            local Notification = require('utils/notification')
             Notification:info(_('No ' .. direction .. ' entry available in local files'))
         end
         return

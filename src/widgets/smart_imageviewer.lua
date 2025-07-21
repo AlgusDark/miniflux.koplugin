@@ -9,6 +9,7 @@ Simple and focused - just overrides key events for better navigation.
 
 local ImageViewer = require('ui/widget/imageviewer')
 local UIManager = require('ui/uimanager')
+local Device = require('device')
 
 ---@class SmartImageViewer : ImageViewer
 local SmartImageViewer = ImageViewer:extend({})
@@ -27,12 +28,10 @@ function SmartImageViewer:setupKeyEvents()
     -- Override the parent's key_events with our close actions
     self.key_events = {
         -- Map all page turn keys to close the image viewer (same as end-of-entry dialog)
-        CloseRPgFwd = { { 'RPgFwd' }, doc = 'close image viewer' }, -- Right page forward
-        CloseLPgFwd = { { 'LPgFwd' }, doc = 'close image viewer' }, -- Left page forward
-        CloseRPgBack = { { 'RPgBack' }, doc = 'close image viewer' }, -- Right page back
-        CloseLPgBack = { { 'LPgBack' }, doc = 'close image viewer' }, -- Left page back
+        ClosePgFwd = { Device.input.group.PgFwd, doc = 'close image viewer' }, -- Page forward
+        ClosePgBack = { Device.input.group.PgBack, doc = 'close image viewer' }, -- Page back
         -- Keep original close keys for other buttons
-        Close = { { 'Back', 'Left' }, doc = 'close image viewer' },
+        Close = { Device.input.group.Back, doc = 'close image viewer' },
         CloseAlt = { { 'Right' }, doc = 'close image viewer' },
     }
 end
