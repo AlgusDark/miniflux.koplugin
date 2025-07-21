@@ -126,7 +126,7 @@ function Browser:showSelectionActionsDialog()
     if actions_enabled then
         local available_actions = self:getSelectionActions()
 
-        for i, action in ipairs(available_actions) do
+        for _, action in ipairs(available_actions) do
             table.insert(selection_actions, {
                 text = action.text,
                 enabled = actions_enabled,
@@ -218,7 +218,7 @@ function Browser:getSelectedCount()
         return 0
     end
     local count = 0
-    for i in pairs(self.selected_items) do
+    for _ in pairs(self.selected_items) do
         count = count + 1
     end
     return count
@@ -228,7 +228,7 @@ end
 function Browser:getSelectedItemIds()
     local selected = {}
     if self.selected_items then
-        for item_id, i in pairs(self.selected_items) do
+        for item_id, _ in pairs(self.selected_items) do
             table.insert(selected, item_id)
         end
     end
@@ -239,7 +239,7 @@ end
 function Browser:getSelectedItems()
     local selected = {}
     if self.selected_items then
-        for item_id, item_object in pairs(self.selected_items) do
+        for _, item_object in pairs(self.selected_items) do
             table.insert(selected, item_object)
         end
     end
@@ -312,7 +312,7 @@ function Browser:updateItemDimStatus(items)
     -- Process all items passed to this function (caller determines scope)
     -- When called from switchItemTable: processes current page items
     -- When called from refreshCurrentView: processes visible items only
-    for i, item in ipairs(items) do
+    for _, item in ipairs(items) do
         local item_id = self:getItemId(item)
         item.dim = self.selected_items[item_id] and true or nil
     end
@@ -331,7 +331,7 @@ function Browser:clearVisualSelection()
     if self.item_table then
         -- PERFORMANCE OPTIMIZATION: Only clear visual indicators for visible items
         local visible_items = self:getVisibleItems(self.item_table)
-        for i, item in ipairs(visible_items) do
+        for _, item in ipairs(visible_items) do
             item.dim = nil
         end
         self:updateItems(1, true) -- select_number=1, no_recalculate_dimen=true
@@ -648,7 +648,7 @@ function Browser:selectAllInCurrentView(do_select)
     end
 
     -- Update selection state for all items (following FileChooser pattern)
-    for i, item in ipairs(self.item_table) do
+    for _, item in ipairs(self.item_table) do
         local item_id = self:getItemId(item)
         if item_id then
             if do_select then
@@ -690,6 +690,7 @@ end
 ---@generic T
 ---@param nav_config RouteConfig<T> Navigation configuration
 ---@return table<string, function> Route handlers lookup table
+-- selene: allow(unused_variable)
 function Browser:getRouteHandlers(nav_config)
     error('Browser subclass must implement getRouteHandlers(nav_config)')
 end
@@ -697,6 +698,7 @@ end
 ---Open an item with optional navigation context
 ---@param item_data table Item data to open
 ---@param context? table Navigation context
+-- selene: allow(unused_variable)
 function Browser:openItem(item_data, context)
     error('Browser subclass must implement openItem()')
 end
@@ -704,6 +706,7 @@ end
 ---Get unique identifier for an item (required for selection functionality)
 ---@param item_data table Item data object
 ---@return string|number Unique identifier for the item
+-- selene: allow(unused_variable)
 function Browser:getItemId(item_data)
     error('Browser subclass must implement getItemId() for selection functionality')
 end

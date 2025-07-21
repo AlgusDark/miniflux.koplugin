@@ -135,7 +135,7 @@ function APIClient:makeRequest(method, endpoint, config)
         local query_parts = {}
         for key, value in pairs(config.query) do
             if type(value) == 'table' then
-                for i, v in ipairs(value) do
+                for _, v in ipairs(value) do
                     addQueryParam(query_parts, { key = key, value = v })
                 end
             else

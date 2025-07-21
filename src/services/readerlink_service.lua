@@ -124,6 +124,7 @@ end
 ---
 ---@param reader_link_instance table ReaderLink instance (not used, but provided by dialog)
 ---@return nil
+-- selene: allow(unused_variable)
 function ReaderLinkService:handleImageViewerAction(reader_link_instance)
     -- Check if we have a stored tap position
     if not self.last_link_tap_pos then
@@ -182,6 +183,7 @@ end
 ---
 ---@param link_url string The URL of the link (not used, but required by ReaderLink)
 ---@return boolean True if button should be shown, false otherwise
+-- selene: allow(unused_variable)
 function ReaderLinkService:shouldShowImageViewerButton(link_url)
     -- Only show for miniflux entries
     if not self:isMinifluxEntry() then

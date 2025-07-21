@@ -3,31 +3,69 @@ local Notification = require('utils/notification')
 
 -- **Collection Service** - Handles feed and category workflows and orchestration.
 --
--- Unified service that coordinates between collections (feeds/categories) and infrastructure services
--- to provide high-level collection operations including notifications and cache management.
---
--- Replaces the duplicate FeedService and CategoryService with a single parameterized implementation.
+-- Service layer for collection operations using proper repository pattern.
+-- Provides business logic for feeds and categories, delegates data access to repository.
+-- Handles UI notifications, error handling, and offline queue management.
 ---@class CollectionService
 ---@field settings MinifluxSettings Settings instance
----@field miniflux_api MinifluxAPI API client for collection operations
+---@field data_repository DataRepository Data access layer
+---@field miniflux_api MinifluxAPI API client for direct operations (mark as read, etc.)
 local CollectionService = {}
 
 ---@class CollectionServiceDeps
 ---@field settings MinifluxSettings
+---@field data_repository DataRepository
 ---@field miniflux_api MinifluxAPI
 
 ---Create a new CollectionService instance
----@param deps CollectionServiceDeps Dependencies containing settings and API
+---@param deps CollectionServiceDeps Dependencies containing settings, repository, and API
 ---@return CollectionService
 function CollectionService:new(deps)
     local instance = {
         settings = deps.settings,
+        data_repository = deps.data_repository,
         miniflux_api = deps.miniflux_api,
     }
     setmetatable(instance, self)
     self.__index = self
     return instance
 end
+
+-- =============================================================================
+-- DATA ACCESS OPERATIONS (delegate to repository)
+-- =============================================================================
+
+---Get feeds with counters for feeds view
+---@param config? table Optional configuration with dialogs
+---@return {feeds: MinifluxFeed[], counters: MinifluxFeedCounters}|nil result, Error|nil error
+function CollectionService:getFeedsWithCounters(config)
+    return self.data_repository:getFeedsWithCounters(config)
+end
+
+---Get feeds count for navigation
+---@param config? table Optional configuration
+---@return number|nil count, Error|nil error
+function CollectionService:getFeedCount(config)
+    return self.data_repository:getFeedCount(config)
+end
+
+---Get categories for categories view
+---@param config? table Optional configuration with dialogs
+---@return MinifluxCategory[]|nil categories, Error|nil error
+function CollectionService:getCategories(config)
+    return self.data_repository:getCategories(config)
+end
+
+---Get categories count for navigation
+---@param config? table Optional configuration
+---@return number|nil count, Error|nil error
+function CollectionService:getCategoryCount(config)
+    return self.data_repository:getCategoryCount(config)
+end
+
+-- =============================================================================
+-- BUSINESS OPERATIONS (workflows and orchestration)
+-- =============================================================================
 
 ---Mark all entries in a collection (feed or category) as read
 ---@param collection_type string Type of collection ('feed' or 'category')
@@ -97,7 +135,7 @@ function CollectionService:markAsRead(collection_type, collection_id)
 
         -- Invalidate all caches IMMEDIATELY so counts update
         local MinifluxEvent = require('utils/event')
-        MinifluxEvent.broadcastEvent('MinifluxCacheInvalidate', {})
+        MinifluxEvent:broadcastMinifluxInvalidateCache()
 
         -- Show simple success notification (no dialog)
         Notification:success(success_message)

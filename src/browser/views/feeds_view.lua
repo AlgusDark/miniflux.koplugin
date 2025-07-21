@@ -12,14 +12,14 @@ local _ = require('gettext')
 
 local FeedsView = {}
 
----@alias FeedsViewConfig {cache_service: CacheService, settings: MinifluxSettings, page_state?: number, onSelectItem: function}
+---@alias FeedsViewConfig {collection_service: CollectionService, settings: MinifluxSettings, page_state?: number, onSelectItem: function}
 
 ---Complete feeds view component (React-style) - returns view data for rendering
 ---@param config FeedsViewConfig
 ---@return table|nil View data for browser rendering, or nil on error
 function FeedsView.show(config)
     -- Fetch data with API-level dialog management
-    local result, err = config.cache_service:getFeedsWithCounters({
+    local result, err = config.collection_service:getFeedsWithCounters({
         dialogs = {
             loading = { text = _('Fetching feeds...') },
             error = { text = _('Failed to fetch feeds'), timeout = 5 },
@@ -67,7 +67,7 @@ function FeedsView.buildItems(config)
 
     local menu_items = {}
 
-    for i, feed in ipairs(feeds) do
+    for _, feed in ipairs(feeds) do
         local feed_title = feed.title or _('Untitled Feed')
         local feed_id_str = tostring(feed.id or 0)
 

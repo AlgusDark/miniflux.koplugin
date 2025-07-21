@@ -12,14 +12,14 @@ local _ = require('gettext')
 
 local CategoriesView = {}
 
----@alias CategoriesViewConfig {cache_service: CacheService, settings: MinifluxSettings, page_state?: number, onSelectItem: function}
+---@alias CategoriesViewConfig {collection_service: CollectionService, settings: MinifluxSettings, page_state?: number, onSelectItem: function}
 
 ---Complete categories view component (React-style) - returns view data for rendering
 ---@param config CategoriesViewConfig
 ---@return table|nil View data for browser rendering, or nil on error
 function CategoriesView.show(config)
     -- Fetch data with API-level dialog management
-    local categories, err = config.cache_service:getCategories({
+    local categories, err = config.collection_service:getCategories({
         dialogs = {
             loading = { text = _('Fetching categories...') },
             error = { text = _('Failed to fetch categories'), timeout = 5 },
@@ -65,7 +65,7 @@ function CategoriesView.buildItems(config)
 
     local menu_items = {}
 
-    for i, category in ipairs(categories) do
+    for _, category in ipairs(categories) do
         local category_title = category.title or _('Untitled Category')
         local unread_count = category.total_unread or 0
 

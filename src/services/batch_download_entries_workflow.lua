@@ -37,7 +37,6 @@ function BatchDownloadEntriesWorkflow.execute(deps)
     Trapper:wrap(function()
         local completed_count = 0
         local failed_count = 0
-        local results = {}
 
         -- Batch state tracking for stateful cancellation dialogs
         local batch_state = {
@@ -96,9 +95,6 @@ function BatchDownloadEntriesWorkflow.execute(deps)
                     elseif user_choice == 'include_images_all' then
                         batch_state.skip_images_for_all = false
                         -- Continue with current entry
-                    else -- "resume_downloading" or nil (dialog failed)
-                        -- If dialog failed (nil), default to resuming to avoid silent abort
-                        -- Continue with current entry
                     end
                 end
             else
@@ -132,18 +128,8 @@ function BatchDownloadEntriesWorkflow.execute(deps)
 
             if success then
                 completed_count = completed_count + 1
-                table.insert(results, {
-                    entry_id = entry_data.id,
-                    title = entry_title,
-                    status = 'completed',
-                })
             else
                 failed_count = failed_count + 1
-                table.insert(results, {
-                    entry_id = entry_data.id,
-                    title = entry_title,
-                    status = 'failed',
-                })
             end
         end
 
@@ -268,9 +254,6 @@ function BatchDownloadEntriesWorkflow.downloadSingleEntry(entry_data, opts)
                     elseif user_choice == 'include_images_all' then
                         batch_state.skip_images_for_all = false
                         -- Continue downloading images
-                    else -- "resume_downloading" or nil (dialog failed)
-                        -- If dialog failed (nil), default to resuming to avoid silent abort
-                        -- Continue downloading images
                     end
                 end
             else
@@ -330,7 +313,7 @@ function BatchDownloadEntriesWorkflow.downloadSingleEntry(entry_data, opts)
 
     -- Count successful images for metadata
     local success_count = 0
-    for i, img in ipairs(images) do
+    for _, img in ipairs(images) do
         if img.downloaded then
             success_count = success_count + 1
         end

@@ -16,27 +16,30 @@ local DownloadCache = require('utils/download_cache')
 
 -- **Entry Service** - Handles complex entry workflows and orchestration.
 --
--- It coordinates between the Entry entity, repositories, and infrastructure
--- services to provide high-level entry operations including UI coordination,
--- navigation, and dialog management.
+-- Service layer for entry operations using proper repository pattern.
+-- Provides business logic for entries, delegates data access to repository.
+-- Handles UI coordination, navigation, workflows, and queue management.
 ---@class EntryService
 ---@field settings MinifluxSettings Settings instance
----@field miniflux_api MinifluxAPI Miniflux API instance
+---@field data_repository DataRepository Data access layer
+---@field miniflux_api MinifluxAPI API instance for direct operations (status updates, etc.)
 ---@field miniflux_plugin Miniflux Plugin instance for context management
 ---@field entry_subprocesses table<number, number> Map of entry_id to subprocess PID
 local EntryService = {}
 
 ---@class EntryServiceDeps
 ---@field settings MinifluxSettings
+---@field data_repository DataRepository
 ---@field miniflux_api MinifluxAPI
 ---@field miniflux_plugin Miniflux
 
 ---Create a new EntryService instance
----@param deps EntryServiceDeps Dependencies containing settings, API, and plugin
+---@param deps EntryServiceDeps Dependencies containing settings, repository, API, and plugin
 ---@return EntryService
 function EntryService:new(deps)
     local instance = {
         settings = deps.settings,
+        data_repository = deps.data_repository,
         miniflux_api = deps.miniflux_api,
         miniflux_plugin = deps.miniflux_plugin,
         entry_subprocesses = {}, -- Track subprocesses per entry
@@ -45,6 +48,40 @@ function EntryService:new(deps)
     self.__index = self
 
     return instance
+end
+
+-- =============================================================================
+-- DATA ACCESS OPERATIONS (delegate to repository)
+-- =============================================================================
+
+---Get unread entries for entries view
+---@param config? table Optional configuration
+---@return MinifluxEntry[]|nil entries, Error|nil error
+function EntryService:getUnreadEntries(config)
+    return self.data_repository:getUnreadEntries(config)
+end
+
+---Get entries by feed for feed entries view
+---@param feed_id number Feed ID
+---@param config? table Optional configuration
+---@return MinifluxEntry[]|nil entries, Error|nil error
+function EntryService:getEntriesByFeed(feed_id, config)
+    return self.data_repository:getEntriesByFeed(feed_id, config)
+end
+
+---Get entries by category for category entries view
+---@param category_id number Category ID
+---@param config? table Optional configuration
+---@return MinifluxEntry[]|nil entries, Error|nil error
+function EntryService:getEntriesByCategory(category_id, config)
+    return self.data_repository:getEntriesByCategory(category_id, config)
+end
+
+---Get unread count for main view and navigation
+---@param config? table Optional configuration
+---@return number|nil count, Error|nil error
+function EntryService:getUnreadCount(config)
+    return self.data_repository:getUnreadCount(config)
 end
 
 -- =============================================================================
@@ -65,7 +102,6 @@ function EntryService:loadQueue()
     local queue_file = self:getQueueFilePath()
 
     -- Check if queue file exists
-    local lfs = require('libs/libkoreader-lfs')
     if not lfs.attributes(queue_file, 'mode') then
         return {} -- Empty queue if file doesn't exist
     end
@@ -74,7 +110,7 @@ function EntryService:loadQueue()
     local success, queue_data = pcall(dofile, queue_file)
     if success and type(queue_data) == 'table' then
         local count = 0
-        for i in pairs(queue_data) do
+        for _ in pairs(queue_data) do
             count = count + 1
         end
         return queue_data
@@ -90,7 +126,7 @@ function EntryService:saveQueue(queue)
     local queue_file = self:getQueueFilePath()
 
     local count = 0
-    for i in pairs(queue) do
+    for _ in pairs(queue) do
         count = count + 1
     end
 
@@ -135,7 +171,7 @@ function EntryService:enqueueStatusChange(entry_id, opts)
 
     local queue = self:loadQueue()
     local queue_size_before = 0
-    for i in pairs(queue) do
+    for _ in pairs(queue) do
         queue_size_before = queue_size_before + 1
     end
 
@@ -147,7 +183,7 @@ function EntryService:enqueueStatusChange(entry_id, opts)
     }
 
     local queue_size_after = 0
-    for i in pairs(queue) do
+    for _ in pairs(queue) do
         queue_size_after = queue_size_after + 1
     end
 
@@ -253,7 +289,7 @@ function EntryService:processStatusQueue(auto_confirm, silent)
 
     local queue = self:loadQueue()
     local queue_size = 0
-    for i in pairs(queue) do
+    for _ in pairs(queue) do
         queue_size = queue_size + 1
     end
 
@@ -360,12 +396,12 @@ function EntryService:processStatusQueue(auto_confirm, silent)
     else
         -- Some operations failed - remove only successful entries (O(n) operation)
         if read_success then
-            for i, entry_id in ipairs(read_entries) do
+            for _, entry_id in ipairs(read_entries) do
                 queue[entry_id] = nil
             end
         end
         if unread_success then
-            for i, entry_id in ipairs(unread_entries) do
+            for _, entry_id in ipairs(unread_entries) do
                 queue[entry_id] = nil
             end
         end
@@ -456,7 +492,7 @@ function EntryService:tryBatchUpdateEntries(entry_ids, new_status)
         end
 
         -- Update local metadata for all entries on success (Miniflux returns 204 for success)
-        for i, entry_id in ipairs(entry_ids) do
+        for _, entry_id in ipairs(entry_ids) do
             -- Pass doc_settings only if this entry is currently open
             local entry_doc_settings = (entry_id == current_entry_id) and doc_settings or nil
             EntryEntity.updateEntryStatus(
@@ -520,7 +556,7 @@ function EntryService:markEntriesAsRead(entry_ids)
 
     if not err then
         -- API success - update local metadata
-        for i, entry_id in ipairs(entry_ids) do
+        for _, entry_id in ipairs(entry_ids) do
             EntryEntity.updateEntryStatus(entry_id, { new_status = 'read' })
             -- Remove from queue since server is now source of truth
             self:removeFromQueue(entry_id)
@@ -531,13 +567,13 @@ function EntryService:markEntriesAsRead(entry_ids)
 
         -- Invalidate caches so next navigation shows updated counts
         local MinifluxEvent = require('utils/event')
-        MinifluxEvent.broadcastEvent('MinifluxCacheInvalidate', {})
+        MinifluxEvent:broadcastMinifluxInvalidateCache()
 
         return true
     else
         -- API failed - use queue fallback with better UX messaging
         -- Perform optimistic local updates immediately for good UX
-        for i, entry_id in ipairs(entry_ids) do
+        for _, entry_id in ipairs(entry_ids) do
             EntryEntity.updateEntryStatus(entry_id, { new_status = 'read' })
             -- Queue each entry for later sync
             self:enqueueStatusChange(entry_id, {
@@ -576,7 +612,7 @@ function EntryService:markEntriesAsUnread(entry_ids)
 
     if not err then
         -- API success - update local metadata
-        for i, entry_id in ipairs(entry_ids) do
+        for _, entry_id in ipairs(entry_ids) do
             EntryEntity.updateEntryStatus(entry_id, { new_status = 'unread' })
             -- Remove from queue since server is now source of truth
             self:removeFromQueue(entry_id)
@@ -587,13 +623,13 @@ function EntryService:markEntriesAsUnread(entry_ids)
 
         -- Invalidate caches so next navigation shows updated counts
         local MinifluxEvent = require('utils/event')
-        MinifluxEvent.broadcastEvent('MinifluxCacheInvalidate', {})
+        MinifluxEvent:broadcastMinifluxInvalidateCache()
 
         return true
     else
         -- API failed - use queue fallback with better UX messaging
         -- Perform optimistic local updates immediately for good UX
-        for i, entry_id in ipairs(entry_ids) do
+        for _, entry_id in ipairs(entry_ids) do
             EntryEntity.updateEntryStatus(entry_id, { new_status = 'unread' })
             -- Queue each entry for later sync
             self:enqueueStatusChange(entry_id, {
@@ -671,7 +707,7 @@ function EntryService:changeEntryStatus(entry_id, opts)
 
     if err then
         -- API failed - use queue fallback for offline mode
-        -- Perform optimistic local update for immediate UX
+        -- Perform optimistic local update for _mmediate UX
         EntryEntity.updateEntryStatus(
             entry_id,
             { new_status = new_status, doc_settings = doc_settings }
@@ -704,7 +740,7 @@ function EntryService:changeEntryStatus(entry_id, opts)
 
         -- Invalidate caches so next navigation shows updated counts
         local MinifluxEvent = require('utils/event')
-        MinifluxEvent.broadcastEvent('MinifluxCacheInvalidate', {})
+        MinifluxEvent:broadcastMinifluxInvalidateCache()
 
         return true
     end
@@ -941,7 +977,9 @@ function EntryService:spawnUpdateStatus(entry_id, opts)
     local pid = FFIUtil.runInSubProcess(function()
         -- Import required modules in subprocess
         local MinifluxAPI = require('api/miniflux_api')
+        -- selene: allow(shadowing)
         local EntryEntity = require('entities/entry_entity')
+        -- selene: allow(shadowing)
         local logger = require('logger')
 
         -- Create settings object for subprocess
@@ -957,6 +995,7 @@ function EntryService:spawnUpdateStatus(entry_id, opts)
         })
 
         -- Check network connectivity
+        -- selene: allow(shadowing)
         local NetworkMgr = require('ui/network/manager')
         if not NetworkMgr:isOnline() then
             logger.dbg(
@@ -968,7 +1007,7 @@ function EntryService:spawnUpdateStatus(entry_id, opts)
         end
 
         -- Make API call with built-in timeout handling
-        local result, err = miniflux_api:updateEntries(entry_id, {
+        local _, err = miniflux_api:updateEntries(entry_id, {
             body = { status = new_status },
             -- No dialogs config - silent background operation
         })
@@ -994,11 +1033,13 @@ function EntryService:spawnUpdateStatus(entry_id, opts)
             )
             -- Remove from queue since server is now source of truth
             -- Note: Queue operations need to be duplicated in subprocess
+            -- selene: allow(shadowing)
             local Files = require('utils/files')
             local miniflux_dir = EntryEntity.getDownloadDir()
             local queue_file = miniflux_dir .. 'status_queue.lua'
 
             -- Load queue
+            -- selene: allow(shadowing)
             local lfs = require('libs/libkoreader-lfs')
             if lfs.attributes(queue_file, 'mode') then
                 local success, queue_data = pcall(dofile, queue_file)

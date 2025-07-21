@@ -171,10 +171,10 @@ function HtmlUtils.cleanHtmlContent(content)
     local total_removed = 0
 
     -- Remove each type of unwanted element
-    for i, selector in ipairs(unwanted_selectors) do
+    for _, selector in ipairs(unwanted_selectors) do
         local elements = root:select(selector)
         if elements then
-            for j, element in ipairs(elements) do
+            for _, element in ipairs(elements) do
                 -- Get the original element text BEFORE removal
                 local element_text = element:gettext()
                 if element_text and element_text ~= '' then
@@ -188,7 +188,7 @@ function HtmlUtils.cleanHtmlContent(content)
     -- Use efficient string replacement instead of DOM reconstruction
     if total_removed > 0 then
         local cleaned_content = content
-        for element_text, should_remove in pairs(removed_element_texts) do
+        for element_text, _ in pairs(removed_element_texts) do
             local escaped_pattern = escapePattern(element_text)
             cleaned_content = cleaned_content:gsub(escaped_pattern, '')
         end

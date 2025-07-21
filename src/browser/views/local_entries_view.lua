@@ -63,7 +63,7 @@ function LocalEntriesView.buildItems(config)
     end
 
     -- Reuse existing EntriesView.buildSingleItem for consistency
-    for i, entry in ipairs(entries) do
+    for _, entry in ipairs(entries) do
         local item = EntriesView.buildSingleItem(entry, {
             show_feed_names = show_feed_names,
             onSelectItem = onSelectItem,
