@@ -13,7 +13,6 @@ local DEFAULTS = {
     mark_as_read_on_open = true,
 
     -- API Cache settings
-    api_cache_enabled = true,
     api_cache_ttl = 300, -- 5 minutes in seconds (default for feeds, counts)
     api_cache_ttl_counters = 60, -- 1 minute for counters (more volatile)
     api_cache_ttl_categories = 120, -- 2 minutes for categories (intermediate)
@@ -43,7 +42,6 @@ local DEFAULTS = {
 ---@field hide_read_entries boolean Whether to hide read entries
 ---@field include_images boolean Whether to include images
 ---@field mark_as_read_on_open boolean Whether to automatically mark entries as read when opened
----@field api_cache_enabled boolean Whether API response caching is enabled
 ---@field api_cache_ttl number API cache TTL in seconds
 ---@field api_cache_ttl_counters number API cache TTL for counters in seconds
 ---@field api_cache_ttl_categories number API cache TTL for categories in seconds

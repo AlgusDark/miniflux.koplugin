@@ -77,13 +77,6 @@ function EntryService:getEntriesByCategory(category_id, config)
     return self.data_repository:getEntriesByCategory(category_id, config)
 end
 
----Get unread count for main view and navigation
----@param config? table Optional configuration
----@return number|nil count, Error|nil error
-function EntryService:getUnreadCount(config)
-    return self.data_repository:getUnreadCount(config)
-end
-
 -- =============================================================================
 -- OFFLINE STATUS QUEUE MANAGEMENT
 -- =============================================================================
