@@ -90,7 +90,7 @@ function Navigation.navigateToEntry(entry_info, config)
 
     -- Get navigation context from browser cache
     local context
-    local BrowserCache = require('utils/browser_cache')
+    local BrowserCache = require('features/browser/utils/browser_cache')
     context = BrowserCache.load()
 
     if not context then
@@ -101,7 +101,7 @@ function Navigation.navigateToEntry(entry_info, config)
     -- Handle local navigation separately (skip API entirely)
     if context and context.type == 'local' then
         -- Get ordered entries for local navigation (minimal metadata for memory efficiency)
-        local EntryEntity = require('entities/entry_entity')
+        local EntryEntity = require('domains/entries/entry_entity')
         local nav_entries = EntryEntity.getLocalEntriesForNavigation({ settings = settings })
 
         -- Create enhanced context with ordered entries (same pattern as browser)
@@ -219,7 +219,7 @@ end
 ---@param entry_info table Entry information
 ---@return {metadata: EntryMetadata, published_unix: number}|nil result, Error|nil error
 function Navigation.loadEntryMetadata(entry_info)
-    local EntryEntity = require('entities/entry_entity')
+    local EntryEntity = require('domains/entries/entry_entity')
     local metadata = EntryEntity.loadMetadata(entry_info.entry_id)
     if not metadata or not metadata.published_at then
         return nil, Error.new(_('Cannot navigate: missing timestamp information'))
@@ -361,7 +361,7 @@ end
 ---@param direction string Navigation direction ("previous" or "next')
 ---@return number|nil target_entry_id Adjacent entry ID, or nil if not found
 function Navigation.findAdjacentEntryId(current_entry_id, direction)
-    local EntryEntity = require('entities/entry_entity')
+    local EntryEntity = require('domains/entries/entry_entity')
     local miniflux_dir = EntryEntity.getDownloadDir()
 
     if lfs.attributes(miniflux_dir, 'mode') ~= 'directory' then

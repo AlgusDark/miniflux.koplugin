@@ -89,7 +89,7 @@ function Files.openWithReader(file_path, opts)
 
     -- Save navigation context to cache if provided
     if context then
-        local BrowserCache = require('utils/browser_cache')
+        local BrowserCache = require('features/browser/utils/browser_cache')
         BrowserCache.save(context)
     end
 

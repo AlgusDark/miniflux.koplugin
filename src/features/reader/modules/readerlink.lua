@@ -1,21 +1,26 @@
 --[[--
-**ReaderLink Service for Miniflux Plugin**
+**ReaderLink Enhancement for Miniflux Plugin**
 
-This service enhances KOReader's ReaderLink functionality by adding miniflux-specific
-options to the link dialog. It integrates with the external link dialog system to
-provide additional actions when tapping on links in miniflux entries.
+This module enhances KOReader's ReaderLink functionality by:
+1. Adding 'Open image in viewer' button to link dialogs
+2. Providing full-screen image tap detection for miniflux entries
+3. Integrating with custom ImageViewer widget
+
+This is the single entry point for all reader enhancements.
 --]]
 
 local UIManager = require('ui/uimanager')
+local Device = require('device')
 local _ = require('gettext')
 
 ---@class ReaderLinkService
 ---@field miniflux_plugin Miniflux Reference to main plugin
 ---@field ui ReaderUI Direct reference to reader UI
 ---@field reader_link ReaderLink Direct reference to ReaderLink module
----@field key_handler_service KeyHandlerService|nil Reference to KeyHandlerService (set after creation)
 ---@field dialog_integration_setup boolean Track setup state
 ---@field last_link_tap_pos table|nil Store tap position from link detection
+---@field touch_zones_registered boolean Track touch zones registration state
+---@field touch_zones table[]|nil Touch zones definition for image tap detection
 local ReaderLinkService = {}
 
 ---Create a new ReaderLinkService instance
@@ -23,11 +28,13 @@ local ReaderLinkService = {}
 ---@return ReaderLinkService New service instance
 function ReaderLinkService:new(params)
     local instance = {
+        miniflux_plugin = params.miniflux_plugin, -- Reference to main plugin
         ui = params.miniflux_plugin.ui, -- Direct reference to UI
         reader_link = params.miniflux_plugin.ui.link, -- Direct reference to ReaderLink
-        key_handler_service = nil, -- Will be set after KeyHandlerService is created
         dialog_integration_setup = false, -- Track setup state
         last_link_tap_pos = nil, -- Store tap position from link detection
+        touch_zones_registered = false, -- Track touch zones state
+        touch_zones = nil, -- Touch zones definition
     }
     setmetatable(instance, { __index = self })
 
@@ -36,6 +43,11 @@ function ReaderLinkService:new(params)
 
     -- Set up ReaderLink dialog integration
     instance:setupLinkDialogIntegration()
+
+    -- Set up image touch zones for full-screen image tap detection
+    if Device:isTouchDevice() and instance.ui then
+        instance:setupImageTouchZones()
+    end
 
     return instance
 end
@@ -155,19 +167,8 @@ function ReaderLinkService:handleImageViewerAction(reader_link_instance)
         return
     end
 
-    -- Use custom image viewer with key handlers if available
-    if self.key_handler_service then
-        self.key_handler_service:showImageViewer(image)
-    else
-        -- Fallback to standard ImageViewer
-        local ImageViewer = require('ui/widget/imageviewer')
-        local imgviewer = ImageViewer:new({
-            image = image,
-            with_title_bar = false,
-            fullscreen = true,
-        })
-        UIManager:show(imgviewer)
-    end
+    -- Use custom image viewer with enhanced key handling
+    self:showImageViewer(image)
 
     -- Clear stored tap position to prevent stale data
     self.last_link_tap_pos = nil
@@ -231,10 +232,119 @@ function ReaderLinkService:isMinifluxEntry()
     return file_path:match('/miniflux/') and file_path:match('%.html$')
 end
 
+---Setup touch zones for full-screen image tap detection
+---
+---This sets up full-screen touch zones that override menu corners and page turning
+---to prioritize image detection. Only active for miniflux entries.
+---
+---@return nil
+function ReaderLinkService:setupImageTouchZones()
+    -- Only register touch zones when viewing miniflux entries
+    if not self:isMinifluxEntry() then
+        return
+    end
+
+    -- Avoid duplicate registration
+    if self.touch_zones_registered then
+        return
+    end
+
+    -- Store zone definition for potential deregistration
+    self.touch_zones = {
+        {
+            id = 'miniflux_tap_image',
+            ges = 'tap',
+            screen_zone = {
+                ratio_x = 0,
+                ratio_y = 0, -- Cover entire screen
+                ratio_w = 1,
+                ratio_h = 1,
+            },
+            overrides = {
+                -- Override menu corner zones to prioritize image detection
+                'tap_top_left_corner', -- Top-left menu activation
+                'tap_top_right_corner', -- Top-right menu activation
+                'tap_left_bottom_corner', -- Bottom-left menu activation
+                'tap_right_bottom_corner', -- Bottom-right menu activation
+                -- Override page turning zones as secondary priority
+                'tap_forward', -- Forward page turn
+                'tap_backward', -- Backward page turn
+            },
+            handler = function(ges)
+                return self:onTapImage(ges)
+            end,
+        },
+    }
+
+    self.ui:registerTouchZones(self.touch_zones)
+    self.touch_zones_registered = true
+end
+
+---Handle full-screen image tap events
+---
+---This handler detects image taps anywhere on screen and shows the custom ImageViewer.
+---It only processes taps on miniflux entries to avoid interfering with regular books.
+---
+---@param ges table Gesture information with screen position
+---@return boolean True if handled (blocks other handlers), false if not handled
+function ReaderLinkService:onTapImage(ges)
+    -- Context filter: Only process taps on miniflux entries
+    if not self:isMinifluxEntry() then
+        return false -- Not our content, let other handlers process
+    end
+
+    -- Convert screen coordinates to document coordinates
+    local tap_pos = self.ui.view:screenToPageTransform(ges.pos)
+    if not tap_pos then
+        return false -- Couldn't transform coordinates, let other handlers process
+    end
+
+    -- Use KOReader's built-in image detection (same method as ReaderHighlight)
+    local image = self.ui.document:getImageFromPosition(tap_pos, true, true)
+    if image then
+        -- Found an image at tap position - show custom viewer
+        self:showImageViewer(image)
+        return true -- We handled this tap, block menu/page turn handlers
+    end
+
+    -- No image found at tap position - let other handlers process the tap
+    return false -- Pass through to menu activation or page turning
+end
+
+---Show custom image viewer with enhanced key handling
+---
+---Creates a SmartImageViewer with page-turn-to-close behavior for consistent
+---navigation experience with entry reading.
+---
+---@param image table Image data from document
+---@return nil
+function ReaderLinkService:showImageViewer(image)
+    local MinifluxImageViewer = require('features/reader/widgets/miniflux_imageviewer')
+
+    local imgviewer = MinifluxImageViewer:new({
+        image = image,
+        with_title_bar = false,
+        fullscreen = true,
+        ui_ref = self.ui, -- Pass UI reference for rotation events
+        key_events = {
+            -- Map all page turn keys to close the image viewer
+            ClosePgFwd = { Device.input.group.PgFwd, event = 'Close' }, -- Page forward
+            ClosePgBack = { Device.input.group.PgBack, event = 'Close' }, -- Page back
+        },
+    })
+
+    UIManager:show(imgviewer)
+end
+
 ---Cleanup service when closing or switching documents
 ---@return nil
 function ReaderLinkService:cleanup()
-    -- Currently no cleanup needed, but method provided for consistency
+    -- Unregister touch zones if registered
+    if self.touch_zones_registered and self.touch_zones then
+        self.ui:unRegisterTouchZones(self.touch_zones)
+        self.touch_zones_registered = false
+        self.touch_zones = nil
+    end
 end
 
 return ReaderLinkService
