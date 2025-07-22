@@ -103,4 +103,10 @@ function ImageViewer:onGesture(gesture) end
 ---@param self ImageViewer
 function ImageViewer:onCloseWidget() end
 
+---Not sure where this is coming from but maybe from a widget parent
+function ImageViewer:update() end
+
+---Close the ImageViewer
+function ImageViewer:onClose() end
+
 return ImageViewer

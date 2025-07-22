@@ -5,7 +5,7 @@ local _ = require('gettext')
 local T = require('ffi/util').template
 
 -- Import consolidated dependencies
-local EntryEntity = require('entities/entry_entity')
+local EntryEntity = require('domains/entries/entry_entity')
 local Images = require('utils/images')
 local Trapper = require('ui/trapper')
 local HtmlUtils = require('utils/html_utils')

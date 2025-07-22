@@ -8,8 +8,8 @@ local T = require('ffi/util').template
 local Notification = require('utils/notification')
 local logger = require('logger')
 
-local EntryEntity = require('entities/entry_entity')
-local Navigation = require('services/navigation_service')
+local EntryEntity = require('domains/entries/entry_entity')
+local Navigation = require('features/browser/services/navigation_service')
 local EntryWorkflow = require('services/entry_workflow')
 local Files = require('utils/files')
 local DownloadCache = require('utils/download_cache')
@@ -910,10 +910,9 @@ function EntryService:showEndOfEntryDialog(entry_info)
         },
     })
 
-    -- Enhance dialog with key handlers if available
-    if self.miniflux_plugin.key_handler_service then
-        dialog = self.miniflux_plugin.key_handler_service:enhanceDialogWithKeys(dialog, entry_info)
-    end
+    -- Enhance dialog with key handlers for navigation
+    local DialogKeys = require('features/reader/utils/dialog_keys')
+    dialog = DialogKeys.enhanceDialogWithKeys(dialog, entry_info, self.miniflux_plugin)
 
     -- Show dialog and return reference for caller management
     UIManager:show(dialog)
@@ -977,7 +976,7 @@ function EntryService:spawnUpdateStatus(entry_id, opts)
         -- Import required modules in subprocess
         local MinifluxAPI = require('api/miniflux_api')
         -- selene: allow(shadowing)
-        local EntryEntity = require('entities/entry_entity')
+        local EntryEntity = require('domains/entries/entry_entity')
         -- selene: allow(shadowing)
         local logger = require('logger')
 

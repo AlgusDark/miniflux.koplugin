@@ -75,7 +75,7 @@ Note: crash.log is only created after a crash.]])
     end
 
     -- Create export file
-    local EntryEntity = require('entities/entry_entity')
+    local EntryEntity = require('domains/entries/entry_entity')
     local export_path = EntryEntity.getDownloadDir()
         .. '/miniflux-logs-'
         .. os.date('%Y%m%d-%H%M%S')
@@ -178,7 +178,7 @@ This will:
                             cancel_callback = function()
                                 -- Open the folder containing the log file
                                 local FileManager = require('apps/filemanager/filemanager')
-                                local EntryEntity = require('entities/entry_entity')
+                                local EntryEntity = require('domains/entries/entry_entity')
                                 FileManager:showFiles(EntryEntity.getDownloadDir())
                             end,
                         }))

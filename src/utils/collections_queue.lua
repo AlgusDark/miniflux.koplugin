@@ -1,6 +1,6 @@
 local lfs = require('libs/libkoreader-lfs')
 local Files = require('utils/files')
-local EntryEntity = require('entities/entry_entity')
+local EntryEntity = require('domains/entries/entry_entity')
 
 -- **Collections Queue** - Unified queue utility for feeds and categories
 --

@@ -1,4 +1,4 @@
-local EntryEntity = require('entities/entry_entity')
+local EntryEntity = require('domains/entries/entry_entity')
 local logger = require('logger')
 
 -- **Metadata Preserver** - Utility to preserve miniflux metadata during ReaderUI close

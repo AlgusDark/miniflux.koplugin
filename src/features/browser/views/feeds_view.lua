@@ -7,7 +7,7 @@ Handles data fetching, menu building, and UI rendering.
 @module miniflux.browser.views.feeds_view
 --]]
 
-local ViewUtils = require('browser/views/view_utils')
+local ViewUtils = require('features/browser/views/view_utils')
 local _ = require('gettext')
 
 local FeedsView = {}

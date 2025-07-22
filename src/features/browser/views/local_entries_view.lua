@@ -7,9 +7,9 @@ Shows downloaded entries without network dependency.
 @module miniflux.browser.views.local_entries_view
 --]]
 
-local ViewUtils = require('browser/views/view_utils')
-local EntryEntity = require('entities/entry_entity')
-local EntriesView = require('browser/views/entries_view')
+local ViewUtils = require('features/browser/views/view_utils')
+local EntryEntity = require('domains/entries/entry_entity')
+local EntriesView = require('features/browser/views/entries_view')
 local _ = require('gettext')
 
 local LocalEntriesView = {}
