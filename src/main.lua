@@ -16,9 +16,8 @@ local logger = require('logger')
 local MinifluxAPI = require('api/miniflux_api')
 local MinifluxSettings = require('settings/settings')
 local Menu = require('menu/menu')
-local EntryEntity = require('entities/entry_entity')
-local KeyHandlerService = require('services/key_handler_service')
-local ReaderLinkService = require('services/readerlink_service')
+local EntryEntity = require('domains/entries/entry_entity')
+local ReaderLinkService = require('features/reader/modules/readerlink')
 local UpdateSettings = require('menu/settings/update_settings')
 
 ---@class Miniflux : WidgetContainer
@@ -32,7 +31,6 @@ local UpdateSettings = require('menu/settings/update_settings')
 ---@field entries Entries Entries domain module
 ---@field entry_service EntryService Entry service instance
 ---@field queue_service QueueService Unified queue management service instance
----@field key_handler_service KeyHandlerService Key handler service instance
 ---@field readerlink_service ReaderLinkService ReaderLink enhancement service instance
 ---@field subprocesses_pids table[] List of subprocess PIDs for cleanup
 ---@field subprocesses_collector boolean|nil Flag indicating if subprocess collector is active
@@ -106,20 +104,13 @@ function Miniflux:init()
     self.entry_service = self.services.entry
     self.queue_service = self.services.queue
 
-    local MinifluxBrowser = require('browser/miniflux_browser')
+    local MinifluxBrowser = require('features/browser/browser')
     self.browser = MinifluxBrowser:new({
         title = _('Miniflux'),
         miniflux = self,
     })
 
     if self.ui and self.ui.document then
-        logger.dbg('[Miniflux:Main] Initializing KeyHandlerService for document context')
-        self.key_handler_service = KeyHandlerService:new({
-            miniflux_plugin = self,
-            entry_service = self.entry_service,
-            navigation_service = require('services/navigation_service'),
-        })
-
         -- Wrap ReaderUI to preserve metadata on close
         local MetadataPreserver = require('utils/metadata_preserver')
         self.wrapped_onClose = MetadataPreserver.wrapReaderClose(self.ui)
@@ -130,10 +121,6 @@ function Miniflux:init()
         self.readerlink_service = ReaderLinkService:new({
             miniflux_plugin = self,
         })
-        -- Set cross-service reference for image viewer integration
-        if self.key_handler_service then
-            self.readerlink_service.key_handler_service = self.key_handler_service
-        end
     end
 
     -- Override ReaderStatus EndOfBook behavior for miniflux entries
@@ -377,10 +364,6 @@ function Miniflux:onCloseWidget()
     local DownloadCache = require('utils/download_cache')
     DownloadCache.clear()
 
-    -- Cleanup key handler service touch zones
-    if self.key_handler_service then
-        self.key_handler_service:cleanup()
-    end
     -- Cleanup ReaderLink service
     if self.readerlink_service then
         self.readerlink_service:cleanup()

@@ -1,4 +1,4 @@
-local Browser = require('browser/browser')
+local Browser = require('core/widgets/browser')
 local BrowserMode = Browser.BrowserMode
 
 local _ = require('gettext')
@@ -6,10 +6,10 @@ local T = require('ffi/util').template
 local logger = require('logger')
 
 -- Import view modules
-local MainView = require('browser/views/main_view')
-local FeedsView = require('browser/views/feeds_view')
-local CategoriesView = require('browser/views/categories_view')
-local EntriesView = require('browser/views/entries_view')
+local MainView = require('features/browser/views/main_view')
+local FeedsView = require('features/browser/views/feeds_view')
+local CategoriesView = require('features/browser/views/categories_view')
+local EntriesView = require('features/browser/views/entries_view')
 
 -- **Miniflux Browser** - RSS Browser for Miniflux
 --
@@ -308,7 +308,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
             })
         end,
         unread_entries = function()
-            local UnreadEntriesView = require('browser/views/unread_entries_view')
+            local UnreadEntriesView = require('features/browser/views/unread_entries_view')
             return UnreadEntriesView.show({
                 entry_service = self.entry_service,
                 settings = self.settings,
@@ -322,8 +322,8 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
             })
         end,
         local_entries = function()
-            local LocalEntriesView = require('browser/views/local_entries_view')
-            local EntryEntity = require('entities/entry_entity')
+            local LocalEntriesView = require('features/browser/views/local_entries_view')
+            local EntryEntity = require('domains/entries/entry_entity')
 
             -- Get lightweight navigation entries (5x less memory than full metadata)
             local nav_entries =
@@ -378,7 +378,7 @@ end
 ---@return {has_local: boolean, has_remote: boolean} Analysis results
 function MinifluxBrowser:analyzeSelection(selected_items)
     local has_local, has_remote = false, false
-    local EntryEntity = require('entities/entry_entity')
+    local EntryEntity = require('domains/entries/entry_entity')
     local lfs = require('libs/libkoreader-lfs')
 
     for _, item in ipairs(selected_items) do
@@ -731,7 +731,7 @@ function MinifluxBrowser:deleteSelectedEntries(selected_items)
 
     -- Filter to only local entries (entries that exist locally)
     local local_entries = {}
-    local EntryEntity = require('entities/entry_entity')
+    local EntryEntity = require('domains/entries/entry_entity')
 
     for _, item in ipairs(selected_items) do
         local entry_data = item.entry_data

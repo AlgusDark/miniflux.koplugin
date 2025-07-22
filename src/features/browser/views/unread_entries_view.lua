@@ -7,7 +7,7 @@ but with specific behavior for unread-only content.
 @module miniflux.browser.views.unread_entries_view
 --]]
 
-local EntriesView = require('browser/views/entries_view')
+local EntriesView = require('features/browser/views/entries_view')
 local _ = require('gettext')
 
 local UnreadEntriesView = {}
@@ -41,7 +41,7 @@ function UnreadEntriesView.show(config)
     })
 
     -- Build clean title (status shown in subtitle now)
-    local ViewUtils = require('browser/views/view_utils')
+    local ViewUtils = require('features/browser/views/view_utils')
     local title = _('Unread Entries')
     local subtitle = ViewUtils.buildSubtitle({
         count = #entries,
