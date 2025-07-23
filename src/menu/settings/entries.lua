@@ -1,6 +1,6 @@
 local InputDialog = require('ui/widget/inputdialog')
 local UIManager = require('ui/uimanager')
-local Notification = require('utils/notification')
+local Notification = require('shared/utils/notification')
 local _ = require('gettext')
 local T = require('ffi/util').template
 

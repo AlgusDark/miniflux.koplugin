@@ -1,5 +1,5 @@
 local lfs = require('libs/libkoreader-lfs')
-local Error = require('utils/error')
+local Error = require('shared/utils/error')
 local logger = require('logger')
 
 -- **Files** - Consolidated file utilities including basic file operations and

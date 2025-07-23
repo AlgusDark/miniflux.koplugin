@@ -53,7 +53,7 @@ local MinifluxAPI = {}
 ---@param deps {getSettings: fun(): {server_address: string, api_token: string}} Dependencies with settings getter
 ---@return MinifluxAPI
 function MinifluxAPI:new(deps)
-    local APIClient = require('api/api_client')
+    local APIClient = require('shared/api/api_client')
     local instance = {
         getSettings = deps.getSettings,
         api_client = APIClient:new({ getSettings = deps.getSettings }),

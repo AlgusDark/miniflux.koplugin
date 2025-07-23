@@ -1,6 +1,6 @@
 local UIManager = require('ui/uimanager')
 local MultiConfirmBox = require('ui/widget/multiconfirmbox')
-local Notification = require('utils/notification')
+local Notification = require('shared/utils/notification')
 local _ = require('gettext')
 
 local UpdateSettings = {}

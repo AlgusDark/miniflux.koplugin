@@ -1,8 +1,8 @@
 local Services = {}
 
 -- Import all service classes
-local EntryService = require('services/entry_service')
-local QueueService = require('services/queue_service')
+local EntryService = require('features/entries/services/entry_service')
+local QueueService = require('features/sync/services/queue_service')
 
 ---Build all services with proper dependency order
 ---@param miniflux Miniflux Plugin instance containing settings, api, and domain modules

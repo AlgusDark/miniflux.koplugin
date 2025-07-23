@@ -12,7 +12,7 @@ overriding the ReaderStatus onEndOfBook behavior specifically for Miniflux entri
 local EventListener = require('ui/widget/eventlistener')
 local UIManager = require('ui/uimanager')
 local ButtonDialog = require('ui/widget/buttondialog')
-local Notification = require('utils/notification')
+local Notification = require('shared/utils/notification')
 local Device = require('device')
 local util = require('util')
 local _ = require('gettext')

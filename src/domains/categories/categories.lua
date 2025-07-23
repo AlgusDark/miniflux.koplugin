@@ -1,5 +1,5 @@
 local EventListener = require('ui/widget/eventlistener')
-local CacheAdapter = require('shared/cache_adapter')
+local CacheAdapter = require('shared/cache/cache_adapter')
 local logger = require('logger')
 
 ---Categories domain - handles all category-related operations
@@ -65,7 +65,7 @@ end
 ---@return boolean success
 function Categories:markAsRead(category_id)
     local _ = require('gettext')
-    local Notification = require('utils/notification')
+    local Notification = require('shared/utils/notification')
 
     -- Validate category ID
     if not category_id or type(category_id) ~= 'number' or category_id <= 0 then
@@ -82,7 +82,7 @@ function Categories:markAsRead(category_id)
 
     if err then
         -- API failed - use queue fallback for offline mode
-        local CollectionsQueue = require('utils/collections_queue')
+        local CollectionsQueue = require('features/sync/utils/collections_queue')
         local queue = CollectionsQueue:new('category')
         queue:enqueue(category_id, 'mark_all_read')
 
@@ -90,12 +90,12 @@ function Categories:markAsRead(category_id)
         return true -- Still successful from user perspective
     else
         -- API success - remove from queue since server is source of truth
-        local CollectionsQueue = require('utils/collections_queue')
+        local CollectionsQueue = require('features/sync/utils/collections_queue')
         local queue = CollectionsQueue:new('category')
         queue:remove(category_id)
 
         -- Invalidate all caches IMMEDIATELY so counts update
-        local MinifluxEvent = require('utils/event')
+        local MinifluxEvent = require('shared/utils/event')
         MinifluxEvent:broadcastMinifluxInvalidateCache()
 
         Notification:success(_('Category marked as read'))

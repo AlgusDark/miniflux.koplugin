@@ -5,13 +5,13 @@ local ButtonDialogTitle = require('ui/widget/buttondialogtitle')
 local lfs = require('libs/libkoreader-lfs')
 local _ = require('gettext')
 local T = require('ffi/util').template
-local Notification = require('utils/notification')
+local Notification = require('shared/utils/notification')
 local logger = require('logger')
 
 local EntryEntity = require('domains/entries/entry_entity')
-local EntryWorkflow = require('services/entry_workflow')
-local Files = require('utils/files')
-local DownloadCache = require('utils/download_cache')
+local EntryWorkflow = require('features/entries/services/entry_workflow')
+local Files = require('shared/utils/files')
+local DownloadCache = require('features/entries/utils/download_cache')
 
 -- **Entry Service** - Handles complex entry workflows and orchestration.
 --
@@ -564,7 +564,7 @@ function EntryService:markEntriesAsRead(entry_ids)
         Notification:success(_('Successfully marked ') .. #entry_ids .. _(' entries as read'))
 
         -- Invalidate caches so next navigation shows updated counts
-        local MinifluxEvent = require('utils/event')
+        local MinifluxEvent = require('shared/utils/event')
         MinifluxEvent:broadcastMinifluxInvalidateCache()
 
         return true
@@ -620,7 +620,7 @@ function EntryService:markEntriesAsUnread(entry_ids)
         Notification:success(_('Successfully marked ') .. #entry_ids .. _(' entries as unread'))
 
         -- Invalidate caches so next navigation shows updated counts
-        local MinifluxEvent = require('utils/event')
+        local MinifluxEvent = require('shared/utils/event')
         MinifluxEvent:broadcastMinifluxInvalidateCache()
 
         return true
@@ -649,7 +649,8 @@ end
 ---@param completion_callback? function Optional callback called when batch completes
 ---@return boolean success Always returns true (fire-and-forget operations)
 function EntryService:downloadEntries(entry_data_list, completion_callback)
-    local BatchDownloadEntriesWorkflow = require('services/batch_download_entries_workflow')
+    local BatchDownloadEntriesWorkflow =
+        require('features/entries/services/batch_download_entries_workflow')
 
     BatchDownloadEntriesWorkflow.execute({
         entry_data_list = entry_data_list,
@@ -737,7 +738,7 @@ function EntryService:changeEntryStatus(entry_id, opts)
         self:removeFromQueue(entry_id)
 
         -- Invalidate caches so next navigation shows updated counts
-        local MinifluxEvent = require('utils/event')
+        local MinifluxEvent = require('shared/utils/event')
         MinifluxEvent:broadcastMinifluxInvalidateCache()
 
         return true
@@ -849,7 +850,7 @@ function EntryService:spawnUpdateStatus(entry_id, opts)
 
     local pid = FFIUtil.runInSubProcess(function()
         -- Import required modules in subprocess
-        local MinifluxAPI = require('api/miniflux_api')
+        local MinifluxAPI = require('shared/api/miniflux_api')
         -- selene: allow(shadowing)
         local EntryEntity = require('domains/entries/entry_entity')
         -- selene: allow(shadowing)
@@ -907,7 +908,7 @@ function EntryService:spawnUpdateStatus(entry_id, opts)
             -- Remove from queue since server is now source of truth
             -- Note: Queue operations need to be duplicated in subprocess
             -- selene: allow(shadowing)
-            local Files = require('utils/files')
+            local Files = require('shared/utils/files')
             local miniflux_dir = EntryEntity.getDownloadDir()
             local queue_file = miniflux_dir .. 'status_queue.lua'
 

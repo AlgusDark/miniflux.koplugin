@@ -1,5 +1,5 @@
 local EventListener = require('ui/widget/eventlistener')
-local CacheAdapter = require('shared/cache_adapter')
+local CacheAdapter = require('shared/cache/cache_adapter')
 local logger = require('logger')
 
 ---Feeds domain - handles all feed-related operations
@@ -84,7 +84,7 @@ end
 ---@return boolean success
 function Feeds:markAsRead(feed_id)
     local _ = require('gettext')
-    local Notification = require('utils/notification')
+    local Notification = require('shared/utils/notification')
 
     -- Validate feed ID
     if not feed_id or type(feed_id) ~= 'number' or feed_id <= 0 then
@@ -101,7 +101,7 @@ function Feeds:markAsRead(feed_id)
 
     if err then
         -- API failed - use queue fallback for offline mode
-        local CollectionsQueue = require('utils/collections_queue')
+        local CollectionsQueue = require('features/sync/utils/collections_queue')
         local queue = CollectionsQueue:new('feed')
         queue:enqueue(feed_id, 'mark_all_read')
 
@@ -109,12 +109,12 @@ function Feeds:markAsRead(feed_id)
         return true -- Still successful from user perspective
     else
         -- API success - remove from queue since server is source of truth
-        local CollectionsQueue = require('utils/collections_queue')
+        local CollectionsQueue = require('features/sync/utils/collections_queue')
         local queue = CollectionsQueue:new('feed')
         queue:remove(feed_id)
 
         -- Invalidate all caches IMMEDIATELY so counts update
-        local MinifluxEvent = require('utils/event')
+        local MinifluxEvent = require('shared/utils/event')
         MinifluxEvent:broadcastMinifluxInvalidateCache()
 
         Notification:success(_('Feed marked as read'))

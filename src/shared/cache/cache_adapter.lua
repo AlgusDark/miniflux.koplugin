@@ -1,4 +1,4 @@
-local CacheStore = require('utils/cache_store')
+local CacheStore = require('shared/utils/cache_store')
 
 ---Generic caching adapter for domain slices
 ---@class CacheAdapter

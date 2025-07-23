@@ -1,6 +1,6 @@
 local ButtonDialogTitle = require('ui/widget/buttondialogtitle')
 local UIManager = require('ui/uimanager')
-local Notification = require('utils/notification')
+local Notification = require('shared/utils/notification')
 local _ = require('gettext')
 local logger = require('logger')
 
@@ -24,7 +24,7 @@ end
 ---Get total count across all queue types
 ---@return number total_count, number status_count, number feed_count, number category_count
 function QueueService:getTotalQueueCount()
-    local CollectionsQueue = require('utils/collections_queue')
+    local CollectionsQueue = require('features/sync/utils/collections_queue')
     local feed_queue = CollectionsQueue:new('feed')
     local category_queue = CollectionsQueue:new('category')
 
@@ -156,7 +156,7 @@ end
 ---@param queue_type string Type of queue ('feed' or 'category')
 ---@return number processed, number failed
 function QueueService:processQueue(queue_type)
-    local CollectionsQueue = require('utils/collections_queue')
+    local CollectionsQueue = require('features/sync/utils/collections_queue')
     local queue_instance = CollectionsQueue:new(queue_type)
     local queue_data = queue_instance:load()
     local processed_count = 0
@@ -214,7 +214,7 @@ end
 ---Clear all queue types
 ---@return boolean success
 function QueueService:clearAllQueues()
-    local CollectionsQueue = require('utils/collections_queue')
+    local CollectionsQueue = require('features/sync/utils/collections_queue')
     local feed_queue = CollectionsQueue:new('feed')
     local category_queue = CollectionsQueue:new('category')
 

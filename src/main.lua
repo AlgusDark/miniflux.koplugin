@@ -13,11 +13,10 @@ local Dispatcher = require('dispatcher')
 local _ = require('gettext')
 local logger = require('logger')
 
-local MinifluxAPI = require('api/miniflux_api')
+local MinifluxAPI = require('shared/api/miniflux_api')
 local MinifluxSettings = require('settings/settings')
 local Menu = require('menu/menu')
 local EntryEntity = require('domains/entries/entry_entity')
-local MinifluxReaderLink = require('features/reader/modules/miniflux_readerlink')
 local UpdateSettings = require('menu/settings/update_settings')
 
 ---@class Miniflux : WidgetContainer
@@ -98,7 +97,7 @@ function Miniflux:init()
     self:registerModule('entries', Entries:new({ miniflux = self }))
 
     -- Replace manual service creation with services factory
-    local Services = require('services/services')
+    local Services = require('shared/services')
     self.services = Services.build(self)
 
     -- Keep backward compatibility - individual service references
@@ -113,17 +112,30 @@ function Miniflux:init()
 
     if self.ui and self.ui.document then
         -- Wrap ReaderUI to preserve metadata on close
-        local MetadataPreserver = require('utils/metadata_preserver')
+        local MetadataPreserver = require('features/plugin/utils/metadata_preserver')
         self.wrapped_onClose = MetadataPreserver.wrapReaderClose(self.ui)
     end
 
-    -- Register ReaderLink module
-    logger.dbg('[Miniflux:Main] Registering MinifluxReaderLink module')
-    self:registerModule('readerLink', MinifluxReaderLink:new({ miniflux = self }))
+    -- Register reader modules only when in ReaderUI context
+    logger.dbg(
+        '[Miniflux:Main] Checking ReaderUI context - ui.link exists:',
+        self.ui and self.ui.link and true or false
+    )
+    if self.ui and self.ui.link then
+        logger.dbg('[Miniflux:Main] Initializing ReaderLink module')
+        local MinifluxReaderLink = require('features/reader/modules/miniflux_readerlink')
+        self:registerModule('readerLink', MinifluxReaderLink:new({ miniflux = self }))
+    end
 
-    -- Register MinifluxEndOfBook module
-    local MinifluxEndOfBook = require('features/reader/modules/miniflux_end_of_book')
-    self:registerModule('endOfBook', MinifluxEndOfBook:new({ miniflux = self }))
+    logger.dbg(
+        '[Miniflux:Main] Checking ReaderUI context - ui.status exists:',
+        self.ui and self.ui.status and true or false
+    )
+    if self.ui and self.ui.status then
+        logger.dbg('[Miniflux:Main] Initializing EndOfBook module')
+        local MinifluxEndOfBook = require('features/reader/modules/miniflux_end_of_book')
+        self:registerModule('endOfBook', MinifluxEndOfBook:new({ miniflux = self }))
+    end
 
     -- Register with KOReader menu system
     self.ui.menu:registerToMainMenu(self)
@@ -282,19 +294,6 @@ function Miniflux:onSuspend()
     -- Queue operations will be processed on next network connection
 end
 
----Handle plugin close event - ensure proper cleanup
-function Miniflux:onClose()
-    logger.info('[Miniflux:Main] Plugin closing - cleaning up')
-    self:terminateBackgroundJobs()
-    -- Cancel any scheduled zombie collection
-    if self.subprocesses_collector then
-        UIManager:unschedule(function()
-            self:collectSubprocesses()
-        end)
-        self.subprocesses_collector = nil
-    end
-end
-
 ---Check for automatic updates if enabled and due
 ---@return nil
 function Miniflux:checkForAutomaticUpdates()
@@ -310,8 +309,10 @@ function Miniflux:checkForAutomaticUpdates()
     })
 end
 
----Handle widget close event - ensure proper cleanup
+---Handle widget close event - cleanup resources and instances
 function Miniflux:onCloseWidget()
+    logger.info('[Miniflux:Main] Plugin widget closing - cleaning up resources')
+
     self:terminateBackgroundJobs()
     -- Cancel any scheduled zombie collection
     if self.subprocesses_collector then
@@ -322,7 +323,7 @@ function Miniflux:onCloseWidget()
     end
 
     -- Clear download cache on plugin close
-    local DownloadCache = require('utils/download_cache')
+    local DownloadCache = require('features/entries/utils/download_cache')
     DownloadCache.clear()
 
     -- Revert the wrapped onClose method if it exists
