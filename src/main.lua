@@ -37,6 +37,7 @@ local UpdateSettings = require('menu/settings/update_settings')
 ---@field subprocesses_collect_interval number Interval for subprocess collection in seconds
 ---@field browser MinifluxBrowser|nil Browser instance for UI navigation
 ---@field wrapped_onClose table|nil Wrapped ReaderUI onClose method for metadata preservation
+---@field ui ReaderUI|nil ReaderUI instance when running in reader context
 local Miniflux = WidgetContainer:extend({
     name = 'miniflux',
     is_doc_only = false,
@@ -123,9 +124,11 @@ function Miniflux:init()
         })
     end
 
-    -- Override ReaderStatus EndOfBook behavior for miniflux entries
-    local EndOfBookDialog = require('features/reader/modules/end_of_book_dialog')
-    EndOfBookDialog.overrideReaderBehavior(self)
+    -- Register MinifluxEndOfBook module for end-of-book behavior (ReaderUI only)
+    if self.ui and self.ui.status then
+        local MinifluxEndOfBook = require('features/reader/modules/miniflux_end_of_book')
+        self:registerModule('endOfBook', MinifluxEndOfBook:new({ miniflux = self }))
+    end
 
     -- Register with KOReader menu system
     self.ui.menu:registerToMainMenu(self)
@@ -182,11 +185,14 @@ end
 ---@return nil
 function Miniflux:onReaderReady(doc_settings)
     local file_path = self.ui and self.ui.document and self.ui.document.file
-    -- Pass ReaderUI's DocSettings to avoid cache conflicts
-    self.entry_service:onReaderReady({
-        file_path = file_path,
-        doc_settings = doc_settings, -- ReaderUI's cached DocSettings instance
-    })
+    -- Only process if we have a valid file path
+    if file_path then
+        -- Pass ReaderUI's DocSettings to avoid cache conflicts
+        self.entry_service:onReaderReady({
+            file_path = file_path,
+            doc_settings = doc_settings, -- ReaderUI's cached DocSettings instance
+        })
+    end
 end
 
 -- =============================================================================

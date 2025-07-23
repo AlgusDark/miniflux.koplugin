@@ -5,20 +5,20 @@ tasks:
   fmt:
     desc: Format Lua code with StyLua
     cmds:
-      - stylua --check src/
+      - stylua --check src/ typedefs/
       - echo "✅ Code formatting is correct"
     silent: false
 
   fmt-fix:
     desc: Auto-fix Lua code formatting with StyLua
     cmds:
-      - stylua src/
+      - stylua src/ typedefs/
       - echo "✅ Code formatted successfully"
 
   lint:
     desc: Run selene static analysis
     cmds:
-      - selene src/
+      - selene src/ typedefs/
       - echo "✅ No linting issues found"
 
   lsp-check:
