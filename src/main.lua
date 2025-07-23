@@ -17,7 +17,7 @@ local MinifluxAPI = require('api/miniflux_api')
 local MinifluxSettings = require('settings/settings')
 local Menu = require('menu/menu')
 local EntryEntity = require('domains/entries/entry_entity')
-local ReaderLinkService = require('features/reader/modules/readerlink')
+local MinifluxReaderLink = require('features/reader/modules/miniflux_readerlink')
 local UpdateSettings = require('menu/settings/update_settings')
 
 ---@class Miniflux : WidgetContainer
@@ -31,7 +31,7 @@ local UpdateSettings = require('menu/settings/update_settings')
 ---@field entries Entries Entries domain module
 ---@field entry_service EntryService Entry service instance
 ---@field queue_service QueueService Unified queue management service instance
----@field readerlink_service ReaderLinkService ReaderLink enhancement service instance
+---@field readerLink MinifluxReaderLink ReaderLink enhancement module instance
 ---@field subprocesses_pids table[] List of subprocess PIDs for cleanup
 ---@field subprocesses_collector boolean|nil Flag indicating if subprocess collector is active
 ---@field subprocesses_collect_interval number Interval for subprocess collection in seconds
@@ -117,18 +117,13 @@ function Miniflux:init()
         self.wrapped_onClose = MetadataPreserver.wrapReaderClose(self.ui)
     end
 
-    if self.ui and self.ui.link then
-        logger.dbg('[Miniflux:Main] Initializing ReaderLinkService')
-        self.readerlink_service = ReaderLinkService:new({
-            miniflux_plugin = self,
-        })
-    end
+    -- Register ReaderLink module
+    logger.dbg('[Miniflux:Main] Registering MinifluxReaderLink module')
+    self:registerModule('readerLink', MinifluxReaderLink:new({ miniflux = self }))
 
-    -- Register MinifluxEndOfBook module for end-of-book behavior (ReaderUI only)
-    if self.ui and self.ui.status then
-        local MinifluxEndOfBook = require('features/reader/modules/miniflux_end_of_book')
-        self:registerModule('endOfBook', MinifluxEndOfBook:new({ miniflux = self }))
-    end
+    -- Register MinifluxEndOfBook module
+    local MinifluxEndOfBook = require('features/reader/modules/miniflux_end_of_book')
+    self:registerModule('endOfBook', MinifluxEndOfBook:new({ miniflux = self }))
 
     -- Register with KOReader menu system
     self.ui.menu:registerToMainMenu(self)
@@ -329,11 +324,6 @@ function Miniflux:onCloseWidget()
     -- Clear download cache on plugin close
     local DownloadCache = require('utils/download_cache')
     DownloadCache.clear()
-
-    -- Cleanup ReaderLink service
-    if self.readerlink_service then
-        self.readerlink_service:cleanup()
-    end
 
     -- Revert the wrapped onClose method if it exists
     if self.wrapped_onClose then
