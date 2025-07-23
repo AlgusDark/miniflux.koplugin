@@ -14,10 +14,12 @@ local _ = require('gettext')
 local logger = require('logger')
 
 local MinifluxAPI = require('shared/api/miniflux_api')
-local MinifluxSettings = require('settings/settings')
-local Menu = require('menu/menu')
+local MinifluxSettings = require('features/settings/settings')
+local Menu = require('features/menu/menu')
 local EntryEntity = require('domains/entries/entry_entity')
-local UpdateSettings = require('menu/settings/update_settings')
+local UpdateSettings = require('features/menu/settings/update_settings')
+local EntryService = require('features/entries/services/entry_service')
+local QueueService = require('features/sync/services/queue_service')
 
 ---@class Miniflux : WidgetContainer
 ---@field name string Plugin name identifier
@@ -96,13 +98,20 @@ function Miniflux:init()
     self:registerModule('categories', Categories:new({ miniflux = self }))
     self:registerModule('entries', Entries:new({ miniflux = self }))
 
-    -- Replace manual service creation with services factory
-    local Services = require('shared/services')
-    self.services = Services.build(self)
+    -- Create services directly with proper dependency order
+    self.entry_service = EntryService:new({
+        settings = self.settings,
+        feeds = self.feeds,
+        categories = self.categories,
+        entries = self.entries,
+        miniflux_api = self.api,
+        miniflux_plugin = self,
+    })
 
-    -- Keep backward compatibility - individual service references
-    self.entry_service = self.services.entry
-    self.queue_service = self.services.queue
+    self.queue_service = QueueService:new({
+        entry_service = self.entry_service,
+        miniflux_api = self.api,
+    })
 
     local MinifluxBrowser = require('features/browser/browser')
     self.browser = MinifluxBrowser:new({
@@ -301,7 +310,7 @@ function Miniflux:checkForAutomaticUpdates()
         return
     end
 
-    local CheckUpdates = require('menu/settings/check_updates')
+    local CheckUpdates = require('features/menu/settings/check_updates')
     CheckUpdates.checkForUpdates({
         show_no_update = false,
         settings = self.settings,
