@@ -2,7 +2,7 @@ local ConfirmBox = require('ui/widget/confirmbox')
 local DataStorage = require('datastorage')
 local UIManager = require('ui/uimanager')
 local lfs = require('libs/libkoreader-lfs')
-local Notification = require('utils/notification')
+local Notification = require('shared/utils/notification')
 local _ = require('gettext')
 
 -- **Copy CSS Settings** - Handles copying the plugin's CSS file to the

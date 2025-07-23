@@ -4,10 +4,10 @@ local UIManager = require('ui/uimanager')
 local ButtonDialog = require('ui/widget/buttondialog')
 local ReaderUI = require('apps/reader/readerui')
 local FileManager = require('apps/filemanager/filemanager')
-local Error = require('utils/error')
+local Error = require('shared/utils/error')
 local _ = require('gettext')
 local T = require('ffi/util').template
-local DownloadCache = require('utils/download_cache')
+local DownloadCache = require('features/entries/utils/download_cache')
 local logger = require('logger')
 
 -- **Entry Entity** - Pure utility functions for entry operations, validation,

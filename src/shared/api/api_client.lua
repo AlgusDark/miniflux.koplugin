@@ -4,10 +4,10 @@ local ltn12 = require('ltn12')
 local socket = require('socket')
 local socketutil = require('socketutil')
 local _ = require('gettext')
-local Files = require('utils/files')
+local Files = require('shared/utils/files')
 local util = require('util')
-local Notification = require('utils/notification')
-local Error = require('utils/error')
+local Notification = require('shared/utils/notification')
+local Error = require('shared/utils/error')
 local logger = require('logger')
 
 -- This is the main API client that handles HTTP communication and coordinates

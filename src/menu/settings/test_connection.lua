@@ -1,4 +1,4 @@
-local Notification = require('utils/notification')
+local Notification = require('shared/utils/notification')
 local _ = require('gettext')
 
 -- **Test Connection Settings** - Handles connection testing to the Miniflux
