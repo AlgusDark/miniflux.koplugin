@@ -1,5 +1,5 @@
 local UIManager = require('ui/uimanager')
-local Notification = require('utils/notification')
+local Notification = require('shared/utils/notification')
 local _ = require('gettext')
 
 -- **Mark as Read on Open Settings** - Handles "mark as read on open" submenu

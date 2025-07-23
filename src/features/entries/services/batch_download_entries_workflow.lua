@@ -6,10 +6,10 @@ local T = require('ffi/util').template
 
 -- Import consolidated dependencies
 local EntryEntity = require('domains/entries/entry_entity')
-local Images = require('utils/images')
+local Images = require('features/entries/utils/images')
 local Trapper = require('ui/trapper')
-local HtmlUtils = require('utils/html_utils')
-local Files = require('utils/files')
+local HtmlUtils = require('features/entries/utils/html_utils')
+local Files = require('shared/utils/files')
 
 -- **Batch Download Entries Workflow** - Sequential batch downloading of multiple entries
 --

@@ -8,11 +8,11 @@ local logger = require('logger')
 
 -- Import consolidated dependencies
 local EntryEntity = require('domains/entries/entry_entity')
-local Images = require('utils/images')
+local Images = require('features/entries/utils/images')
 local Trapper = require('ui/trapper')
-local HtmlUtils = require('utils/html_utils')
-local Files = require('utils/files')
-local Notification = require('utils/notification')
+local HtmlUtils = require('features/entries/utils/html_utils')
+local Files = require('shared/utils/files')
+local Notification = require('shared/utils/notification')
 
 -- Centralized workflow message templates for consistency and maintainability
 local WORKFLOW_MESSAGES = {

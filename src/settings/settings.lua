@@ -114,7 +114,7 @@ function MinifluxSettings:__newindex(key, value)
         self.settings:saveSetting(key, value)
 
         -- Broadcast settings change event
-        local MinifluxEvent = require('utils/event')
+        local MinifluxEvent = require('shared/utils/event')
         MinifluxEvent:broadcastMinifluxSettingsChange({
             key = key,
             old_value = old_value,

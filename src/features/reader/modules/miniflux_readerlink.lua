@@ -12,14 +12,13 @@ This is the single entry point for all reader enhancements.
 local EventListener = require('ui/widget/eventlistener')
 local UIManager = require('ui/uimanager')
 local Device = require('device')
-local util = require('util')
 local _ = require('gettext')
 
 ---@class MinifluxReaderLink : EventListener
 ---@field miniflux Miniflux Reference to main plugin
 ---@field ui ReaderUI Direct reference to reader UI
 ---@field reader_link ReaderLink Direct reference to ReaderLink module
----@field wrapped_onTap table|nil Wrapped onTap method object
+---@field original_onTap function|nil Original onTap method reference
 ---@field dialog_integration_setup boolean Track setup state
 ---@field last_link_tap_pos table|nil Store tap position from link detection
 ---@field touch_zones_registered boolean Track touch zones registration state
@@ -44,19 +43,33 @@ function MinifluxReaderLink:init()
     self.touch_zones_registered = false
     self.touch_zones = nil
 
-    -- Wrap ReaderLink's onTap method to capture tap position
+    -- Override ReaderLink's onTap method to capture tap position for external link dialogs
+    --
+    -- NOTE: This direct method override approach is used instead of util.wrapMethod because
+    -- the wrapper utility causes gesture data corruption (ges.pos becomes nil) leading to
+    -- crashes in KOReader's core document code (credocument.lua:922).
+    --
+    -- EXPECTED BEHAVIOR: This override gets called twice per tap due to KOReader's internal
+    -- gesture processing chain, but both calls have valid data (unlike util.wrapMethod).
+    -- This is normal and safe behavior.
+    --
+    -- PURPOSE: Captures tap positions for link-wrapped images (<a href><img></a>) so the
+    -- external link dialog can show "Open image in viewer" button when appropriate.
     if self.reader_link then
-        self.wrapped_onTap = util.wrapMethod(self.reader_link, 'onTap', function(...)
-            -- Only capture tap position for miniflux entries
-            if self:isMinifluxEntry() then
-                local args = { ... }
-                local ges = args[3] -- third argument is gesture
-                self.last_link_tap_pos = ges and ges.pos
+        -- Store reference to original onTap method for cleanup
+        self.original_onTap = self.reader_link.onTap
+        local module = self
+
+        -- Replace with our override that captures tap positions
+        self.reader_link.onTap = function(reader_link_instance, arg, ges)
+            -- Only capture tap position for miniflux entries to avoid interfering with regular books
+            if module:isMinifluxEntry() then
+                module.last_link_tap_pos = ges and ges.pos
             end
 
-            -- Always call original method
-            return self.wrapped_onTap:raw_method_call(...)
-        end)
+            -- Always call original method to maintain normal link processing
+            return module.original_onTap(reader_link_instance, arg, ges)
+        end
     end
 
     -- Set up ReaderLink dialog integration
@@ -247,6 +260,11 @@ function MinifluxReaderLink:setupImageTouchZones()
     end
 
     -- Store zone definition for potential deregistration
+    --
+    -- TOUCH ZONE STRATEGY: We register a full-screen touch zone that overrides menu corners
+    -- and page turning zones. This allows users to tap images anywhere on screen without
+    -- accidentally triggering menu activation or page turns. The handler validates that
+    -- there's actually an image at the tap position before consuming the gesture.
     self.touch_zones = {
         {
             id = 'miniflux_tap_image',
@@ -258,7 +276,7 @@ function MinifluxReaderLink:setupImageTouchZones()
                 ratio_h = 1,
             },
             overrides = {
-                -- Override menu corner zones to prioritize image detection
+                -- Override menu corner zones to prioritize image detection over menu activation
                 'tap_top_left_corner', -- Top-left menu activation
                 'tap_top_right_corner', -- Top-right menu activation
                 'tap_left_bottom_corner', -- Bottom-left menu activation
@@ -285,12 +303,17 @@ end
 ---@param ges table Gesture information with screen position
 ---@return boolean True if handled (blocks other handlers), false if not handled
 function MinifluxReaderLink:onTapImage(ges)
-    -- Context filter: Only process taps on miniflux entries
+    -- Validate gesture input - this prevents crashes from corrupted gesture data
+    if not ges or not ges.pos then
+        return false -- Invalid gesture, let other handlers process
+    end
+
+    -- Context filter: Only process taps on miniflux entries to avoid interfering with regular books
     if not self:isMinifluxEntry() then
         return false -- Not our content, let other handlers process
     end
 
-    -- Convert screen coordinates to document coordinates
+    -- Convert screen coordinates to document coordinates for image detection
     local tap_pos = self.miniflux.ui.view:screenToPageTransform(ges.pos)
     if not tap_pos then
         return false -- Couldn't transform coordinates, let other handlers process
@@ -336,10 +359,10 @@ end
 ---Cleanup module when closing or switching documents
 ---@return nil
 function MinifluxReaderLink:onCloseWidget()
-    -- Revert wrapped onTap method
-    if self.wrapped_onTap then
-        self.wrapped_onTap:revert()
-        self.wrapped_onTap = nil
+    -- Revert direct onTap method override
+    if self.original_onTap and self.reader_link then
+        self.reader_link.onTap = self.original_onTap
+        self.original_onTap = nil
     end
 
     -- Unregister touch zones if registered

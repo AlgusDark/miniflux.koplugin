@@ -1,5 +1,5 @@
 local EventListener = require('ui/widget/eventlistener')
-local CacheAdapter = require('shared/cache_adapter')
+local CacheAdapter = require('shared/cache/cache_adapter')
 local logger = require('logger')
 
 ---Entries domain - handles all entry-related operations

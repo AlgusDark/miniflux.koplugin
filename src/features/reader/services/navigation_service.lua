@@ -1,11 +1,11 @@
 local lfs = require('libs/libkoreader-lfs')
-local Notification = require('utils/notification')
+local Notification = require('shared/utils/notification')
 local _ = require('gettext')
 local logger = require('logger')
 
 -- Import dependencies
-local TimeUtils = require('utils/time_utils')
-local Error = require('utils/error')
+local TimeUtils = require('shared/utils/time_utils')
+local Error = require('shared/utils/error')
 
 -- Constants
 local DIRECTION_PREVIOUS = 'previous'
@@ -291,7 +291,7 @@ function Navigation.tryLocalFileFirst(opts)
         local html_file = entry_dir .. 'entry.html'
 
         if lfs.attributes(html_file, 'mode') == 'file' then
-            local Files = require('utils/files')
+            local Files = require('shared/utils/files')
             Files.openWithReader(html_file, { context = context })
             return true
         end
