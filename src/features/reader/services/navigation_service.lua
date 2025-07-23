@@ -22,58 +22,27 @@ local MSG_FINDING_NEXT = 'Finding next entry...'
 -- navigation_context and navigation_utils for better organization.
 local Navigation = {}
 
----Get API options based on navigation context and entry metadata
----@param opts table Options containing base_options, context, entry_metadata
----@return ApiOptions Context-aware options with feed_id/category_id filters
-function Navigation.getContextAwareOptions(opts)
-    -- Extract parameters from opts
-    local base_options = opts.base_options
-    local context = opts.context
-    local entry_metadata = opts.entry_metadata
-
-    local options = {}
-
-    -- Copy base options
-    for k, v in pairs(base_options) do
-        options[k] = v
-    end
-
-    -- Add context-aware filtering based on browsing context
-    if context and context.type == 'feed' then
-        -- Use context.id if available (browsing specific feed), otherwise use entry's feed
-        local feed_id = context.id or (entry_metadata.feed and entry_metadata.feed.id)
-        options.feed_id = feed_id
-    elseif context and context.type == 'category' then
-        -- Use context.id if available (browsing specific category), otherwise use entry's category
-        local category_id = context.id or (entry_metadata.category and entry_metadata.category.id)
-        options.category_id = category_id
-    end
-    -- For "global" type or nil context, no additional filtering (browse all entries)
-
-    return options
-end
-
 -- =============================================================================
 -- ENTRY NAVIGATION LOGIC
 -- =============================================================================
 
 ---Navigate to an entry in specified direction
 ---@param entry_info table Current entry information with file_path and entry_id
----@param config {navigation_options: {direction: string}, settings: MinifluxSettings, miniflux_api: MinifluxAPI, entry_service: EntryService, miniflux_plugin: Miniflux}
+---@param miniflux Miniflux Miniflux plugin instance containing all dependencies
+---@param navigation_options {direction: string} Navigation options
 ---@return nil
-function Navigation.navigateToEntry(entry_info, config)
-    local navigation_options = config.navigation_options
-    local settings = config.settings
-    local miniflux_api = config.miniflux_api
-    local entry_service = config.entry_service
-    local miniflux_plugin = config.miniflux_plugin
+function Navigation.navigateToEntry(entry_info, miniflux, navigation_options)
     local direction = navigation_options.direction
 
     -- Validate input
-    local _valid, err = Navigation.validateNavigationInput(entry_info, miniflux_api)
-    if err then
-        logger.err('[Miniflux:NavigationService] Navigation failed:', err.message)
-        Notification:warning(err.message)
+    if not entry_info.entry_id then
+        logger.err('[Miniflux:NavigationService] Navigation failed: missing entry ID')
+        Notification:warning(_('Cannot navigate: missing entry ID'))
+        return
+    end
+    if not miniflux.api then
+        logger.err('[Miniflux:NavigationService] Navigation failed: API not available')
+        Notification:warning(_('Cannot navigate: Miniflux API not available'))
         return
     end
 
@@ -100,53 +69,41 @@ function Navigation.navigateToEntry(entry_info, config)
 
     -- Handle local navigation separately (skip API entirely)
     if context and context.type == 'local' then
-        -- Get ordered entries for local navigation (minimal metadata for memory efficiency)
-        local EntryEntity = require('domains/entries/entry_entity')
-        local nav_entries = EntryEntity.getLocalEntriesForNavigation({ settings = settings })
-
-        -- Create enhanced context with ordered entries (same pattern as browser)
-        local enhanced_context = {
-            type = 'local',
-            ordered_entries = nav_entries,
-        }
-
-        local target_entry_id = Navigation.navigateLocalEntries({
-            current_entry_id = entry_info.entry_id,
-            navigation_options = { direction = direction },
-            context = enhanced_context,
+        Navigation.handleLocalNavigation({
+            entry_info = entry_info,
+            miniflux = miniflux,
+            direction = direction,
         })
-
-        if target_entry_id then
-            -- Get the full entry data for the target entry
-            local target_entry_data = EntryEntity.loadMetadata(target_entry_id)
-
-            if target_entry_data then
-                -- Open the local entry using the same method as browser
-                entry_service:readEntry(target_entry_data, {
-                    browser = miniflux_plugin.browser,
-                    context = enhanced_context,
-                })
-            else
-                logger.err(
-                    '[Miniflux:NavigationService] Failed to load metadata for entry:',
-                    target_entry_id
-                )
-                Notification:error(_('Failed to open target entry'))
-            end
-        else
-            Notification:info(_('No ' .. direction .. ' entry available in local files'))
-        end
         return
     end
 
-    -- Build navigation options
-    local nav_options, options_err = Navigation.buildNavigationOptions({
-        published_unix = published_unix,
+    -- Handle API navigation with offline fallback
+    Navigation.handleApiNavigation({
+        entry_info = entry_info,
+        miniflux = miniflux,
         direction = direction,
-        settings = settings,
-        context = context,
         metadata = metadata,
+        published_unix = published_unix,
+        context = context,
     })
+end
+
+---Handle API-based navigation with offline fallback
+---@param options {entry_info: table, miniflux: table, direction: string, metadata: table, published_unix: number, context: table}
+---@return nil
+function Navigation.handleApiNavigation(options)
+    local entry_info = options.entry_info
+    local miniflux = options.miniflux
+    local direction = options.direction
+    local metadata = options.metadata
+    local published_unix = options.published_unix
+    local context = options.context
+
+    -- Build navigation options
+    local nav_options, options_err = Navigation.buildNavigationOptions(
+        { metadata = metadata, published_unix = published_unix },
+        { direction = direction, settings = miniflux.settings, context = context }
+    )
     if options_err then
         Notification:warning(options_err.message)
         return
@@ -154,12 +111,10 @@ function Navigation.navigateToEntry(entry_info, config)
     ---@cast nav_options -nil
 
     -- Perform search
-    local success, result = Navigation.performNavigationSearch({
-        options = nav_options,
-        direction = direction,
-        miniflux_api = miniflux_api,
-        current_entry_id = entry_info.entry_id,
-    })
+    local success, result = Navigation.performNavigationSearch(
+        { options = nav_options, direction = direction },
+        { miniflux_api = miniflux.api, current_entry_id = entry_info.entry_id }
+    )
 
     if success and result and result.entries and #result.entries > 0 then
         local target_entry = result.entries[1]
@@ -172,7 +127,7 @@ function Navigation.navigateToEntry(entry_info, config)
                 context = context,
             })
         then
-            entry_service:readEntry(target_entry, { context = context })
+            miniflux.entry_service:readEntry(target_entry, { context = context })
         end
     else
         -- Handle different failure scenarios with appropriate messages
@@ -194,26 +149,55 @@ function Navigation.navigateToEntry(entry_info, config)
     end
 end
 
+---Handle local navigation (skip API entirely)
+---@param options {entry_info: table, miniflux: table, direction: string}
+---@return nil
+function Navigation.handleLocalNavigation(options)
+    local entry_info = options.entry_info
+    local miniflux = options.miniflux
+    local direction = options.direction
+
+    -- Get ordered entries for local navigation (minimal metadata for memory efficiency)
+    local EntryEntity = require('domains/entries/entry_entity')
+    local nav_entries = EntryEntity.getLocalEntriesForNavigation({ settings = miniflux.settings })
+
+    -- Create enhanced context with ordered entries (same pattern as browser)
+    local enhanced_context = {
+        type = 'local',
+        ordered_entries = nav_entries,
+    }
+
+    local target_entry_id = Navigation.navigateLocalEntries({
+        current_entry_id = entry_info.entry_id,
+        direction = direction,
+        ordered_entries = nav_entries,
+    })
+
+    if target_entry_id then
+        -- Get the full entry data for the target entry
+        local target_entry_data = EntryEntity.loadMetadata(target_entry_id)
+
+        if target_entry_data then
+            -- Open the local entry using the same method as browser
+            miniflux.entry_service:readEntry(target_entry_data, {
+                browser = miniflux.browser,
+                context = enhanced_context,
+            })
+        else
+            logger.err(
+                '[Miniflux:NavigationService] Failed to load metadata for entry:',
+                target_entry_id
+            )
+            Notification:error(_('Failed to open target entry'))
+        end
+    else
+        Notification:info(_('No ' .. direction .. ' entry available in local files'))
+    end
+end
+
 -- =============================================================================
 -- NAVIGATION HELPER FUNCTIONS (PURE FUNCTIONS)
 -- =============================================================================
-
----Validate navigation input parameters
----@param entry_info table Entry information with file_path and entry_id
----@param miniflux_api table Miniflux API instance
----@return boolean|nil result, Error|nil error
-function Navigation.validateNavigationInput(entry_info, miniflux_api)
-    if not entry_info.entry_id then
-        return nil, Error.new(_('Cannot navigate: missing entry ID'))
-    end
-
-    if not miniflux_api then
-        return nil, Error.new(_('Cannot navigate: Miniflux API not available'))
-    end
-
-    -- Note: Plugin can be nil (for direct file opening), context will default to global
-    return true, nil
-end
 
 ---Load and validate entry metadata
 ---@param entry_info table Entry information
@@ -235,14 +219,15 @@ function Navigation.loadEntryMetadata(entry_info)
 end
 
 ---Build navigation options based on direction
----@param config {published_unix: number, direction: string, settings: table, context: MinifluxContext?, metadata: table}
+---@param entry_context {metadata: table, published_unix: number} Entry metadata and timestamp
+---@param nav_request {direction: string, settings: table, context: table?} Navigation request details
 ---@return table|nil result, Error|nil error
-function Navigation.buildNavigationOptions(config)
-    local published_unix = config.published_unix
-    local direction = config.direction
-    local settings = config.settings
-    local context = config.context
-    local metadata = config.metadata
+function Navigation.buildNavigationOptions(entry_context, nav_request)
+    local metadata = entry_context.metadata
+    local published_unix = entry_context.published_unix
+    local direction = nav_request.direction
+    local settings = nav_request.settings
+    local context = nav_request.context
 
     local base_options = {
         limit = settings.limit,
@@ -256,13 +241,17 @@ function Navigation.buildNavigationOptions(config)
         base_options.status = { 'unread' }
     end
 
-    local options = Navigation.getContextAwareOptions({
-        base_options = base_options,
-        context = context,
-        entry_metadata = metadata,
-    })
-    if not options then
-        return nil, Error.new(_('Cannot navigate: failed to get context options'))
+    local options = {}
+    -- Copy base options
+    for k, v in pairs(base_options) do
+        options[k] = v
+    end
+
+    -- Add context-aware filtering
+    if context and context.type == 'feed' then
+        options.feed_id = context.id or (metadata.feed and metadata.feed.id)
+    elseif context and context.type == 'category' then
+        options.category_id = context.id or (metadata.category and metadata.category.id)
     end
 
     if direction == DIRECTION_PREVIOUS then
@@ -312,13 +301,14 @@ function Navigation.tryLocalFileFirst(opts)
 end
 
 ---Perform navigation search with offline fallback
----@param config {options: ApiOptions, direction: string, miniflux_api: MinifluxAPI, current_entry_id: number}
+---@param search_params {options: ApiOptions, direction: string} Search parameters
+---@param api_context {miniflux_api: MinifluxAPI, current_entry_id: number} API and context info
 ---@return boolean success, table|string result_or_error
-function Navigation.performNavigationSearch(config)
-    local options = config.options
-    local direction = config.direction
-    local miniflux_api = config.miniflux_api
-    local current_entry_id = config.current_entry_id
+function Navigation.performNavigationSearch(search_params, api_context)
+    local options = search_params.options
+    local direction = search_params.direction
+    local miniflux_api = api_context.miniflux_api
+    local current_entry_id = api_context.current_entry_id
 
     local loading_message = direction == DIRECTION_PREVIOUS and MSG_FINDING_PREVIOUS
         or MSG_FINDING_NEXT
@@ -399,15 +389,12 @@ function Navigation.findAdjacentEntryId(current_entry_id, direction)
 end
 
 ---Navigate within local entries using pre-computed ordered list (optimized for performance)
----@param config {current_entry_id: number, navigation_options: {direction: string}, context: {type: string, ordered_entries: table[]}}
+---@param options {current_entry_id: number, direction: string, ordered_entries: table[]}
 ---@return number|nil Next entry ID or nil if no adjacent entry found
-function Navigation.navigateLocalEntries(config)
-    local current_entry_id = config.current_entry_id
-    local direction = config.navigation_options.direction
-    local context = config.context
-
-    -- Get pre-computed ordered entries from context (already sorted by user preferences)
-    local ordered_entries = context.ordered_entries
+function Navigation.navigateLocalEntries(options)
+    local current_entry_id = options.current_entry_id
+    local direction = options.direction
+    local ordered_entries = options.ordered_entries
     if not ordered_entries or #ordered_entries == 0 then
         return nil
     end
