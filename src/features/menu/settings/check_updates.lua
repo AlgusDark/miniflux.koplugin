@@ -264,7 +264,7 @@ function CheckUpdates.checkForUpdates(options)
 
     -- Mark check as performed if settings provided (for automatic checks)
     if settings then
-        local UpdateSettings = require('menu/settings/update_settings')
+        local UpdateSettings = require('features/menu/settings/update_settings')
         UpdateSettings.markUpdateCheckPerformed(settings)
     end
 
