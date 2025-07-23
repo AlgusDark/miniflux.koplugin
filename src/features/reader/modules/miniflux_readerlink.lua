@@ -9,80 +9,62 @@ This module enhances KOReader's ReaderLink functionality by:
 This is the single entry point for all reader enhancements.
 --]]
 
+local EventListener = require('ui/widget/eventlistener')
 local UIManager = require('ui/uimanager')
 local Device = require('device')
+local util = require('util')
 local _ = require('gettext')
 
----@class ReaderLinkService
----@field miniflux_plugin Miniflux Reference to main plugin
+---@class MinifluxReaderLink : EventListener
+---@field miniflux Miniflux Reference to main plugin
 ---@field ui ReaderUI Direct reference to reader UI
 ---@field reader_link ReaderLink Direct reference to ReaderLink module
+---@field wrapped_onTap table|nil Wrapped onTap method object
 ---@field dialog_integration_setup boolean Track setup state
 ---@field last_link_tap_pos table|nil Store tap position from link detection
 ---@field touch_zones_registered boolean Track touch zones registration state
 ---@field touch_zones table[]|nil Touch zones definition for image tap detection
-local ReaderLinkService = {}
+local MinifluxReaderLink = EventListener:extend({
+    name = 'miniflux_readerlink',
+    miniflux = nil,
+})
 
----Create a new ReaderLinkService instance
----@param params table Parameters with miniflux_plugin
----@return ReaderLinkService New service instance
-function ReaderLinkService:new(params)
-    local instance = {
-        miniflux_plugin = params.miniflux_plugin, -- Reference to main plugin
-        ui = params.miniflux_plugin.ui, -- Direct reference to UI
-        reader_link = params.miniflux_plugin.ui.link, -- Direct reference to ReaderLink
-        dialog_integration_setup = false, -- Track setup state
-        last_link_tap_pos = nil, -- Store tap position from link detection
-        touch_zones_registered = false, -- Track touch zones state
-        touch_zones = nil, -- Touch zones definition
-    }
-    setmetatable(instance, { __index = self })
-
-    -- Override ReaderLink's onTap to capture tap position
-    instance:overrideReaderLinkOnTap()
-
-    -- Set up ReaderLink dialog integration
-    instance:setupLinkDialogIntegration()
-
-    -- Set up image touch zones for full-screen image tap detection
-    if Device:isTouchDevice() and instance.ui then
-        instance:setupImageTouchZones()
-    end
-
-    return instance
-end
-
----Override ReaderLink's onTap method to capture tap position for image detection
----
----This method intercepts the link tap handling to store the tap position so we can
----use it later in the external link dialog to detect if there's an image at that position.
----
----The override chain works like this:
----1. User taps on a link
----2. Our override captures the tap position
----3. Original onTap processes the link normally
----4. External link dialog shows with our button (if image detected)
----5. Button uses stored tap position to find and show the image
----
----@return nil
-function ReaderLinkService:overrideReaderLinkOnTap()
-    if not self.ui or not self.reader_link then
+---Initialize the module and set up ReaderLink enhancements
+function MinifluxReaderLink:init()
+    if not self.miniflux or not self.miniflux.ui or not self.miniflux.ui.link then
         return
     end
 
-    -- Store reference to original onTap method
-    local original_onTap = self.reader_link.onTap
-    local service = self
+    -- Set up references
+    self.ui = self.miniflux.ui
+    self.reader_link = self.miniflux.ui.link
+    self.wrapped_onTap = nil
+    self.dialog_integration_setup = false
+    self.last_link_tap_pos = nil
+    self.touch_zones_registered = false
+    self.touch_zones = nil
 
-    -- Replace with our override
-    self.reader_link.onTap = function(reader_link_instance, arg, ges)
-        -- Only capture tap position for miniflux entries
-        if service:isMinifluxEntry() then
-            service.last_link_tap_pos = ges and ges.pos
-        end
+    -- Wrap ReaderLink's onTap method to capture tap position
+    if self.reader_link then
+        self.wrapped_onTap = util.wrapMethod(self.reader_link, 'onTap', function(...)
+            -- Only capture tap position for miniflux entries
+            if self:isMinifluxEntry() then
+                local args = { ... }
+                local ges = args[3] -- third argument is gesture
+                self.last_link_tap_pos = ges and ges.pos
+            end
 
-        -- Call original onTap method
-        return original_onTap(reader_link_instance, arg, ges)
+            -- Always call original method
+            return self.wrapped_onTap:raw_method_call(...)
+        end)
+    end
+
+    -- Set up ReaderLink dialog integration
+    self:setupLinkDialogIntegration()
+
+    -- Set up image touch zones for full-screen image tap detection
+    if Device:isTouchDevice() and self.ui then
+        self:setupImageTouchZones()
     end
 end
 
@@ -103,7 +85,7 @@ end
 ---3. Optional show_in_dialog_func for conditional display
 ---
 ---@return nil
-function ReaderLinkService:setupLinkDialogIntegration()
+function MinifluxReaderLink:setupLinkDialogIntegration()
     -- Only set up integration if ReaderLink is available
     if not self.reader_link then
         return
@@ -137,26 +119,31 @@ end
 ---@param reader_link_instance table ReaderLink instance (not used, but provided by dialog)
 ---@return nil
 -- selene: allow(unused_variable)
-function ReaderLinkService:handleImageViewerAction(reader_link_instance)
+function MinifluxReaderLink:handleImageViewerAction(reader_link_instance)
     -- Check if we have a stored tap position
     if not self.last_link_tap_pos then
         return
     end
 
     -- Validate UI components
-    if not self.ui or not self.ui.view or not self.ui.document then
+    if
+        not self.miniflux
+        or not self.miniflux.ui
+        or not self.miniflux.ui.view
+        or not self.miniflux.ui.document
+    then
         return
     end
 
     -- Check if there's an image at the stored tap position
-    local tap_pos = self.ui.view:screenToPageTransform(self.last_link_tap_pos)
+    local tap_pos = self.miniflux.ui.view:screenToPageTransform(self.last_link_tap_pos)
     if not tap_pos then
         return
     end
 
     -- Use KOReader's built-in image detection with error handling
     local success, image = pcall(function()
-        return self.ui.document:getImageFromPosition(tap_pos, true, true)
+        return self.miniflux.ui.document:getImageFromPosition(tap_pos, true, true)
     end)
 
     if not success then
@@ -185,7 +172,7 @@ end
 ---@param link_url string The URL of the link (not used, but required by ReaderLink)
 ---@return boolean True if button should be shown, false otherwise
 -- selene: allow(unused_variable)
-function ReaderLinkService:shouldShowImageViewerButton(link_url)
+function MinifluxReaderLink:shouldShowImageViewerButton(link_url)
     -- Only show for miniflux entries
     if not self:isMinifluxEntry() then
         return false
@@ -197,19 +184,24 @@ function ReaderLinkService:shouldShowImageViewerButton(link_url)
     end
 
     -- Validate UI components
-    if not self.ui or not self.ui.view or not self.ui.document then
+    if
+        not self.miniflux
+        or not self.miniflux.ui
+        or not self.miniflux.ui.view
+        or not self.miniflux.ui.document
+    then
         return false
     end
 
     -- Check if there's actually an image at the stored tap position
-    local tap_pos = self.ui.view:screenToPageTransform(self.last_link_tap_pos)
+    local tap_pos = self.miniflux.ui.view:screenToPageTransform(self.last_link_tap_pos)
     if not tap_pos then
         return false
     end
 
     -- Use KOReader's built-in image detection with error handling
     local success, image = pcall(function()
-        return self.ui.document:getImageFromPosition(tap_pos, true, true)
+        return self.miniflux.ui.document:getImageFromPosition(tap_pos, true, true)
     end)
 
     if not success then
@@ -223,12 +215,17 @@ end
 
 ---Check if current document is a miniflux entry
 ---@return boolean True if current document is a miniflux entry
-function ReaderLinkService:isMinifluxEntry()
-    if not self.ui or not self.ui.document or not self.ui.document.file then
+function MinifluxReaderLink:isMinifluxEntry()
+    if
+        not self.miniflux
+        or not self.miniflux.ui
+        or not self.miniflux.ui.document
+        or not self.miniflux.ui.document.file
+    then
         return false
     end
 
-    local file_path = self.ui.document.file
+    local file_path = self.miniflux.ui.document.file
     return file_path:match('/miniflux/') and file_path:match('%.html$')
 end
 
@@ -238,7 +235,7 @@ end
 ---to prioritize image detection. Only active for miniflux entries.
 ---
 ---@return nil
-function ReaderLinkService:setupImageTouchZones()
+function MinifluxReaderLink:setupImageTouchZones()
     -- Only register touch zones when viewing miniflux entries
     if not self:isMinifluxEntry() then
         return
@@ -276,7 +273,7 @@ function ReaderLinkService:setupImageTouchZones()
         },
     }
 
-    self.ui:registerTouchZones(self.touch_zones)
+    self.miniflux.ui:registerTouchZones(self.touch_zones)
     self.touch_zones_registered = true
 end
 
@@ -287,20 +284,20 @@ end
 ---
 ---@param ges table Gesture information with screen position
 ---@return boolean True if handled (blocks other handlers), false if not handled
-function ReaderLinkService:onTapImage(ges)
+function MinifluxReaderLink:onTapImage(ges)
     -- Context filter: Only process taps on miniflux entries
     if not self:isMinifluxEntry() then
         return false -- Not our content, let other handlers process
     end
 
     -- Convert screen coordinates to document coordinates
-    local tap_pos = self.ui.view:screenToPageTransform(ges.pos)
+    local tap_pos = self.miniflux.ui.view:screenToPageTransform(ges.pos)
     if not tap_pos then
         return false -- Couldn't transform coordinates, let other handlers process
     end
 
     -- Use KOReader's built-in image detection (same method as ReaderHighlight)
-    local image = self.ui.document:getImageFromPosition(tap_pos, true, true)
+    local image = self.miniflux.ui.document:getImageFromPosition(tap_pos, true, true)
     if image then
         -- Found an image at tap position - show custom viewer
         self:showImageViewer(image)
@@ -318,7 +315,7 @@ end
 ---
 ---@param image table Image data from document
 ---@return nil
-function ReaderLinkService:showImageViewer(image)
+function MinifluxReaderLink:showImageViewer(image)
     local MinifluxImageViewer = require('features/reader/widgets/miniflux_imageviewer')
 
     local imgviewer = MinifluxImageViewer:new({
@@ -336,15 +333,21 @@ function ReaderLinkService:showImageViewer(image)
     UIManager:show(imgviewer)
 end
 
----Cleanup service when closing or switching documents
+---Cleanup module when closing or switching documents
 ---@return nil
-function ReaderLinkService:cleanup()
+function MinifluxReaderLink:onCloseWidget()
+    -- Revert wrapped onTap method
+    if self.wrapped_onTap then
+        self.wrapped_onTap:revert()
+        self.wrapped_onTap = nil
+    end
+
     -- Unregister touch zones if registered
-    if self.touch_zones_registered and self.touch_zones then
-        self.ui:unRegisterTouchZones(self.touch_zones)
+    if self.touch_zones_registered and self.touch_zones and self.miniflux and self.miniflux.ui then
+        self.miniflux.ui:unRegisterTouchZones(self.touch_zones)
         self.touch_zones_registered = false
         self.touch_zones = nil
     end
 end
 
-return ReaderLinkService
+return MinifluxReaderLink
