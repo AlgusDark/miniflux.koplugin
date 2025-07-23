@@ -95,19 +95,19 @@ local BookList = {}
 ---Available collation methods for sorting books
 ---@type table<string, CollationConfig>
 BookList.collates = {
-    strcoll = {},                -- Sort by name (locale-aware)
-    natural = {},                -- Natural sorting ("file2" before "file10")
-    access = {},                 -- Sort by last read date
-    date = {},                   -- Sort by modification date
-    size = {},                   -- Sort by file size
-    type = {},                   -- Sort by file type
+    strcoll = {}, -- Sort by name (locale-aware)
+    natural = {}, -- Natural sorting ("file2" before "file10")
+    access = {}, -- Sort by last read date
+    date = {}, -- Sort by modification date
+    size = {}, -- Sort by file size
+    type = {}, -- Sort by file type
     percent_unopened_first = {}, -- Sort by progress, unopened first
-    percent_unopened_last = {},  -- Sort by progress, unopened last
-    percent_natural = {},        -- Sort by progress with natural ordering
-    title = {},                  -- Sort by book title metadata
-    authors = {},                -- Sort by author metadata
-    series = {},                 -- Sort by series metadata
-    keywords = {},               -- Sort by keywords metadata
+    percent_unopened_last = {}, -- Sort by progress, unopened last
+    percent_natural = {}, -- Sort by progress with natural ordering
+    title = {}, -- Sort by book title metadata
+    authors = {}, -- Sort by author metadata
+    series = {}, -- Sort by series metadata
+    keywords = {}, -- Sort by keywords metadata
 }
 
 ---Initialize BookList with options

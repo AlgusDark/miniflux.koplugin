@@ -20,7 +20,7 @@
 ---@field name string Module name identifier
 ---@field active_widgets table[] Currently active widget instances
 ---@field dialog table|nil Parent container reference if in dialog mode
----@field document table Document interface for current file
+---@field document Document Document interface for current file
 ---@field password string|nil Password for document unlock
 ---@field postInitCallback function|nil Callback after initialization
 ---@field postReaderReadyCallback function|nil Callback when reader is ready
@@ -33,6 +33,7 @@
 ---@field config table Configuration management
 ---@field rolling table Rolling view module (for reflowable documents)
 ---@field paging table Paging view module (for fixed layout documents)
+---@field status table Reader status module for progress and completion
 ---@field doc_settings DocSettings Document settings for current file
 local ReaderUI = {}
 
