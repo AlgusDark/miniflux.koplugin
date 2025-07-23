@@ -23,7 +23,6 @@ local DownloadCache = require('features/entries/utils/download_cache')
 ---@field feeds Feeds Feeds domain module
 ---@field categories Categories Categories domain module
 ---@field entries Entries Entries domain module
----@field miniflux_api MinifluxAPI API instance for direct operations (status updates, etc.)
 ---@field miniflux_plugin Miniflux Plugin instance for context management
 ---@field entry_subprocesses table<number, number> Map of entry_id to subprocess PID
 local EntryService = {}
@@ -33,11 +32,10 @@ local EntryService = {}
 ---@field feeds Feeds
 ---@field categories Categories
 ---@field entries Entries
----@field miniflux_api MinifluxAPI
 ---@field miniflux_plugin Miniflux
 
 ---Create a new EntryService instance
----@param deps EntryServiceDeps Dependencies containing settings, domain modules, API, and plugin
+---@param deps EntryServiceDeps Dependencies containing settings, domain modules, and plugin
 ---@return EntryService
 function EntryService:new(deps)
     local instance = {
@@ -45,7 +43,6 @@ function EntryService:new(deps)
         feeds = deps.feeds,
         categories = deps.categories,
         entries = deps.entries,
-        miniflux_api = deps.miniflux_api,
         miniflux_plugin = deps.miniflux_plugin,
         entry_subprocesses = {}, -- Track subprocesses per entry
     }
@@ -430,7 +427,7 @@ end
 ---@return boolean success
 function EntryService:tryUpdateEntryStatus(entry_id, new_status)
     -- Use existing API with minimal dialogs
-    local _result, err = self.miniflux_api:updateEntries(entry_id, {
+    local _result, err = self.entries:updateEntries(entry_id, {
         body = { status = new_status },
         -- No dialogs for background queue processing
     })
@@ -471,7 +468,7 @@ function EntryService:tryBatchUpdateEntries(entry_ids, new_status)
     end
 
     -- Use existing batch API without dialogs for background processing
-    local _result, err = self.miniflux_api:updateEntries(entry_ids, {
+    local _result, err = self.entries:updateEntries(entry_ids, {
         body = { status = new_status },
         -- No dialogs for background queue processing
     })
@@ -544,7 +541,7 @@ function EntryService:markEntriesAsRead(entry_ids)
     local progress_message = _('Marking ') .. #entry_ids .. _(' entries as read...')
 
     -- Try batch API call first
-    local _result, err = self.miniflux_api:updateEntries(entry_ids, {
+    local _result, err = self.entries:updateEntries(entry_ids, {
         body = { status = 'read' },
         dialogs = {
             loading = { text = progress_message },
@@ -600,7 +597,7 @@ function EntryService:markEntriesAsUnread(entry_ids)
     local progress_message = _('Marking ') .. #entry_ids .. _(' entries as unread...')
 
     -- Try batch API call first
-    local _result, err = self.miniflux_api:updateEntries(entry_ids, {
+    local _result, err = self.entries:updateEntries(entry_ids, {
         body = { status = 'unread' },
         dialogs = {
             loading = { text = progress_message },
@@ -695,7 +692,7 @@ function EntryService:changeEntryStatus(entry_id, opts)
     local _error_text = T(_('Failed to mark entry as %1'), new_status)
 
     -- Call API with automatic dialog management
-    local _result, err = self.miniflux_api:updateEntries(entry_id, {
+    local _result, err = self.entries:updateEntries(entry_id, {
         body = { status = new_status },
         dialogs = {
             loading = { text = loading_text },

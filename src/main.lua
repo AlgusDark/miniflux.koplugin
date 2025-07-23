@@ -104,13 +104,13 @@ function Miniflux:init()
         feeds = self.feeds,
         categories = self.categories,
         entries = self.entries,
-        miniflux_api = self.api,
         miniflux_plugin = self,
     })
 
     self.queue_service = QueueService:new({
         entry_service = self.entry_service,
-        miniflux_api = self.api,
+        feeds = self.feeds,
+        categories = self.categories,
     })
 
     local MinifluxBrowser = require('features/browser/browser')
