@@ -124,7 +124,8 @@ function Miniflux:init()
     end
 
     -- Override ReaderStatus EndOfBook behavior for miniflux entries
-    self:overrideEndOfBookBehavior()
+    local EndOfBookDialog = require('features/reader/modules/end_of_book_dialog')
+    EndOfBookDialog.overrideReaderBehavior(self)
 
     -- Register with KOReader menu system
     self.ui.menu:registerToMainMenu(self)
@@ -173,47 +174,6 @@ end
 ---@return nil
 function Miniflux:onReadMinifluxEntries()
     self.browser:open()
-end
-
----Override ReaderStatus EndOfBook behavior to handle miniflux entries
----@return nil
-function Miniflux:overrideEndOfBookBehavior()
-    if not self.ui or not self.ui.status then
-        return
-    end
-
-    -- Save the original onEndOfBook method
-    local original_onEndOfBook = self.ui.status.onEndOfBook
-
-    -- Replace with our custom handler
-    self.ui.status.onEndOfBook = function(reader_status_instance)
-        -- Check if current document is a miniflux HTML file
-        if not self.ui or not self.ui.document or not self.ui.document.file then
-            -- Fallback to original behavior
-            return original_onEndOfBook(reader_status_instance)
-        end
-
-        local file_path = self.ui.document.file
-
-        -- Check if this is a miniflux HTML entry
-        if file_path:match('/miniflux/') and file_path:match('%.html$') then
-            -- Extract entry ID from path and convert to number
-            local entry_id_str = file_path:match('/miniflux/(%d+)/')
-            local entry_id = entry_id_str and tonumber(entry_id_str)
-
-            if entry_id then
-                -- Show the end of entry dialog with entry info as parameter
-                self.entry_service:showEndOfEntryDialog({
-                    file_path = file_path,
-                    entry_id = entry_id,
-                })
-                return -- Don't call original handler
-            end
-        end
-
-        -- For non-miniflux files, use original behavior
-        return original_onEndOfBook(reader_status_instance)
-    end
 end
 
 ---Handle ReaderReady event - called when a document is fully loaded and ready
