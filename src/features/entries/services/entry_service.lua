@@ -847,7 +847,7 @@ function EntryService:spawnUpdateStatus(entry_id, opts)
 
     local pid = FFIUtil.runInSubProcess(function()
         -- Import required modules in subprocess
-        local MinifluxAPI = require('shared/api/miniflux_api')
+        local MinifluxAPI = require('api/miniflux_api')
         -- selene: allow(shadowing)
         local EntryEntity = require('domains/entries/entry_entity')
         -- selene: allow(shadowing)
