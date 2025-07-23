@@ -13,7 +13,7 @@ local Dispatcher = require('dispatcher')
 local _ = require('gettext')
 local logger = require('logger')
 
-local MinifluxAPI = require('shared/api/miniflux_api')
+local MinifluxAPI = require('api/miniflux_api')
 local MinifluxSettings = require('features/settings/settings')
 local Menu = require('features/menu/menu')
 local EntryEntity = require('domains/entries/entry_entity')
