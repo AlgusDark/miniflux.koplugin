@@ -85,7 +85,7 @@ end
 ---@param plugin table The Miniflux plugin instance
 ---@return table[] Update settings menu items
 function UpdateSettings.getSubMenu(plugin)
-    local CheckUpdates = require('menu/settings/check_updates')
+    local CheckUpdates = require('features/menu/settings/check_updates')
 
     local settings = plugin.settings
 
