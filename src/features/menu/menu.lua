@@ -52,7 +52,7 @@ function Menu.build(plugin)
                 sub_item_table = {
                     -- === CONNECTION SETTINGS ===
                     ServerConfig.getMenuItem(plugin.settings),
-                    TestConnection.getMenuItem(plugin.api),
+                    TestConnection.getMenuItem(plugin.entries),
 
                     -- === DISPLAY SETTINGS ===
                     Entries.getMenuItem(plugin.settings),

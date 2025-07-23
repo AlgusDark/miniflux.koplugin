@@ -40,9 +40,9 @@ function Navigation.navigateToEntry(entry_info, miniflux, navigation_options)
         Notification:warning(_('Cannot navigate: missing entry ID'))
         return
     end
-    if not miniflux.api then
-        logger.err('[Miniflux:NavigationService] Navigation failed: API not available')
-        Notification:warning(_('Cannot navigate: Miniflux API not available'))
+    if not miniflux.entries then
+        logger.err('[Miniflux:NavigationService] Navigation failed: Entries domain not available')
+        Notification:warning(_('Cannot navigate: Entries service not available'))
         return
     end
 
@@ -113,7 +113,7 @@ function Navigation.handleApiNavigation(options)
     -- Perform search
     local success, result = Navigation.performNavigationSearch(
         { options = nav_options, direction = direction },
-        { miniflux_api = miniflux.api, current_entry_id = entry_info.entry_id }
+        { entries = miniflux.entries, current_entry_id = entry_info.entry_id }
     )
 
     if success and result and result.entries and #result.entries > 0 then
@@ -302,19 +302,19 @@ end
 
 ---Perform navigation search with offline fallback
 ---@param search_params {options: ApiOptions, direction: string} Search parameters
----@param api_context {miniflux_api: MinifluxAPI, current_entry_id: number} API and context info
+---@param api_context {entries: Entries, current_entry_id: number} Domain services and context info
 ---@return boolean success, table|string result_or_error
 function Navigation.performNavigationSearch(search_params, api_context)
     local options = search_params.options
     local direction = search_params.direction
-    local miniflux_api = api_context.miniflux_api
+    local entries = api_context.entries
     local current_entry_id = api_context.current_entry_id
 
     local loading_message = direction == DIRECTION_PREVIOUS and MSG_FINDING_PREVIOUS
         or MSG_FINDING_NEXT
 
     -- Try API call first
-    local result, err = miniflux_api:getEntries(options, {
+    local result, err = entries:getEntries(options, {
         dialogs = {
             loading = { text = loading_message },
         },
