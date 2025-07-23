@@ -18,7 +18,6 @@ local EntriesView = require('features/browser/views/entries_view')
 ---@class MinifluxBrowser : Browser
 ---@field miniflux Miniflux Miniflux plugin instance
 ---@field settings MinifluxSettings Plugin settings
----@field miniflux_api MinifluxAPI Miniflux API
 ---@field download_dir string Download directory path
 ---@field entry_service EntryService Entry service instance
 ---@field miniflux_plugin Miniflux Plugin instance for context management

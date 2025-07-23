@@ -58,6 +58,31 @@ function Entries:getUnreadCount(config)
     end)
 end
 
+---Update entry status for one or multiple entries
+---@param entry_ids number|number[] Entry ID or array of entry IDs to update
+---@param config? table Configuration with body containing status and dialogs
+---@return table|nil result, Error|nil error
+function Entries:updateEntries(entry_ids, config)
+    return self.miniflux.api:updateEntries(entry_ids, config)
+end
+
+---Get entries with optional filtering
+---@param options? ApiOptions Query options for filtering and sorting
+---@param config? table Configuration including optional dialogs
+---@return MinifluxEntriesResponse|nil result, Error|nil error
+function Entries:getEntries(options, config)
+    return self.miniflux.api:getEntries(options, config)
+end
+
+---Test connection to Miniflux server (useful for settings)
+-- TODO: Move this to a dedicated system/health domain - this doesn't belong in entries
+-- Other endpoints like /version, /readiness might also need a home outside domain boundaries
+---@param config? table Configuration including optional dialogs
+---@return table|nil result, Error|nil error
+function Entries:testConnection(config)
+    return self.miniflux.api:getMe(config)
+end
+
 -- =============================================================================
 -- EVENT HANDLERS
 -- =============================================================================

@@ -6,16 +6,18 @@ local logger = require('logger')
 
 ---@class QueueService
 ---@field entry_service EntryService Reference to entry service for entry queue operations
----@field miniflux_api MinifluxAPI Reference to API client for feed/category operations
+---@field feeds Feeds Reference to feeds domain for feed operations
+---@field categories Categories Reference to categories domain for category operations
 local QueueService = {}
 
 ---Create a new QueueService instance
----@param config table Configuration with entry_service and miniflux_api
+---@param config table Configuration with entry_service, feeds, and categories
 ---@return QueueService
 function QueueService:new(config)
     local instance = {
         entry_service = config.entry_service,
-        miniflux_api = config.miniflux_api,
+        feeds = config.feeds,
+        categories = config.categories,
     }
     setmetatable(instance, { __index = self })
     return instance
@@ -164,12 +166,13 @@ function QueueService:processQueue(queue_type)
 
     for collection_id, opts in pairs(queue_data) do
         if opts and opts.operation == 'mark_all_read' and collection_id then
-            local _, err
+            local success = false
             if queue_type == 'feed' then
-                _, err = self.miniflux_api:markFeedAsRead(collection_id)
+                success = self.feeds:markAsRead(collection_id)
             elseif queue_type == 'category' then
-                _, err = self.miniflux_api:markCategoryAsRead(collection_id)
+                success = self.categories:markAsRead(collection_id)
             end
+            local err = not success
 
             if not err then
                 -- Success - remove from queue
@@ -180,8 +183,7 @@ function QueueService:processQueue(queue_type)
                     '[Miniflux:QueueService] Failed to mark',
                     queue_type,
                     collection_id,
-                    'as read:',
-                    err.message or 'unknown error'
+                    'as read (domain returned false)'
                 )
                 failed_count = failed_count + 1
             end

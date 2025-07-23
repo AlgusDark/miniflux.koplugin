@@ -80,6 +80,11 @@ function Feeds:getEntriesByFeed(feed_id, config)
 end
 
 ---Mark all entries in a feed as read
+-- TODO: ARCHITECTURAL DEBT - This method violates domain boundaries by handling queuing
+-- The domain should only return Result|nil, Error|nil pattern from API calls.
+-- Queue fallback logic belongs in features/offline/ or features/entries/mark_as_read_or_queue.lua
+-- Current implementation mixes domain logic with offline/queue concerns.
+-- See: https://github.com/your-repo/issues/XXX for proper offline architecture
 ---@param feed_id number The feed ID
 ---@return boolean success
 function Feeds:markAsRead(feed_id)
