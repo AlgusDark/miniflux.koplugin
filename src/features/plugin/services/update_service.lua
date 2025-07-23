@@ -217,7 +217,7 @@ function UpdateService.checkForUpdates(plugin_instance)
     logger.info('[Miniflux:UpdateService] Found', #releases_data, 'total releases')
 
     -- Get beta setting from settings
-    local Settings = require('settings/settings')
+    local Settings = require('features/settings/settings')
     local settings = Settings:new()
     local include_beta = settings.auto_update_include_beta
     logger.info('[Miniflux:UpdateService] Include beta releases:', include_beta)

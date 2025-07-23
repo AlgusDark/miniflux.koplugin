@@ -34,7 +34,7 @@ function MinifluxBrowser:init()
     self.settings = self.miniflux.settings
 
     -- Initialize services container
-    self.entry_service = self.miniflux.services.entry
+    self.entry_service = self.miniflux.entry_service
 
     -- Initialize Browser parent (handles generic setup)
     Browser.init(self)
