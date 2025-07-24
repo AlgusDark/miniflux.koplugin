@@ -1,17 +1,14 @@
 local EventListener = require('ui/widget/eventlistener')
-local CacheAdapter = require('shared/cache/cache_adapter')
 local logger = require('logger')
 
 ---Categories domain - handles all category-related operations
 ---@class Categories : EventListener
 ---@field miniflux Miniflux Parent plugin reference
----@field cache CacheAdapter Cache adapter for categories data
+---@field http_cache HTTPCacheAdapter HTTP cache adapter for categories data
 local Categories = EventListener:extend({})
 
 ---Initialize categories domain
 function Categories:init()
-    local miniflux = self.miniflux
-    self.cache = CacheAdapter:new(miniflux.settings)
     logger.dbg('[Miniflux:Categories] Initialized')
 end
 
@@ -19,7 +16,7 @@ end
 ---@param config? table Optional configuration with dialogs
 ---@return MinifluxCategory[]|nil result, Error|nil error
 function Categories:getCategories(config)
-    return self.cache:fetchWithCache('categories', {
+    return self.http_cache:fetchWithCache('categories', {
         ttl = self.miniflux.settings.api_cache_ttl_categories,
         fetcher = function()
             return self.miniflux.api:getCategories(true, config) -- include counts
@@ -106,35 +103,6 @@ function Categories:markAsRead(category_id)
         Notification:success(_('Category marked as read'))
         return true
     end
-end
-
--- =============================================================================
--- EVENT HANDLERS
--- =============================================================================
-
----@private
-function Categories:shouldInvalidateCache(key)
-    local invalidating_keys = {
-        [self.miniflux.settings.Key.ORDER] = true,
-        [self.miniflux.settings.Key.DIRECTION] = true,
-        [self.miniflux.settings.Key.LIMIT] = true,
-        [self.miniflux.settings.Key.HIDE_READ_ENTRIES] = true,
-    }
-    return invalidating_keys[key] == true
-end
-
-function Categories:onMinifluxSettingsChanged(payload)
-    local key = payload.key
-
-    if self:shouldInvalidateCache(key) then
-        logger.info('[Miniflux:Categories] Invalidating cache due to setting change:', key)
-        self.cache:clear()
-    end
-end
-
-function Categories:onMinifluxCacheInvalidate()
-    logger.info('[Miniflux:Categories] Cache invalidation event received')
-    self.cache:clear()
 end
 
 return Categories

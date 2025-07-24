@@ -1,17 +1,14 @@
 local EventListener = require('ui/widget/eventlistener')
-local CacheAdapter = require('shared/cache/cache_adapter')
 local logger = require('logger')
 
 ---Feeds domain - handles all feed-related operations
 ---@class Feeds : EventListener
 ---@field miniflux Miniflux Parent plugin reference
----@field cache CacheAdapter Cache adapter for feeds data
+---@field http_cache HTTPCacheAdapter HTTP cache adapter for feeds data
 local Feeds = EventListener:extend({})
 
 ---Initialize feeds domain
 function Feeds:init()
-    local miniflux = self.miniflux
-    self.cache = CacheAdapter:new(miniflux.settings)
     logger.dbg('[Miniflux:Feeds] Initialized')
 end
 
@@ -19,7 +16,7 @@ end
 ---@param config? table Optional configuration with dialogs
 ---@return MinifluxFeed[]|nil result, Error|nil error
 function Feeds:getFeeds(config)
-    return self.cache:fetchWithCache('feeds', function()
+    return self.http_cache:fetchWithCache('feeds', function()
         return self.miniflux.api:getFeeds(config)
     end)
 end
@@ -28,7 +25,7 @@ end
 ---@param config? table Optional configuration with dialogs
 ---@return {feeds: MinifluxFeed[], counters: MinifluxFeedCounters}|nil result, Error|nil error
 function Feeds:getFeedsWithCounters(config)
-    return self.cache:fetchWithCache('feeds_with_counters', {
+    return self.http_cache:fetchWithCache('feeds_with_counters', {
         ttl = self.miniflux.settings.api_cache_ttl_counters,
         fetcher = function()
             local feeds, err = self:getFeeds(config)
@@ -125,35 +122,6 @@ function Feeds:markAsRead(feed_id)
         Notification:success(_('Feed marked as read'))
         return true
     end
-end
-
--- =============================================================================
--- EVENT HANDLERS
--- =============================================================================
-
----@private
-function Feeds:shouldInvalidateCache(key)
-    local invalidating_keys = {
-        [self.miniflux.settings.Key.ORDER] = true,
-        [self.miniflux.settings.Key.DIRECTION] = true,
-        [self.miniflux.settings.Key.LIMIT] = true,
-        [self.miniflux.settings.Key.HIDE_READ_ENTRIES] = true,
-    }
-    return invalidating_keys[key] == true
-end
-
-function Feeds:onMinifluxSettingsChanged(payload)
-    local key = payload.key
-
-    if self:shouldInvalidateCache(key) then
-        logger.info('[Miniflux:Feeds] Invalidating cache due to setting change:', key)
-        self.cache:clear()
-    end
-end
-
-function Feeds:onMinifluxCacheInvalidate()
-    logger.info('[Miniflux:Feeds] Cache invalidation event received')
-    self.cache:clear()
 end
 
 return Feeds

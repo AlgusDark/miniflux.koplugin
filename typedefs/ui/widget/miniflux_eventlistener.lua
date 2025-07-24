@@ -6,7 +6,7 @@ local MinifluxEventListener = {}
 ---Handle Miniflux settings changed event
 ---@param self MinifluxEventListener
 ---@param payload MinifluxSettingsChangeData # Event payload
-function MinifluxEventListener:onMinifluxSettingsChanged(payload) end
+function MinifluxEventListener:onMinifluxSettingsChange(payload) end
 
 ---Handle Miniflux cache invalidate event
 ---@param self MinifluxEventListener

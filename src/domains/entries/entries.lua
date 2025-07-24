@@ -1,17 +1,14 @@
 local EventListener = require('ui/widget/eventlistener')
-local CacheAdapter = require('shared/cache/cache_adapter')
 local logger = require('logger')
 
 ---Entries domain - handles all entry-related operations
 ---@class Entries : EventListener
 ---@field miniflux Miniflux Parent plugin reference
----@field cache CacheAdapter Cache adapter for entries data
+---@field http_cache HTTPCacheAdapter HTTP cache adapter for entries data
 local Entries = EventListener:extend({})
 
 ---Initialize entries domain
 function Entries:init()
-    local miniflux = self.miniflux
-    self.cache = CacheAdapter:new(miniflux.settings)
     logger.dbg('[Miniflux:Entries] Initialized')
 end
 
@@ -48,7 +45,7 @@ function Entries:getUnreadCount(config)
     }
     local cache_key = self.miniflux.api:buildEntriesUrl(options) .. '_count'
 
-    return self.cache:fetchWithCache(cache_key, function()
+    return self.http_cache:fetchWithCache(cache_key, function()
         local result, err = self.miniflux.api:getEntries(options, config)
         if err then
             return nil, err
@@ -81,35 +78,6 @@ end
 ---@return table|nil result, Error|nil error
 function Entries:testConnection(config)
     return self.miniflux.api:getMe(config)
-end
-
--- =============================================================================
--- EVENT HANDLERS
--- =============================================================================
-
----@private
-function Entries:shouldInvalidateCache(key)
-    local invalidating_keys = {
-        [self.miniflux.settings.Key.ORDER] = true,
-        [self.miniflux.settings.Key.DIRECTION] = true,
-        [self.miniflux.settings.Key.LIMIT] = true,
-        [self.miniflux.settings.Key.HIDE_READ_ENTRIES] = true,
-    }
-    return invalidating_keys[key] == true
-end
-
-function Entries:onMinifluxSettingsChanged(payload)
-    local key = payload.key
-
-    if self:shouldInvalidateCache(key) then
-        logger.info('[Miniflux:Entries] Invalidating cache due to setting change:', key)
-        self.cache:clear()
-    end
-end
-
-function Entries:onMinifluxCacheInvalidate()
-    logger.info('[Miniflux:Entries] Cache invalidation event received')
-    self.cache:clear()
 end
 
 return Entries
