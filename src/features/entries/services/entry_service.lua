@@ -853,16 +853,10 @@ function EntryService:spawnUpdateStatus(entry_id, opts)
         -- selene: allow(shadowing)
         local logger = require('logger')
 
-        -- Create settings object for subprocess
-        local subprocess_settings = {
-            server_address = server_address,
-            api_token = api_token,
-        }
-
+        -- Create API instance for subprocess with direct configuration
         local miniflux_api = MinifluxAPI:new({
-            getSettings = function()
-                return subprocess_settings
-            end,
+            api_token = api_token,
+            server_address = server_address,
         })
 
         -- Check network connectivity

@@ -61,8 +61,11 @@ end
 
 ---Handle FlushSettings event from UIManager
 function Miniflux:onFlushSettings()
-    logger.dbg('[Miniflux:Main] Handling FlushSettings event')
-    self.settings:save()
+    if self.settings.updated then
+        logger.dbg('[Miniflux:Main] Writing settings to disk')
+        self.settings:save()
+        self.settings.updated = false
+    end
 end
 
 ---Initialize the plugin by setting up all components
@@ -80,14 +83,14 @@ function Miniflux:init()
 
     self.settings = MinifluxSettings:new()
 
-    self.api = MinifluxAPI:new({
-        getSettings = function()
-            return {
-                server_address = self.settings.server_address,
-                api_token = self.settings.api_token,
-            }
-        end,
-    })
+    -- Register MinifluxAPI as a module after settings initialization
+    self:registerModule(
+        'api',
+        MinifluxAPI:new({
+            api_token = self.settings.api_token,
+            server_address = self.settings.server_address,
+        })
+    )
 
     -- Register domain modules using vertical slice architecture
     local Feeds = require('domains/feeds/feeds')
