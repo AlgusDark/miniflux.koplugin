@@ -291,8 +291,8 @@ function Navigation.tryLocalFileFirst(opts)
         local html_file = entry_dir .. 'entry.html'
 
         if lfs.attributes(html_file, 'mode') == 'file' then
-            local Files = require('shared/utils/files')
-            Files.openWithReader(html_file, { context = context })
+            local EntryReader = require('features/reader/services/open_entry')
+            EntryReader.openEntry(html_file, { context = context })
             return true
         end
     end

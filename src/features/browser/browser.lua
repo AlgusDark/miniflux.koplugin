@@ -220,7 +220,7 @@ function MinifluxBrowser:openItem(entry_data, context)
         context and context.type or 'global'
     )
     -- Pass context directly to readEntry to flow through EntryWorkflow
-    self.entry_service:readEntry(entry_data, { browser = self, context = context })
+    self.entry_service:readEntry(entry_data, { context = context })
 end
 
 ---Get Miniflux-specific route handlers (implements Browser:getRouteHandlers)

@@ -1,10 +1,8 @@
 local lfs = require('libs/libkoreader-lfs')
 local Error = require('shared/utils/error')
-local logger = require('logger')
 
--- **Files** - Consolidated file utilities including basic file operations and
--- metadata loading. Combines functionality from file_utils and metadata_loader
--- for better organization.
+-- **Files** - Basic file utilities for common file operations like writing,
+-- directory creation, and path manipulation.
 local Files = {}
 
 -- =============================================================================
@@ -53,57 +51,6 @@ function Files.createDirectory(dir_path)
         end
     end
     return true, nil
-end
-
--- =============================================================================
--- READER INTEGRATION
--- =============================================================================
-
----@class OpenWithReaderCallbacks
----@field before_open? function Callback executed before opening the file
----@field on_ready? function Callback executed after ReaderUI is ready
-
----@class MinifluxContext
----@field type string Context type ("feed", "category", "global", "local")
----@field id? number Feed or category ID
----@field ordered_entries? table[] Ordered entries for navigation
-
----@class OpenWithReaderOptions : OpenWithReaderCallbacks
----@field context? MinifluxContext Optional navigation context to attach to ReaderUI.instance
-
----Open a file with ReaderUI and optional callbacks
----@param file_path string Path to the file to open
----@param opts? OpenWithReaderOptions Options including callbacks and context
----@return nil
-function Files.openWithReader(file_path, opts)
-    opts = opts or {}
-    local context = opts.context
-
-    -- Execute pre-open callback if provided
-    if opts.before_open then
-        opts.before_open()
-    end
-
-    -- Open the file
-    local ReaderUI = require('apps/reader/readerui')
-
-    -- Save navigation context to cache if provided
-    if context then
-        local BrowserCache = require('features/browser/utils/browser_cache')
-        BrowserCache.save(context)
-    end
-
-    -- Show the reader
-    ReaderUI:showReader(file_path)
-
-    -- Handle post-ready callback if provided
-    -- Note: This won't work reliably because showReader is async
-    -- Callbacks should be registered through the plugin system instead
-    if opts.on_ready then
-        logger.warn(
-            '[Miniflux:Files] on_ready callback may not work reliably with async showReader'
-        )
-    end
 end
 
 return Files

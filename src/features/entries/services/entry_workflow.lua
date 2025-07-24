@@ -356,11 +356,10 @@ local EntryWorkflow = {}
 
 ---Execute complete entry workflow with progress tracking (fire-and-forget)
 ---Downloads entry, creates files, and opens in reader with full user interaction support
----@param deps {entry_data: table, settings: table, browser?: table, context?: MinifluxContext}
+---@param deps {entry_data: table, settings: table, context?: MinifluxContext}
 function EntryWorkflow.execute(deps)
     local entry_data = deps.entry_data
     local settings = deps.settings
-    local browser = deps.browser
     local browser_context = deps.context
 
     --[[
@@ -394,13 +393,9 @@ function EntryWorkflow.execute(deps)
         --]]
         if EntryEntity.isEntryDownloaded(entry_data.id) then
             local html_file = EntryEntity.getEntryHtmlPath(entry_data.id)
-            -- Use Files.openWithReader for clean file opening
-            Files.openWithReader(html_file, {
-                before_open = function()
-                    if browser then
-                        browser:close()
-                    end
-                end,
+            -- Use EntryReader for clean entry opening
+            local EntryReader = require('features/reader/services/open_entry')
+            EntryReader.openEntry(html_file, {
                 context = browser_context,
             })
             return -- Completed - fire and forget
@@ -412,7 +407,7 @@ function EntryWorkflow.execute(deps)
         - Extract content and discover images
         - Show initial progress to user
         Phase state affects cancellation: only "cancel entry" option available
-        --]]
+                --]]
         current_phase = PHASES.PREPARING
 
         -- Prepare download context inline
@@ -580,12 +575,8 @@ function EntryWorkflow.execute(deps)
             success_count,
             'images'
         )
-        Files.openWithReader(context.html_file, {
-            before_open = function()
-                if browser then
-                    browser:close() -- Close browser before opening reader
-                end
-            end,
+        local EntryReader = require('features/reader/services/open_entry')
+        EntryReader.openEntry(context.html_file, {
             context = browser_context,
         })
 

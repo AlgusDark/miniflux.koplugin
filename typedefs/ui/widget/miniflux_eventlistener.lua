@@ -17,4 +17,9 @@ function MinifluxEventListener:onMinifluxCacheInvalidate() end
 ---@param args MinifluxServerConfigChangeData # Event payload with new server configuration
 function MinifluxEventListener:onMinifluxServerConfigChange(args) end
 
+---Handle Miniflux browser close requested event
+---@param self MinifluxEventListener
+---@param payload? MinifluxBrowserCloseRequestedData # Event payload with close reason
+function MinifluxEventListener:onMinifluxBrowserCloseRequested(payload) end
+
 return MinifluxEventListener
