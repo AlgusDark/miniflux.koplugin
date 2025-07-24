@@ -502,7 +502,6 @@ function EntryService:tryBatchUpdateEntries(entry_ids, new_status)
 end
 
 ---@class ReadEntryOptions
----@field browser? MinifluxBrowser Browser instance to close
 ---@field context? MinifluxContext Navigation context to attach to ReaderUI.instance
 
 ---Read an entry (download if needed and open)
@@ -510,7 +509,6 @@ end
 ---@param opts? ReadEntryOptions Options for entry reading
 function EntryService:readEntry(entry_data, opts)
     opts = opts or {}
-    local browser = opts.browser
     local context = opts.context
 
     -- Validate entry data with enhanced validation
@@ -524,7 +522,6 @@ function EntryService:readEntry(entry_data, opts)
     EntryWorkflow.execute({
         entry_data = entry_data,
         settings = self.settings,
-        browser = browser,
         context = context,
     })
 end

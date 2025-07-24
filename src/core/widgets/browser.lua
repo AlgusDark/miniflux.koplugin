@@ -1,5 +1,6 @@
 local BookList = require('ui/widget/booklist')
 local UIManager = require('ui/uimanager')
+local logger = require('logger')
 local _ = require('gettext')
 
 -- Navigation type definitions for generic browser functionality
@@ -461,7 +462,21 @@ end
 
 ---Close the browser (for compatibility with entry service)
 function Browser:close()
+    logger.info('[Browser] Closing browser')
     UIManager:close(self)
+end
+
+-- =============================================================================
+-- EVENT HANDLERS
+-- =============================================================================
+
+---Handle browser close requested event
+---@param payload? MinifluxBrowserCloseRequestedData Event payload with close reason
+-- selene: allow(unused_variable)
+function Browser:onMinifluxBrowserCloseRequested(payload)
+    -- Close this browser instance when requested via event
+    -- TODO: Could use payload.reason for logging/debugging in the future
+    self:close()
 end
 
 -- Page navigation methods are inherited from BookList
