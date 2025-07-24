@@ -1,6 +1,7 @@
 local MultiInputDialog = require('ui/widget/multiinputdialog')
 local UIManager = require('ui/uimanager')
 local Notification = require('shared/utils/notification')
+local MinifluxEvent = require('shared/utils/event')
 local _ = require('gettext')
 
 -- **Server Configuration Settings** - Handles server address and API token
@@ -61,6 +62,13 @@ function ServerConfig.showDialog(settings)
                         if fields[2] and fields[2] ~= '' then
                             settings.api_token = fields[2]
                         end
+
+                        -- Broadcast server config change event
+                        MinifluxEvent:broadcastMinifluxServerConfigChange({
+                            api_token = settings.api_token,
+                            server_address = settings.server_address,
+                        })
+
                         Notification:success(_('Settings saved'))
                         UIManager:close(settings_dialog)
                     end,
