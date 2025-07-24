@@ -33,6 +33,7 @@ local DEFAULTS = {
 -- using metamethods. Uses LuaSettings for storage with proper initialization
 -- and state management.
 ---@class MinifluxSettings
+---@field updated boolean Boolean flag to know if settings have really changed
 ---@field settings LuaSettings LuaSettings instance
 ---@field server_address string Server address
 ---@field api_token string API token
@@ -79,6 +80,7 @@ MinifluxSettings.Key = {
 function MinifluxSettings:new()
     local instance = {
         settings = LuaSettings:open(DataStorage:getSettingsDir() .. '/miniflux.lua'),
+        updated = false,
     }
 
     setmetatable(instance, self)
@@ -112,6 +114,10 @@ function MinifluxSettings:__newindex(key, value)
     if DEFAULTS[key] ~= nil then
         local old_value = self.settings:readSetting(key, DEFAULTS[key])
         self.settings:saveSetting(key, value)
+
+        if old_value ~= value then
+            self.updated = true
+        end
 
         -- Broadcast settings change event
         local MinifluxEvent = require('shared/utils/event')

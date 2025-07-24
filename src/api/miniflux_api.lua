@@ -1,3 +1,5 @@
+local EventListener = require('ui/widget/eventlistener')
+
 ---@class MinifluxEntriesResponse
 ---@field entries MinifluxEntry[] Array of entries
 ---@field total? number Total number of entries available
@@ -44,23 +46,33 @@
 -- Domain-specific API that provides all Miniflux operations.
 -- Uses the generic APIClient for HTTP communication while adding
 -- Miniflux-specific endpoint knowledge and request building.
----@class MinifluxAPI
+---@class MinifluxAPI : EventListener
 ---@field api_client APIClient Generic HTTP API client
----@field getSettings fun(): {server_address: string, api_token: string} Settings getter function
-local MinifluxAPI = {}
+---@field api_token string API token for authentication
+---@field server_address string Server address for API calls
+local MinifluxAPI = EventListener:extend({})
 
----Create a new MinifluxAPI instance
----@param deps {getSettings: fun(): {server_address: string, api_token: string}} Dependencies with settings getter
----@return MinifluxAPI
-function MinifluxAPI:new(deps)
+---Initialize the API instance with configuration
+function MinifluxAPI:init()
     local APIClient = require('core/api_client')
-    local instance = {
-        getSettings = deps.getSettings,
-        api_client = APIClient:new({ getSettings = deps.getSettings }),
-    }
-    setmetatable(instance, self)
-    self.__index = self
-    return instance
+    self.api_client = APIClient:new({
+        server_address = self.server_address,
+        api_token = self.api_token,
+    })
+end
+
+---Handle server configuration change event
+---@param args {api_token: string, server_address: string} New server configuration
+function MinifluxAPI:onMinifluxServerConfigChange(args)
+    self.api_token = args.api_token
+    self.server_address = args.server_address
+
+    -- Recreate APIClient with new settings
+    local APIClient = require('core/api_client')
+    self.api_client = APIClient:new({
+        server_address = self.server_address,
+        api_token = self.api_token,
+    })
 end
 
 -- =============================================================================
@@ -71,8 +83,7 @@ end
 ---@param options? ApiOptions Query options for filtering and sorting
 ---@return string url Full URL with query parameters
 function MinifluxAPI:buildEntriesUrl(options)
-    local settings = self.getSettings()
-    local base_url = settings.server_address .. '/v1/entries'
+    local base_url = self.server_address .. '/v1/entries'
     if not options then
         return base_url
     end

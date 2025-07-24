@@ -9,9 +9,11 @@ local MinifluxEvent = {}
 ---@enum MinifluxEventName
 ---| 'MinifluxSettingsChanged'
 ---| 'MinifluxCacheInvalidate'
+---| 'MinifluxServerConfigChange'
 local MinifluxEventName = {
     MinifluxSettingsChange = 'MinifluxSettingsChange',
     MinifluxCacheInvalidate = 'MinifluxCacheInvalidate',
+    MinifluxServerConfigChange = 'MinifluxServerConfigChange',
 }
 
 ---Broadcast event to all widgets (all widgets receive it)
@@ -30,6 +32,13 @@ end
 
 function MinifluxEvent:broadcastMinifluxInvalidateCache()
     broadcastEvent(MinifluxEventName.MinifluxCacheInvalidate)
+end
+
+---@alias MinifluxServerConfigChangeData { api_token: string, server_address: string }
+
+---@param payload MinifluxServerConfigChangeData
+function MinifluxEvent:broadcastMinifluxServerConfigChange(payload)
+    broadcastEvent(MinifluxEventName.MinifluxServerConfigChange, payload)
 end
 
 return MinifluxEvent
