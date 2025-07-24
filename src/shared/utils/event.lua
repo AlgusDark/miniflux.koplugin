@@ -7,7 +7,7 @@ local Event = require('ui/event')
 local MinifluxEvent = {}
 
 ---@enum MinifluxEventName
----| 'MinifluxSettingsChanged'
+---| 'MinifluxSettingsChange'
 ---| 'MinifluxCacheInvalidate'
 ---| 'MinifluxServerConfigChange'
 local MinifluxEventName = {

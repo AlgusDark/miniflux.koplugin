@@ -1,38 +1,41 @@
 local CacheStore = require('shared/utils/cache_store')
 
----Generic caching adapter for domain slices
----@class CacheAdapter
+---HTTP API response cache adapter with TTL support
+---@class HTTPCacheAdapter
 ---@field cache CacheStore Cache store instance
----@field settings MinifluxSettings Settings for TTL configuration
-local CacheAdapter = {}
-CacheAdapter.__index = CacheAdapter
+---@field config {api_cache_ttl: number, db_name: string} Configuration for TTL and database
+local HTTPCacheAdapter = {}
+HTTPCacheAdapter.__index = HTTPCacheAdapter
 
----Create a new cache adapter
----@param settings MinifluxSettings Settings containing cache configuration
----@return CacheAdapter
-function CacheAdapter:new(settings)
+---Create a new HTTP cache adapter
+---@param config {api_cache_ttl: number, db_name?: string} Configuration containing cache TTL and optional db name
+---@return HTTPCacheAdapter
+function HTTPCacheAdapter:new(config)
     local instance = setmetatable({}, self)
-    instance.settings = settings
+    instance.config = {
+        api_cache_ttl = config.api_cache_ttl,
+        db_name = config.db_name or 'cache.sqlite',
+    }
     instance.cache = CacheStore:new({
-        default_ttl = settings.api_cache_ttl,
-        db_name = 'miniflux_cache.sqlite',
+        default_ttl = instance.config.api_cache_ttl,
+        db_name = instance.config.db_name,
     })
     return instance
 end
 
----Generic cache-or-fetch helper
+---Generic cache-or-fetch helper for HTTP API responses
 ---@param cache_key string Cache key to use
 ---@param fetcher_or_opts function|{ttl: number, fetcher: function} Either fetcher function or options with ttl and fetcher
 ---@return any|nil result, Error|nil error
-function CacheAdapter:fetchWithCache(cache_key, fetcher_or_opts)
+function HTTPCacheAdapter:fetchWithCache(cache_key, fetcher_or_opts)
     local fetcher, ttl
 
     if type(fetcher_or_opts) == 'function' then
         fetcher = fetcher_or_opts
-        ttl = self.settings.api_cache_ttl
+        ttl = self.config.api_cache_ttl
     else
         fetcher = fetcher_or_opts.fetcher
-        ttl = fetcher_or_opts.ttl or self.settings.api_cache_ttl
+        ttl = fetcher_or_opts.ttl or self.config.api_cache_ttl
     end
 
     local cached_data, is_valid = self.cache:get(cache_key, { ttl = ttl })
@@ -55,7 +58,7 @@ end
 
 ---Clear all cached data
 ---@return boolean success
-function CacheAdapter:clear()
+function HTTPCacheAdapter:clear()
     self.cache:clear()
     return true
 end
@@ -63,8 +66,8 @@ end
 ---Remove specific cache key
 ---@param cache_key string Cache key to remove
 ---@return boolean success
-function CacheAdapter:remove(cache_key)
+function HTTPCacheAdapter:remove(cache_key)
     return self.cache:remove(cache_key)
 end
 
-return CacheAdapter
+return HTTPCacheAdapter

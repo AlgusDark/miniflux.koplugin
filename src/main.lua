@@ -20,12 +20,14 @@ local EntryEntity = require('domains/entries/entry_entity')
 local UpdateSettings = require('features/menu/settings/update_settings')
 local EntryService = require('features/entries/services/entry_service')
 local QueueService = require('features/sync/services/queue_service')
+local HTTPCacheAdapter = require('shared/cache/http_cache_adapter')
 
 ---@class Miniflux : WidgetContainer
 ---@field name string Plugin name identifier
 ---@field is_doc_only boolean Whether plugin is document-only
 ---@field download_dir string Full path to download directory
 ---@field settings MinifluxSettings Settings instance
+---@field http_cache HTTPCacheAdapter Shared HTTP cache adapter instance
 ---@field api MinifluxAPI Miniflux-specific API instance
 ---@field feeds Feeds Feeds domain module
 ---@field categories Categories Categories domain module
@@ -83,6 +85,12 @@ function Miniflux:init()
 
     self.settings = MinifluxSettings:new()
 
+    -- Create shared HTTP cache instance after settings
+    self.http_cache = HTTPCacheAdapter:new({
+        api_cache_ttl = self.settings.api_cache_ttl,
+        db_name = 'miniflux_cache.sqlite',
+    })
+
     -- Register MinifluxAPI as a module after settings initialization
     self:registerModule(
         'api',
@@ -97,9 +105,12 @@ function Miniflux:init()
     local Categories = require('domains/categories/categories')
     local Entries = require('domains/entries/entries')
 
-    self:registerModule('feeds', Feeds:new({ miniflux = self }))
-    self:registerModule('categories', Categories:new({ miniflux = self }))
-    self:registerModule('entries', Entries:new({ miniflux = self }))
+    self:registerModule('feeds', Feeds:new({ miniflux = self, http_cache = self.http_cache }))
+    self:registerModule(
+        'categories',
+        Categories:new({ miniflux = self, http_cache = self.http_cache })
+    )
+    self:registerModule('entries', Entries:new({ miniflux = self, http_cache = self.http_cache }))
 
     -- Create services directly with proper dependency order
     self.entry_service = EntryService:new({
@@ -212,6 +223,29 @@ function Miniflux:onReaderReady(doc_settings)
             doc_settings = doc_settings, -- ReaderUI's cached DocSettings instance
         })
     end
+end
+
+-- =============================================================================
+-- HTTP CACHE MANAGEMENT
+-- =============================================================================
+
+function Miniflux:onMinifluxSettingsChange(payload)
+    local key = payload.key
+    local invalidating_keys = {
+        [self.settings.Key.ORDER] = true,
+        [self.settings.Key.DIRECTION] = true,
+        [self.settings.Key.LIMIT] = true,
+        [self.settings.Key.HIDE_READ_ENTRIES] = true,
+    }
+
+    if invalidating_keys[key] then
+        self.http_cache:clear()
+    end
+end
+
+function Miniflux:onMinifluxCacheInvalidate()
+    logger.info('[Miniflux:Main] Cache invalidation event received')
+    self.http_cache:clear()
 end
 
 -- =============================================================================
