@@ -139,25 +139,10 @@ function Miniflux:init()
         -- Wrap ReaderUI to preserve metadata on close
         local MetadataPreserver = require('features/plugin/utils/metadata_preserver')
         self.wrapped_onClose = MetadataPreserver.wrapReaderClose(self.ui)
-    end
 
-    -- Register reader modules only when in ReaderUI context
-    logger.dbg(
-        '[Miniflux:Main] Checking ReaderUI context - ui.link exists:',
-        self.ui and self.ui.link and true or false
-    )
-    if self.ui and self.ui.link then
-        logger.dbg('[Miniflux:Main] Initializing ReaderLink module')
         local MinifluxReaderLink = require('features/reader/modules/miniflux_readerlink')
         self:registerModule('readerLink', MinifluxReaderLink:new({ miniflux = self }))
-    end
 
-    logger.dbg(
-        '[Miniflux:Main] Checking ReaderUI context - ui.status exists:',
-        self.ui and self.ui.status and true or false
-    )
-    if self.ui and self.ui.status then
-        logger.dbg('[Miniflux:Main] Initializing EndOfBook module')
         local MinifluxEndOfBook = require('features/reader/modules/miniflux_end_of_book')
         self:registerModule('endOfBook', MinifluxEndOfBook:new({ miniflux = self }))
     end
