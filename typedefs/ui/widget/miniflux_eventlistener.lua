@@ -22,4 +22,9 @@ function MinifluxEventListener:onMinifluxServerConfigChange(args) end
 ---@param payload? MinifluxBrowserCloseRequestedData # Event payload with close reason
 function MinifluxEventListener:onMinifluxBrowserCloseRequested(payload) end
 
+---Handle Miniflux browser context change event
+---@param self MinifluxEventListener
+---@param payload? MinifluxBrowserContextChangeData # Event payload with new context
+function MinifluxEventListener:onMinifluxBrowserContextChange(payload) end
+
 return MinifluxEventListener
