@@ -57,10 +57,8 @@ function Navigation.navigateToEntry(entry_info, miniflux, navigation_options)
     local metadata = metadata_result.metadata
     local published_unix = metadata_result.published_unix
 
-    -- Get navigation context from browser cache
-    local context
-    local BrowserCache = require('features/browser/utils/browser_cache')
-    context = BrowserCache.load()
+    -- Get navigation context from browser context
+    local context = miniflux:getBrowserContext()
 
     if not context then
         -- Default to global context if no specific context is cached

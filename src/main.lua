@@ -22,6 +22,8 @@ local EntryService = require('features/entries/services/entry_service')
 local QueueService = require('features/sync/services/queue_service')
 local HTTPCacheAdapter = require('shared/cache/http_cache_adapter')
 
+local browser_context = nil
+
 ---@class Miniflux : WidgetContainer
 ---@field name string Plugin name identifier
 ---@field is_doc_only boolean Whether plugin is document-only
@@ -377,6 +379,14 @@ function Miniflux:onCloseWidget()
         self.wrapped_onClose:revert()
         self.wrapped_onClose = nil
     end
+end
+
+function Miniflux:onMinifluxBrowserContextChange(payload)
+    browser_context = payload.context
+end
+
+function Miniflux:getBrowserContext()
+    return browser_context
 end
 
 return Miniflux
