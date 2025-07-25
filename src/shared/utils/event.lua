@@ -11,11 +11,13 @@ local MinifluxEvent = {}
 ---| 'MinifluxCacheInvalidate'
 ---| 'MinifluxServerConfigChange'
 ---| 'MinifluxBrowserCloseRequested'
+---| 'MinifluxBrowserContextChange'
 local MinifluxEventName = {
     MinifluxSettingsChange = 'MinifluxSettingsChange',
     MinifluxCacheInvalidate = 'MinifluxCacheInvalidate',
     MinifluxServerConfigChange = 'MinifluxServerConfigChange',
     MinifluxBrowserCloseRequested = 'MinifluxBrowserCloseRequested',
+    MinifluxBrowserContextChange = 'MinifluxBrowserContextChange',
 }
 
 ---Broadcast event to all widgets (all widgets receive it)
@@ -48,6 +50,13 @@ end
 ---@param payload? MinifluxBrowserCloseRequestedData
 function MinifluxEvent:broadcastMinifluxBrowserCloseRequested(payload)
     broadcastEvent(MinifluxEventName.MinifluxBrowserCloseRequested, payload)
+end
+
+---@alias MinifluxBrowserContextChangeData { context: MinifluxContext }
+
+---@param payload? MinifluxBrowserContextChangeData
+function MinifluxEvent:broadcastMinifluxBrowserContextChange(payload)
+    broadcastEvent(MinifluxEventName.MinifluxBrowserContextChange, payload)
 end
 
 return MinifluxEvent
