@@ -345,12 +345,7 @@ function MinifluxReaderLink:showImageViewer(image)
         image = image,
         with_title_bar = false,
         fullscreen = true,
-        ui_ref = self.ui, -- Pass UI reference for rotation events
-        key_events = {
-            -- Map all page turn keys to close the image viewer
-            ClosePgFwd = { Device.input.group.PgFwd, event = 'Close' }, -- Page forward
-            ClosePgBack = { Device.input.group.PgBack, event = 'Close' }, -- Page back
-        },
+        ui_ref = self.ui,
     })
 
     UIManager:show(imgviewer)

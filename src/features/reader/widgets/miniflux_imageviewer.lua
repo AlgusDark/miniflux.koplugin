@@ -28,9 +28,9 @@ function MinifluxImageViewer:setupKeyEvents()
     self.key_events = {
         ClosePgFwd = { { Device.input.group.PgFwd } }, -- Page forward
         RotatePgBack = { { Device.input.group.PgBack } }, -- Page back
-        Close = { { Device.input.group.Back } },
-        CloseWithRight = { { 'Right' } },
-        RotateWithLeft = { { 'Left' } },
+        Close = { { Device.input.group.Back } }, -- Close
+        CloseWithRight = { { 'Right' } }, -- Close with right
+        RotateWithLeft = { { 'Left' } }, -- Rotate with left
     }
 end
 
@@ -45,21 +45,11 @@ function MinifluxImageViewer:onCloseWithRight()
 end
 
 -- Page turn key handlers (override default zoom behavior)
-function MinifluxImageViewer:onCloseRPgFwd()
+function MinifluxImageViewer:onClosePgFwd()
     return self:onClose()
 end
 
-function MinifluxImageViewer:onCloseLPgFwd()
-    return self:onClose()
-end
-
-function MinifluxImageViewer:onRotateRPgBack()
-    self.rotated = not self.rotated and true or false
-    self:update()
-    return true
-end
-
-function MinifluxImageViewer:onRotateLPgBack()
+function MinifluxImageViewer:onRotatePgBack()
     self.rotated = not self.rotated and true or false
     self:update()
     return true
