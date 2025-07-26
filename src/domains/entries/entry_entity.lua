@@ -7,7 +7,6 @@ local FileManager = require('apps/filemanager/filemanager')
 local Error = require('shared/utils/error')
 local _ = require('gettext')
 local T = require('ffi/util').template
-local DownloadCache = require('features/entries/utils/download_cache')
 local logger = require('logger')
 
 -- **Entry Entity** - Pure utility functions for entry operations, validation,
@@ -116,7 +115,18 @@ end
 ---@param entry_id number Entry ID
 ---@return boolean True if downloaded
 function EntryEntity.isEntryDownloaded(entry_id)
-    return DownloadCache.isDownloaded(entry_id, EntryEntity.getEntryHtmlPath)
+    if not entry_id then
+        return false
+    end
+
+    -- Check if entry is in entries info cache
+    local MinifluxBrowser = require('features/browser/browser')
+    local entry_info_cache = MinifluxBrowser.getEntryInfoCache(entry_id)
+    if entry_info_cache then
+        return true
+    end
+
+    return false
 end
 
 ---@class EntryMetadata
@@ -179,11 +189,16 @@ function EntryEntity.saveMetadata(params)
     local flush_result = doc_settings:flush()
 
     -- Invalidate download cache for this entry since we just saved it
-    DownloadCache.invalidate(entry_data.id)
-    logger.dbg(
-        '[Miniflux:EntryEntity] Invalidated download cache after saving entry',
-        entry_data.id
-    )
+    -- logger.dbg(
+    --     '[Miniflux:EntryEntity] Invalidated download cache after saving entry',
+    --     entry_data.id
+    -- )
+
+    local MinifluxBrowser = require('features/browser/browser')
+    MinifluxBrowser.setEntryInfoCache(entry_data.id, {
+        status = entry_data.status,
+        title = entry_data.title,
+    })
 
     return flush_result, nil
 end
@@ -208,6 +223,11 @@ function EntryEntity.updateEntryStatus(entry_id, opts)
         status = new_status,
     })
 
+    local MinifluxBrowser = require('features/browser/browser')
+    MinifluxBrowser.setEntryInfoCache(entry_id, {
+        status = new_status,
+    })
+
     if not sdr_result or sdr_err then
         logger.err(
             '[Miniflux:EntryEntity] Failed to update SDR metadata for entry',
@@ -226,6 +246,10 @@ function EntryEntity.updateEntryStatus(entry_id, opts)
             ui_entry_metadata.last_updated = timestamp
             doc_settings:saveSetting('miniflux_entry', ui_entry_metadata)
             logger.dbg('[Miniflux:EntryEntity] Updated ReaderUI DocSettings for entry', entry_id)
+
+            MinifluxBrowser.setEntryInfoCache(entry_id, {
+                status = new_status,
+            })
         else
             logger.warn(
                 '[Miniflux:EntryEntity] No miniflux_entry in ReaderUI DocSettings for entry',
@@ -308,6 +332,12 @@ function EntryEntity.updateMetadata(entry_id, updates)
     end
 
     doc_settings:saveSetting('miniflux_entry', entry_metadata)
+
+    local MinifluxBrowser = require('features/browser/browser')
+    MinifluxBrowser.setEntryInfoCache(entry_id, {
+        status = entry_metadata.status,
+        title = entry_metadata.title,
+    })
 
     local flush_result = doc_settings:flush()
     if flush_result then

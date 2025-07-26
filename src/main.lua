@@ -16,13 +16,11 @@ local logger = require('logger')
 local MinifluxAPI = require('api/miniflux_api')
 local MinifluxSettings = require('features/settings/settings')
 local Menu = require('features/menu/menu')
-local EntryEntity = require('domains/entries/entry_entity')
+local DataStorage = require('datastorage')
 local UpdateSettings = require('features/menu/settings/update_settings')
 local EntryService = require('features/entries/services/entry_service')
 local QueueService = require('features/sync/services/queue_service')
 local HTTPCacheAdapter = require('shared/cache/http_cache_adapter')
-
-local browser_context = nil
 
 ---@class Miniflux : WidgetContainer
 ---@field name string Plugin name identifier
@@ -50,6 +48,8 @@ local Miniflux = WidgetContainer:extend({
     subprocesses_pids = {},
     subprocesses_collector = nil,
     subprocesses_collect_interval = 10,
+    browser_context = nil,
+    download_dir = ('%s/%s/'):format(DataStorage:getFullDataDir(), 'miniflux'),
 })
 
 ---Register a module with the plugin for event handling
@@ -77,13 +77,14 @@ end
 function Miniflux:init()
     logger.info('[Miniflux:Main] Initializing plugin')
 
-    local download_dir = self:initializeDownloadDirectory()
-    if not download_dir then
-        logger.err('[Miniflux:Main] Failed to initialize download directory')
-        return
+    -- Create the directory if it doesn't exist
+    if not lfs.attributes(self.download_dir, 'mode') then
+        local success = lfs.mkdir(self.download_dir)
+        if not success then
+            logger.err('[Miniflux:Main] Failed to create download directory')
+            return
+        end
     end
-    self.download_dir = download_dir
-    logger.dbg('[Miniflux:Main] Download directory:', download_dir)
 
     self.settings = MinifluxSettings:new()
 
@@ -154,22 +155,6 @@ function Miniflux:init()
     self:checkForAutomaticUpdates()
 
     logger.info('[Miniflux:Main] Plugin initialization complete')
-end
-
----Initialize the download directory for entries
----@return string|nil Download directory path or nil if failed
-function Miniflux:initializeDownloadDirectory()
-    local download_dir = EntryEntity.getDownloadDir()
-
-    -- Create the directory if it doesn't exist
-    if not lfs.attributes(download_dir, 'mode') then
-        local success = lfs.mkdir(download_dir)
-        if not success then
-            return nil
-        end
-    end
-
-    return download_dir
 end
 
 ---Add Miniflux items to the main menu (called by KOReader)
@@ -355,10 +340,6 @@ function Miniflux:onCloseWidget()
         self.subprocesses_collector = nil
     end
 
-    -- Clear download cache on plugin close
-    local DownloadCache = require('features/entries/utils/download_cache')
-    DownloadCache.clear()
-
     -- Revert the wrapped onClose method if it exists
     if self.wrapped_onClose then
         self.wrapped_onClose:revert()
@@ -367,11 +348,13 @@ function Miniflux:onCloseWidget()
 end
 
 function Miniflux:onMinifluxBrowserContextChange(payload)
-    browser_context = payload.context
+    logger.info('[Miniflux:browser_context] Browser context changed:', payload.context)
+    Miniflux.browser_context = payload.context
 end
 
 function Miniflux:getBrowserContext()
-    return browser_context
+    logger.info('[Miniflux:browser_context] Getting browser context:', Miniflux.browser_context)
+    return Miniflux.browser_context
 end
 
 return Miniflux
