@@ -11,7 +11,6 @@ local logger = require('logger')
 local EntryEntity = require('domains/entries/entry_entity')
 local EntryWorkflow = require('features/entries/services/entry_workflow')
 local Files = require('shared/utils/files')
-local DownloadCache = require('features/entries/utils/download_cache')
 
 -- **Entry Service** - Handles complex entry workflows and orchestration.
 --
@@ -972,12 +971,12 @@ function EntryService:deleteLocalEntry(entry_id)
 
     if ok then
         -- Invalidate download cache for this entry
-        DownloadCache.invalidate(entry_id)
+        local MinifluxBrowser = require('features/browser/browser')
+        MinifluxBrowser.deleteEntryInfoCache(entry_id)
         logger.dbg(
             '[Miniflux:EntryService] Invalidated download cache after deleting entry',
             entry_id
         )
-
         Notification:success(_('Local entry deleted successfully'))
 
         -- Open Miniflux folder

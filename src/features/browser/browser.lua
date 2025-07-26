@@ -21,8 +21,11 @@ local EntriesView = require('features/browser/views/entries_view')
 ---@field download_dir string Download directory path
 ---@field entry_service EntryService Entry service instance
 ---@field miniflux_plugin Miniflux Plugin instance for context management
+---@field entries_info_cache table<number, table> Entries info cache
 ---@field new fun(self: MinifluxBrowser, o: BrowserOptions): MinifluxBrowser Create new MinifluxBrowser instance
-local MinifluxBrowser = Browser:extend({})
+local MinifluxBrowser = Browser:extend({
+    entries_info_cache = {},
+})
 
 ---@alias MinifluxNavigationContext {feed_id?: number, category_id?: number}
 
@@ -38,7 +41,67 @@ function MinifluxBrowser:init()
     -- Initialize Browser parent (handles generic setup)
     Browser.init(self)
 
+    if next(MinifluxBrowser.entries_info_cache) == nil then
+        self:populateEntriesCache()
+    end
+
     logger.dbg('[Miniflux:Browser] MinifluxBrowser initialized')
+end
+
+function MinifluxBrowser:populateEntriesCache()
+    logger.dbg('[Miniflux:BrowserEntriesInfoCache] Populating entries cache in background')
+    local lfs = require('libs/libkoreader-lfs')
+    local DocSettings = require('docsettings')
+    local DataStorage = require('datastorage')
+
+    local miniflux_path = ('%s/%s/'):format(DataStorage:getFullDataDir(), 'miniflux')
+
+    for entry in lfs.dir(miniflux_path) do
+        if entry ~= '.' and entry ~= '..' then
+            local folder_path = miniflux_path .. entry
+            local attr = lfs.attributes(folder_path)
+            if attr and attr.mode == 'directory' then
+                local entry_id = tonumber(entry)
+                if entry_id then
+                    -- Look for SDR file
+                    local file_path = folder_path .. '/entry.html'
+                    if DocSettings:hasSidecarFile(file_path) then
+                        local doc_settings = DocSettings:open(file_path)
+                        local entry_metadata = doc_settings:readSetting('miniflux_entry') or {}
+
+                        MinifluxBrowser.setEntryInfoCache(entry_id, {
+                            status = entry_metadata.status,
+                            title = entry_metadata.title,
+                        })
+                    end
+                end
+            end
+        end
+    end
+end
+
+---@param entry_id number Entry ID
+---@param entry_metadata {status: string, title: string} Entry metadata
+function MinifluxBrowser.setEntryInfoCache(entry_id, entry_metadata)
+    logger.dbg('[Miniflux:BrowserEntriesInfoCache] Setting entry info cache for entry:', entry_id)
+    MinifluxBrowser.entries_info_cache[entry_id] = {
+        status = entry_metadata.status,
+        title = entry_metadata.title,
+    }
+end
+
+function MinifluxBrowser.getEntryInfoCache(entry_id)
+    logger.dbg(
+        '[Miniflux:BrowserEntriesInfoCache] Getting entry info cache for entry:',
+        MinifluxBrowser.entries_info_cache[entry_id]
+    )
+    return MinifluxBrowser.entries_info_cache[entry_id]
+end
+
+-- Used when files are deleted
+function MinifluxBrowser.deleteEntryInfoCache(entry_id)
+    logger.dbg('[Miniflux:BrowserEntriesInfoCache] Deleting entry info cache for entry:', entry_id)
+    MinifluxBrowser.entries_info_cache[entry_id] = nil
 end
 
 -- =============================================================================
