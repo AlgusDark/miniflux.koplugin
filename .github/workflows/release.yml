@@ -29,12 +29,18 @@ jobs:
           version: 3.x
 
       - name: Set up Lua
-        uses: leafo/gh-actions-lua@v10
+        uses: leafo/gh-actions-lua@v11
         with:
           luaVersion: "5.1"
 
       - name: Set up LuaRocks
         uses: leafo/gh-actions-luarocks@v4
+
+      - name: Set up Selene
+        uses: NTBBloodbath/selene-action@v1.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --version
 
       - name: Install dependencies
         run: |
