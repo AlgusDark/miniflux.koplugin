@@ -202,14 +202,14 @@ function MinifluxEndOfBook:showDialog(entry_info)
 
         -- Navigate to previous entry (logical "back" direction)
         dialog.key_events.NavigatePrevious = {
-            Device.input.group.PgBack, -- Page back buttons
+            { Device.input.group.PgBack }, -- Page back buttons
             event = 'NavigateTo',
             args = 'previous',
         }
 
         -- Navigate to next entry (logical "forward" direction)
         dialog.key_events.NavigateNext = {
-            Device.input.group.PgFwd, -- Page forward buttons
+            { Device.input.group.PgFwd }, -- Page forward buttons
             event = 'NavigateTo',
             args = 'next',
         }

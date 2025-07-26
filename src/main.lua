@@ -183,7 +183,7 @@ end
 
 ---Handle ReaderReady event - called when a document is fully loaded and ready
 ---This is the proper place to perform auto-mark-as-read for miniflux entries
----@param doc_settings table Document settings instance
+---@param doc_settings DocSettings Document settings instance
 ---@return nil
 function Miniflux:onReaderReady(doc_settings)
     local file_path = self.ui and self.ui.document and self.ui.document.file
