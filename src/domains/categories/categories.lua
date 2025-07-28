@@ -67,7 +67,7 @@ end
 ---@return boolean success
 function Categories:markAsRead(category_id)
     local _ = require('gettext')
-    local Notification = require('shared/utils/notification')
+    local Notification = require('shared/widgets/notification')
 
     -- Validate category ID
     if not category_id or type(category_id) ~= 'number' or category_id <= 0 then
@@ -97,7 +97,7 @@ function Categories:markAsRead(category_id)
         queue:remove(category_id)
 
         -- Invalidate all caches IMMEDIATELY so counts update
-        local MinifluxEvent = require('shared/utils/event')
+        local MinifluxEvent = require('shared/event')
         MinifluxEvent:broadcastMinifluxInvalidateCache()
 
         Notification:success(_('Category marked as read'))

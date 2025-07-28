@@ -1,6 +1,6 @@
 local UIManager = require('ui/uimanager')
 local ConfirmBox = require('ui/widget/confirmbox')
-local Notification = require('shared/utils/notification')
+local Notification = require('shared/widgets/notification')
 local Trapper = require('ui/trapper')
 local util = require('util')
 local lfs = require('libs/libkoreader-lfs')

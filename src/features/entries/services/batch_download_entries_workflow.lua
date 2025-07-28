@@ -9,7 +9,7 @@ local EntryEntity = require('domains/entries/entry_entity')
 local Images = require('features/entries/utils/images')
 local Trapper = require('ui/trapper')
 local HtmlUtils = require('features/entries/utils/html_utils')
-local Files = require('shared/utils/files')
+local Files = require('shared/files')
 
 -- **Batch Download Entries Workflow** - Sequential batch downloading of multiple entries
 --

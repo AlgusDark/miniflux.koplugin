@@ -1,4 +1,4 @@
-local Error = require('shared/utils/error')
+local Error = require('shared/error')
 local _ = require('gettext')
 
 -- **TimeUtils** - Time utilities for Miniflux Plugin

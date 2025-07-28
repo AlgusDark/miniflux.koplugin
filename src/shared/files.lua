@@ -1,5 +1,5 @@
 local lfs = require('libs/libkoreader-lfs')
-local Error = require('shared/utils/error')
+local Error = require('shared/error')
 
 -- **Files** - Basic file utilities for common file operations like writing,
 -- directory creation, and path manipulation.

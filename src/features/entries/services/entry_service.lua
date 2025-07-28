@@ -5,12 +5,12 @@ local ButtonDialogTitle = require('ui/widget/buttondialogtitle')
 local lfs = require('libs/libkoreader-lfs')
 local _ = require('gettext')
 local T = require('ffi/util').template
-local Notification = require('shared/utils/notification')
+local Notification = require('shared/widgets/notification')
 local logger = require('logger')
 
 local EntryEntity = require('domains/entries/entry_entity')
 local EntryWorkflow = require('features/entries/services/entry_workflow')
-local Files = require('shared/utils/files')
+local Files = require('shared/files')
 
 -- **Entry Service** - Handles complex entry workflows and orchestration.
 --
@@ -557,7 +557,7 @@ function EntryService:markEntriesAsRead(entry_ids)
         Notification:success(_('Successfully marked ') .. #entry_ids .. _(' entries as read'))
 
         -- Invalidate caches so next navigation shows updated counts
-        local MinifluxEvent = require('shared/utils/event')
+        local MinifluxEvent = require('shared/event')
         MinifluxEvent:broadcastMinifluxInvalidateCache()
 
         return true
@@ -613,7 +613,7 @@ function EntryService:markEntriesAsUnread(entry_ids)
         Notification:success(_('Successfully marked ') .. #entry_ids .. _(' entries as unread'))
 
         -- Invalidate caches so next navigation shows updated counts
-        local MinifluxEvent = require('shared/utils/event')
+        local MinifluxEvent = require('shared/event')
         MinifluxEvent:broadcastMinifluxInvalidateCache()
 
         return true
@@ -731,7 +731,7 @@ function EntryService:changeEntryStatus(entry_id, opts)
         self:removeFromQueue(entry_id)
 
         -- Invalidate caches so next navigation shows updated counts
-        local MinifluxEvent = require('shared/utils/event')
+        local MinifluxEvent = require('shared/event')
         MinifluxEvent:broadcastMinifluxInvalidateCache()
 
         return true
@@ -895,7 +895,7 @@ function EntryService:spawnUpdateStatus(entry_id, opts)
             -- Remove from queue since server is now source of truth
             -- Note: Queue operations need to be duplicated in subprocess
             -- selene: allow(shadowing)
-            local Files = require('shared/utils/files')
+            local Files = require('shared/files')
             local miniflux_dir = EntryEntity.getDownloadDir()
             local queue_file = miniflux_dir .. 'status_queue.lua'
 
@@ -971,7 +971,7 @@ function EntryService:deleteLocalEntry(entry_id)
 
     if ok then
         -- Invalidate download cache for this entry
-        local MinifluxBrowser = require('features/browser/browser')
+        local MinifluxBrowser = require('features/browser/miniflux_browser')
         MinifluxBrowser.deleteEntryInfoCache(entry_id)
         logger.dbg(
             '[Miniflux:EntryService] Invalidated download cache after deleting entry',

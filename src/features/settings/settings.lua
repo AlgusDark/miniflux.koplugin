@@ -120,7 +120,7 @@ function MinifluxSettings:__newindex(key, value)
         end
 
         -- Broadcast settings change event
-        local MinifluxEvent = require('shared/utils/event')
+        local MinifluxEvent = require('shared/event')
         MinifluxEvent:broadcastMinifluxSettingsChange({
             key = key,
             old_value = old_value,

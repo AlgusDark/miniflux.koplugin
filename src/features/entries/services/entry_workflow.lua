@@ -11,8 +11,8 @@ local EntryEntity = require('domains/entries/entry_entity')
 local Images = require('features/entries/utils/images')
 local Trapper = require('ui/trapper')
 local HtmlUtils = require('features/entries/utils/html_utils')
-local Files = require('shared/utils/files')
-local Notification = require('shared/utils/notification')
+local Files = require('shared/files')
+local Notification = require('shared/widgets/notification')
 
 -- Centralized workflow message templates for consistency and maintainability
 local WORKFLOW_MESSAGES = {
