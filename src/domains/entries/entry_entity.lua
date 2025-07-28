@@ -4,7 +4,7 @@ local UIManager = require('ui/uimanager')
 local ButtonDialog = require('ui/widget/buttondialog')
 local ReaderUI = require('apps/reader/readerui')
 local FileManager = require('apps/filemanager/filemanager')
-local Error = require('shared/utils/error')
+local Error = require('shared/error')
 local _ = require('gettext')
 local T = require('ffi/util').template
 local logger = require('logger')
@@ -120,7 +120,7 @@ function EntryEntity.isEntryDownloaded(entry_id)
     end
 
     -- Check if entry is in entries info cache
-    local MinifluxBrowser = require('features/browser/browser')
+    local MinifluxBrowser = require('features/browser/miniflux_browser')
     local entry_info_cache = MinifluxBrowser.getEntryInfoCache(entry_id)
     if entry_info_cache then
         return true
@@ -194,7 +194,7 @@ function EntryEntity.saveMetadata(params)
     --     entry_data.id
     -- )
 
-    local MinifluxBrowser = require('features/browser/browser')
+    local MinifluxBrowser = require('features/browser/miniflux_browser')
     MinifluxBrowser.setEntryInfoCache(entry_data.id, {
         status = entry_data.status,
         title = entry_data.title,
@@ -223,7 +223,7 @@ function EntryEntity.updateEntryStatus(entry_id, opts)
         status = new_status,
     })
 
-    local MinifluxBrowser = require('features/browser/browser')
+    local MinifluxBrowser = require('features/browser/miniflux_browser')
     MinifluxBrowser.setEntryInfoCache(entry_id, {
         status = new_status,
     })
@@ -333,7 +333,7 @@ function EntryEntity.updateMetadata(entry_id, updates)
 
     doc_settings:saveSetting('miniflux_entry', entry_metadata)
 
-    local MinifluxBrowser = require('features/browser/browser')
+    local MinifluxBrowser = require('features/browser/miniflux_browser')
     MinifluxBrowser.setEntryInfoCache(entry_id, {
         status = entry_metadata.status,
         title = entry_metadata.title,

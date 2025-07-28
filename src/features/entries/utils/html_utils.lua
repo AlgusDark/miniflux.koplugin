@@ -7,7 +7,7 @@ local htmlparser = require('htmlparser')
 
 -- Import dependencies for entry content processing
 local Images = require('features/entries/utils/images')
-local Error = require('shared/utils/error')
+local Error = require('shared/error')
 
 -- **HtmlUtils** - HTML utilities for Miniflux Browser
 --

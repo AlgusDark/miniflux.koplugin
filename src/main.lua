@@ -20,7 +20,7 @@ local DataStorage = require('datastorage')
 local UpdateSettings = require('features/menu/settings/update_settings')
 local EntryService = require('features/entries/services/entry_service')
 local QueueService = require('features/sync/services/queue_service')
-local HTTPCacheAdapter = require('shared/cache/http_cache_adapter')
+local HTTPCacheAdapter = require('shared/http_cache_adapter')
 
 ---@class Miniflux : WidgetContainer
 ---@field name string Plugin name identifier
@@ -130,7 +130,7 @@ function Miniflux:init()
         categories = self.categories,
     })
 
-    local MinifluxBrowser = require('features/browser/browser')
+    local MinifluxBrowser = require('features/browser/miniflux_browser')
     self.browser = MinifluxBrowser:new({
         title = _('Miniflux'),
         miniflux = self,
