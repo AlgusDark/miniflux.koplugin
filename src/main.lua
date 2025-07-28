@@ -18,7 +18,7 @@ local MinifluxSettings = require('features/settings/settings')
 local Menu = require('features/menu/menu')
 local DataStorage = require('datastorage')
 local UpdateSettings = require('features/menu/settings/update_settings')
-local EntryService = require('features/entries/services/entry_service')
+local EntryService = require('features/browser/download/entry_service')
 local QueueService = require('features/sync/services/queue_service')
 local HTTPCacheAdapter = require('shared/http_cache_adapter')
 
