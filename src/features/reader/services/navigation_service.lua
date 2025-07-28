@@ -1,11 +1,11 @@
 local lfs = require('libs/libkoreader-lfs')
-local Notification = require('shared/utils/notification')
+local Notification = require('shared/widgets/notification')
 local _ = require('gettext')
 local logger = require('logger')
 
 -- Import dependencies
-local TimeUtils = require('shared/utils/time_utils')
-local Error = require('shared/utils/error')
+local TimeUtils = require('shared/time_utils')
+local Error = require('shared/error')
 
 -- Constants
 local DIRECTION_PREVIOUS = 'previous'

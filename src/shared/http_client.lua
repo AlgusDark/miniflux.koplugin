@@ -4,21 +4,20 @@ local ltn12 = require('ltn12')
 local socket = require('socket')
 local socketutil = require('socketutil')
 local _ = require('gettext')
-local Files = require('shared/utils/files')
+local Files = require('shared/files')
 local util = require('util')
-local Notification = require('shared/utils/notification')
-local Error = require('shared/utils/error')
+local Notification = require('shared/widgets/notification')
+local Error = require('shared/error')
 local logger = require('logger')
 
--- This is the main API client that handles HTTP communication and coordinates
--- with specialized API modules. It provides convenient HTTP methods and manages
--- the connection to the Miniflux server.
----@class APIClient
+-- This is the main Http client that handles HTTP communication.
+--It provides convenient HTTP methods
+---@class HttpClient
 ---@field server_address string Server address for API calls
 ---@field api_token string API token for authentication
-local APIClient = {}
+local HttpClient = {}
 
----@class APIClientConfig
+---@class HttpClientConfig
 ---@field server_address string Server address for API calls
 ---@field api_token string API token for authentication
 
@@ -27,31 +26,15 @@ local APIClient = {}
 ---@field error? {text?: string, timeout?: number|nil} Error notification (defaults to 5s)
 ---@field success? {text?: string, timeout?: number|nil} Success notification (defaults to 2s)
 
----@alias EntryStatus "read"|"unread"|"removed"
----@alias SortDirection "asc"|"desc"
-
----@class ApiOptions
----@field limit? number Maximum number of entries to return
----@field order? "id"|"status"|"published_at"|"category_title"|"category_id" Field to sort by
----@field direction? SortDirection Sort direction
----@field status? EntryStatus[] Entry status filter
----@field category_id? number Filter by category ID
----@field feed_id? number Filter by feed ID
----@field published_before? number Filter entries published before this timestamp
----@field published_after? number Filter entries published after this timestamp
-
----@class APIBody
----@field status? EntryStatus Entry status to update
-
----@class APIClientConfig
----@field body? APIBody Request body data
----@field query? ApiOptions Query parameters
----@field dialogs? ApiDialogConfig Dialog configuration for loading/error/success messages
+---@class HttpClientOptions<Body, QueryParams>: {body?: Body, query?: QueryParams, dialogs?: ApiDialogConfig}
+--@field body? Body Request body
+--@field query? Options Query parameters
+--@field dialogs? ApiDialogConfig Dialog configuration
 
 ---Create a new API instance
----@param config APIClientConfig Configuration table with server address and API token
----@return APIClient
-function APIClient:new(config)
+---@param config HttpClientConfig Configuration table with server address and API token
+---@return HttpClient
+function HttpClient:new(config)
     local instance = {}
     setmetatable(instance, self)
     self.__index = self
@@ -63,8 +46,8 @@ function APIClient:new(config)
 end
 
 ---@class QueryParam
----@field key string Parameter key
----@field value string|number Parameter value
+---@field key string|number Parameter key
+---@field value string|number|table Parameter value
 
 ---Add a URL-encoded query parameter to the query parts array
 ---@param query_parts table Array to append the parameter to
@@ -106,9 +89,9 @@ end
 ---Make an HTTP request to the API with optional dialog support
 ---@param method "GET"|"POST"|"PUT"|"DELETE" HTTP method to use
 ---@param endpoint string API endpoint path
----@param config? table Configuration including body, query, and dialogs
+---@param config? HttpClientOptions<table, QueryParam[]> Configuration including body, query, and dialogs
 ---@return table|nil result, Error|nil error
-function APIClient:makeRequest(method, endpoint, config)
+function HttpClient:makeRequest(method, endpoint, config)
     config = config or {}
     local dialogs = config.dialogs
 
@@ -138,9 +121,11 @@ function APIClient:makeRequest(method, endpoint, config)
         for key, value in pairs(config.query) do
             if type(value) == 'table' then
                 for _, v in ipairs(value) do
+                    -- Arrays values are encoded as multiple parameters. E.g. {status = {'read', 'unread'}} -> ?status=read&status=unread
                     addQueryParam(query_parts, { key = key, value = v })
                 end
             else
+                -- Single values are encoded as a single parameter. E.g. {status = 'read'} -> ?status=read
                 addQueryParam(query_parts, { key = key, value = value })
             end
         end
@@ -150,7 +135,7 @@ function APIClient:makeRequest(method, endpoint, config)
     local headers = {
         ['X-Auth-Token'] = api_token,
         ['Content-Type'] = 'application/json',
-        ['User-Agent'] = 'KOReader-Miniflux/1.0',
+        ['User-Agent'] = 'KOReader/1.0',
     }
 
     local response_body = {}
@@ -169,7 +154,7 @@ function APIClient:makeRequest(method, endpoint, config)
 
     socketutil:set_timeout(socketutil.LARGE_BLOCK_TIMEOUT, socketutil.LARGE_TOTAL_TIMEOUT)
     local code, resp_headers, _status = socket.skip(1, http.request(request))
-    logger.dbg('[Miniflux:APIClient]', method, url, '->', code or 'no response')
+    logger.dbg('[HttpClient]', method, url, '->', code or 'no response')
     socketutil:reset_timeout()
 
     if loading_notification then
@@ -177,7 +162,7 @@ function APIClient:makeRequest(method, endpoint, config)
     end
     if resp_headers == nil then
         local error_message = _('Network error occurred')
-        logger.err('[Miniflux:APIClient] Network error:', method, url)
+        logger.err('[HttpClient] Network error:', method, url)
         if dialogs and dialogs.error then
             local error_text = dialogs.error.text or error_message
             Notification:error(error_text, { timeout = dialogs.error.timeout })
@@ -210,7 +195,7 @@ function APIClient:makeRequest(method, endpoint, config)
     end
 
     local error_message = buildErrorMessage(code, response_text)
-    logger.warn('[Miniflux:APIClient] API error:', method, url, '->', code, error_message)
+    logger.warn('[HttpClient] API error:', method, url, '->', code, error_message)
 
     if dialogs and dialogs.error then
         local error_text = dialogs.error.text or error_message
@@ -224,7 +209,7 @@ end
 ---@param endpoint string API endpoint path
 ---@param config? table Configuration with optional query, dialogs
 ---@return table|nil result, Error|nil error
-function APIClient:get(endpoint, config)
+function HttpClient:get(endpoint, config)
     config = config or {}
     return self:makeRequest('GET', endpoint, config)
 end
@@ -233,7 +218,7 @@ end
 ---@param endpoint string API endpoint path
 ---@param config? table Configuration with optional body, query, dialogs
 ---@return table|nil result, Error|nil error
-function APIClient:post(endpoint, config)
+function HttpClient:post(endpoint, config)
     config = config or {}
     return self:makeRequest('POST', endpoint, config)
 end
@@ -242,7 +227,7 @@ end
 ---@param endpoint string API endpoint path
 ---@param config? table Configuration with optional body, query, dialogs
 ---@return table|nil result, Error|nil error
-function APIClient:put(endpoint, config)
+function HttpClient:put(endpoint, config)
     config = config or {}
     return self:makeRequest('PUT', endpoint, config)
 end
@@ -251,9 +236,9 @@ end
 ---@param endpoint string API endpoint path
 ---@param config? table Configuration with optional query, dialogs
 ---@return table|nil result, Error|nil error
-function APIClient:delete(endpoint, config)
+function HttpClient:delete(endpoint, config)
     config = config or {}
     return self:makeRequest('DELETE', endpoint, config)
 end
 
-return APIClient
+return HttpClient

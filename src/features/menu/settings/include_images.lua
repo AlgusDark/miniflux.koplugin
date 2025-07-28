@@ -1,5 +1,5 @@
 local UIManager = require('ui/uimanager')
-local Notification = require('shared/utils/notification')
+local Notification = require('shared/widgets/notification')
 local _ = require('gettext')
 
 -- **Include Images Settings** - Handles "include images" submenu with ON/OFF

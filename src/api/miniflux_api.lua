@@ -43,19 +43,45 @@ local EventListener = require('ui/widget/eventlistener')
 ---@field title string Category title
 ---@field total_unread? number Total unread entries in category
 
+---@alias EntryStatus "read"|"unread"|"removed"
+---@alias SortDirection "asc"|"desc"
+
+---@class ApiOptions
+---@field limit? number Maximum number of entries to return
+---@field order? "id"|"status"|"published_at"|"category_title"|"category_id" Field to sort by
+---@field direction? SortDirection Sort direction
+---@field status? EntryStatus[] Entry status filter
+---@field category_id? number Filter by category ID
+---@field feed_id? number Filter by feed ID
+---@field published_before? number Filter entries published before this timestamp
+---@field published_after? number Filter entries published after this timestamp
+
+---@class APIBody
+---@field status? EntryStatus Entry status to update
+
 -- Domain-specific API that provides all Miniflux operations.
--- Uses the generic APIClient for HTTP communication while adding
+-- Uses the generic HttpClient for HTTP communication while adding
 -- Miniflux-specific endpoint knowledge and request building.
 ---@class MinifluxAPI : EventListener
----@field api_client APIClient Generic HTTP API client
+---@field api_client HttpClient Generic HTTP API client
 ---@field api_token string API token for authentication
 ---@field server_address string Server address for API calls
 local MinifluxAPI = EventListener:extend({})
 
+---Create a new HttpClient instance
+---@param config {server_address: string, api_token: string} Configuration for HttpClient
+---@return HttpClient<APIBody, ApiOptions>
+function createHttpClient(config)
+    local HttpClient = require('shared/http_client')
+    return HttpClient:new({
+        server_address = config.server_address,
+        api_token = config.api_token,
+    })
+end
+
 ---Initialize the API instance with configuration
 function MinifluxAPI:init()
-    local APIClient = require('core/api_client')
-    self.api_client = APIClient:new({
+    self.api_client = createHttpClient({
         server_address = self.server_address,
         api_token = self.api_token,
     })
@@ -67,9 +93,8 @@ function MinifluxAPI:onMinifluxServerConfigChange(args)
     self.api_token = args.api_token
     self.server_address = args.server_address
 
-    -- Recreate APIClient with new settings
-    local APIClient = require('core/api_client')
-    self.api_client = APIClient:new({
+    -- Recreate HttpClient with new settings
+    self.api_client = createHttpClient({
         server_address = self.server_address,
         api_token = self.api_token,
     })

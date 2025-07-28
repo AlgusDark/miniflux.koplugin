@@ -1,4 +1,4 @@
-local CacheStore = require('shared/utils/cache_store')
+local CacheStore = require('shared/cache_store')
 
 ---HTTP API response cache adapter with TTL support
 ---@class HTTPCacheAdapter

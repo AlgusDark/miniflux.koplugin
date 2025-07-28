@@ -71,7 +71,7 @@ end
 ---@param miniflux Miniflux Plugin instance with domain modules
 ---@return table|nil result, string|nil error
 function MainView.loadData(miniflux)
-    local Notification = require('shared/utils/notification')
+    local Notification = require('shared/widgets/notification')
     local loading_notification = Notification:info(_('Loading...'))
 
     -- Get unread count from entries domain

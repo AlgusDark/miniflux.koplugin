@@ -1,4 +1,4 @@
-local Browser = require('core/widgets/browser')
+local Browser = require('shared/widgets/browser')
 local BrowserMode = Browser.BrowserMode
 
 local _ = require('gettext')
@@ -111,7 +111,7 @@ end
 ---Override settings dialog with Miniflux-specific implementation
 function MinifluxBrowser:onLeftButtonTap()
     if not self.settings then
-        local Notification = require('shared/utils/notification')
+        local Notification = require('shared/widgets/notification')
         Notification:error(_('Settings not available'))
         return
     end
@@ -203,7 +203,7 @@ function MinifluxBrowser:toggleHideReadEntries()
     self.settings.hide_read_entries = not self.settings.hide_read_entries
 
     -- Show notification about the change
-    local Notification = require('shared/utils/notification')
+    local Notification = require('shared/widgets/notification')
     local status_text = self.settings.hide_read_entries and _('Now showing unread entries only')
         or _('Now showing all entries')
     Notification:info(status_text)
@@ -255,13 +255,13 @@ end
 ---Refresh current view with global cache invalidation
 function MinifluxBrowser:refreshWithCacheInvalidation()
     logger.info('[Miniflux:Browser] Refreshing with cache invalidation')
-    local Notification = require('shared/utils/notification')
+    local Notification = require('shared/widgets/notification')
 
     -- Show loading notification
     local loading_notification = Notification:info(_('Refreshing...'))
 
     -- Invalidate all caches via event system
-    local MinifluxEvent = require('shared/utils/event')
+    local MinifluxEvent = require('shared/event')
     MinifluxEvent:broadcastMinifluxInvalidateCache()
 
     -- Refresh current view with fresh data
@@ -808,7 +808,7 @@ function MinifluxBrowser:deleteSelectedEntries(selected_items)
     end
 
     if #local_entries == 0 then
-        local Notification = require('shared/utils/notification')
+        local Notification = require('shared/widgets/notification')
         Notification:info(_('No local entries selected for deletion'))
         return
     end
@@ -845,7 +845,7 @@ end
 ---Perform the actual batch deletion of local entries
 ---@param local_entries table Array of entry data objects
 function MinifluxBrowser:performBatchDelete(local_entries)
-    local Notification = require('shared/utils/notification')
+    local Notification = require('shared/widgets/notification')
     local progress_notification = Notification:info(_('Deleting entries...'))
 
     local success_count = 0

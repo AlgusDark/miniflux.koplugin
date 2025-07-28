@@ -1,7 +1,7 @@
 local MultiInputDialog = require('ui/widget/multiinputdialog')
 local UIManager = require('ui/uimanager')
-local Notification = require('shared/utils/notification')
-local MinifluxEvent = require('shared/utils/event')
+local Notification = require('shared/widgets/notification')
+local MinifluxEvent = require('shared/event')
 local _ = require('gettext')
 
 -- **Server Configuration Settings** - Handles server address and API token

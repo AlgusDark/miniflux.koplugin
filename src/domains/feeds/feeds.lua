@@ -86,7 +86,7 @@ end
 ---@return boolean success
 function Feeds:markAsRead(feed_id)
     local _ = require('gettext')
-    local Notification = require('shared/utils/notification')
+    local Notification = require('shared/widgets/notification')
 
     -- Validate feed ID
     if not feed_id or type(feed_id) ~= 'number' or feed_id <= 0 then
@@ -116,7 +116,7 @@ function Feeds:markAsRead(feed_id)
         queue:remove(feed_id)
 
         -- Invalidate all caches IMMEDIATELY so counts update
-        local MinifluxEvent = require('shared/utils/event')
+        local MinifluxEvent = require('shared/event')
         MinifluxEvent:broadcastMinifluxInvalidateCache()
 
         Notification:success(_('Feed marked as read'))

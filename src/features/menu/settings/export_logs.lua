@@ -1,5 +1,5 @@
 local UIManager = require('ui/uimanager')
-local Notification = require('shared/utils/notification')
+local Notification = require('shared/widgets/notification')
 local ConfirmBox = require('ui/widget/confirmbox')
 local Device = require('device')
 local _ = require('gettext')

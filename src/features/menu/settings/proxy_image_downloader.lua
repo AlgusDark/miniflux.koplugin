@@ -1,6 +1,6 @@
 local MultiInputDialog = require('ui/widget/multiinputdialog')
 local UIManager = require('ui/uimanager')
-local Notification = require('shared/utils/notification')
+local Notification = require('shared/widgets/notification')
 local _ = require('gettext')
 
 -- **Proxy Image Downloader Settings** - Handles proxy configuration for image downloads

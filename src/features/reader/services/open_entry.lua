@@ -10,7 +10,7 @@ Future improvements planned:
 - Enhanced metadata preservation
 --]]
 
-local MinifluxEvent = require('shared/utils/event')
+local MinifluxEvent = require('shared/event')
 
 ---@class MinifluxContext
 ---@field type string Context type ("feed", "category", "global", "local")
