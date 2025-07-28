@@ -9,7 +9,7 @@ local Notification = require('shared/widgets/notification')
 local logger = require('logger')
 
 local EntryEntity = require('domains/entries/entry_entity')
-local EntryWorkflow = require('features/entries/services/entry_workflow')
+local EntryWorkflow = require('features/browser/download/download_entry')
 local Files = require('shared/files')
 
 -- **Entry Service** - Handles complex entry workflows and orchestration.
@@ -643,7 +643,7 @@ end
 ---@return boolean success Always returns true (fire-and-forget operations)
 function EntryService:downloadEntries(entry_data_list, completion_callback)
     local BatchDownloadEntriesWorkflow =
-        require('features/entries/services/batch_download_entries_workflow')
+        require('features/browser/download/batch_download_entries_workflow')
 
     BatchDownloadEntriesWorkflow.execute({
         entry_data_list = entry_data_list,
