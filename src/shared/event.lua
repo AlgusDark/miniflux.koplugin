@@ -10,13 +10,13 @@ local MinifluxEvent = {}
 ---| 'MinifluxSettingsChange'
 ---| 'MinifluxCacheInvalidate'
 ---| 'MinifluxServerConfigChange'
----| 'MinifluxBrowserCloseRequested'
+---| 'BrowserCloseRequest'
 ---| 'MinifluxBrowserContextChange'
 local MinifluxEventName = {
     MinifluxSettingsChange = 'MinifluxSettingsChange',
     MinifluxCacheInvalidate = 'MinifluxCacheInvalidate',
     MinifluxServerConfigChange = 'MinifluxServerConfigChange',
-    MinifluxBrowserCloseRequested = 'MinifluxBrowserCloseRequested',
+    BrowserCloseRequest = 'BrowserCloseRequest',
     MinifluxBrowserContextChange = 'MinifluxBrowserContextChange',
 }
 
@@ -45,11 +45,9 @@ function MinifluxEvent:broadcastMinifluxServerConfigChange(payload)
     broadcastEvent(MinifluxEventName.MinifluxServerConfigChange, payload)
 end
 
----@alias MinifluxBrowserCloseRequestedData { reason?: string }
-
----@param payload? MinifluxBrowserCloseRequestedData
-function MinifluxEvent:broadcastMinifluxBrowserCloseRequested(payload)
-    broadcastEvent(MinifluxEventName.MinifluxBrowserCloseRequested, payload)
+---@param payload? { reason?: string }
+function MinifluxEvent:broadcastBrowserCloseRequest(payload)
+    broadcastEvent(MinifluxEventName.BrowserCloseRequest, payload)
 end
 
 ---@alias MinifluxBrowserContextChangeData { context: MinifluxContext }
