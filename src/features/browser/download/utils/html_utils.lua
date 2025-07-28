@@ -6,7 +6,7 @@ local util = require('util') -- Use KOReader's built-in utilities
 local htmlparser = require('htmlparser')
 
 -- Import dependencies for entry content processing
-local Images = require('features/entries/utils/images')
+local Images = require('features/browser/download/utils/images')
 local Error = require('shared/error')
 
 -- **HtmlUtils** - HTML utilities for Miniflux Browser
