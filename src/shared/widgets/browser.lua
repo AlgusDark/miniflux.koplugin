@@ -471,9 +471,9 @@ end
 -- =============================================================================
 
 ---Handle browser close requested event
----@param payload? MinifluxBrowserCloseRequestedData Event payload with close reason
+---@param payload? { reason?: string } Event payload with close reason
 -- selene: allow(unused_variable)
-function Browser:onMinifluxBrowserCloseRequested(payload)
+function Browser:onBrowserCloseRequest(payload)
     -- Close this browser instance when requested via event
     -- TODO: Could use payload.reason for logging/debugging in the future
     self:close()

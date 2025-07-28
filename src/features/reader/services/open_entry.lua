@@ -31,7 +31,7 @@ function EntryReader.openEntry(file_path, opts)
     opts = opts or {}
     local context = opts.context
 
-    MinifluxEvent:broadcastMinifluxBrowserCloseRequested({ reason = 'entry_opening' })
+    MinifluxEvent:broadcastBrowserCloseRequest({ reason = 'entry_opening' })
 
     if context then
         MinifluxEvent:broadcastMinifluxBrowserContextChange({ context = context })
