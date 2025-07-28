@@ -4,7 +4,6 @@ local _ = require('gettext')
 local logger = require('logger')
 
 -- Import dependencies
-local TimeUtils = require('shared/time_utils')
 local Error = require('shared/error')
 
 -- Constants
@@ -16,6 +15,43 @@ local PUBLISHED_AFTER = 'published_after'
 local PUBLISHED_BEFORE = 'published_before'
 local MSG_FINDING_PREVIOUS = 'Finding previous entry...'
 local MSG_FINDING_NEXT = 'Finding next entry...'
+
+function iso8601_to_unix(iso_string)
+    local Y, M, D, h, m, sec, sign, tzh, tzm =
+        iso_string:match('(%d+)%-(%d+)%-(%d+)T' .. '(%d+):(%d+):(%d+)' .. '([%+%-])(%d%d):(%d%d)$')
+
+    if not Y then
+        return nil, Error.new(_('Invalid ISO-8601 timestamp format'))
+    end
+
+    Y, M, D = tonumber(Y), tonumber(M), tonumber(D)
+    h, m, sec = tonumber(h), tonumber(m), tonumber(sec)
+    tzh, tzm = tonumber(tzh), tonumber(tzm)
+
+    local y = Y
+    local mo = M
+    if mo <= 2 then
+        y = y - 1
+        mo = mo + 12
+    end
+
+    local era = math.floor(y / 400)
+    local yoe = y - era * 400
+    local doy = math.floor((153 * (mo - 3) + 2) / 5) + D - 1
+    local doe = yoe * 365 + math.floor(yoe / 4) - math.floor(yoe / 100) + doy
+    local days = era * 146097 + doe - 719468
+
+    local utc_secs = days * 86400 + h * 3600 + m * 60 + sec
+
+    local offs = tzh * 3600 + tzm * 60
+    if sign == '+' then
+        utc_secs = utc_secs - offs
+    else
+        utc_secs = utc_secs + offs
+    end
+
+    return utc_secs, nil
+end
 
 -- **Navigation Service** - Consolidated navigation utilities including context
 -- management and entry navigation logic. Combines functionality from
@@ -207,7 +243,7 @@ function Navigation.loadEntryMetadata(entry_info)
         return nil, Error.new(_('Cannot navigate: missing timestamp information'))
     end
 
-    local published_unix, time_err = TimeUtils.iso8601_to_unix(metadata.published_at)
+    local published_unix, time_err = iso8601_to_unix(metadata.published_at)
     if time_err then
         return nil, Error.new(_('Cannot navigate: invalid timestamp format'))
     end
