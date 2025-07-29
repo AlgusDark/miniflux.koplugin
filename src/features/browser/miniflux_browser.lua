@@ -339,7 +339,8 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         end,
         feed_entries = function()
             return EntriesView.show({
-                entry_service = self.entry_service,
+                feeds = self.miniflux.feeds,
+                entries = self.miniflux.entries,
                 settings = self.settings,
                 entry_type = 'feed',
                 id = nav_config.context and nav_config.context.feed_id,
@@ -355,7 +356,8 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         end,
         category_entries = function()
             return EntriesView.show({
-                entry_service = self.entry_service,
+                categories = self.miniflux.categories,
+                entries = self.miniflux.entries,
                 settings = self.settings,
                 entry_type = 'category',
                 id = nav_config.context and nav_config.context.category_id,
@@ -372,7 +374,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         unread_entries = function()
             local UnreadEntriesView = require('features/browser/views/unread_entries_view')
             return UnreadEntriesView.show({
-                entry_service = self.entry_service,
+                entries = self.miniflux.entries,
                 settings = self.settings,
                 page_state = nav_config.page_state,
                 onSelectItem = function(entry_data)

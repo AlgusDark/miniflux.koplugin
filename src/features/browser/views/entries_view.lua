@@ -7,15 +7,14 @@ Handles data fetching, menu building, and UI rendering.
 @module miniflux.browser.views.entries_view
 --]]
 
-local ViewUtils = require('features/browser/views/view_utils')
 local EntryEntity = require('domains/entries/entry_entity')
 local _ = require('gettext')
 
 local EntriesView = {}
 
----@alias EntriesViewConfig {entry_service: EntryService, settings: MinifluxSettings, entry_type: "unread"|"feed"|"category", id?: number, page_state?: number, onSelectItem: function}
+---@alias EntriesViewConfig {feeds?: Feeds, categories?: Categories, entries: Entries, settings: MinifluxSettings, entry_type: "unread"|"feed"|"category", id?: number, page_state?: number, onSelectItem: function}
 
----Complete entries view component (React-style) - returns view data for rendering
+---Complete entries view component - returns view data for rendering
 ---@param config EntriesViewConfig
 ---@return table|nil View data for browser rendering, or nil on error
 function EntriesView.show(config)
@@ -24,38 +23,40 @@ function EntriesView.show(config)
 
     -- Validate required parameters based on entry type
     if (entry_type == 'feed' or entry_type == 'category') and not id then
-        error('ID is required for ' .. entry_type .. ' entry type')
+        return nil -- ID is required for feed/category types
     end
-    ---@cast id -nil
+    ---@cast id number
 
-    -- Prepare loading messages
-    local loading_messages = {
-        unread = _('Fetching unread entries...'),
-        feed = _('Fetching feed entries...'),
-        category = _('Fetching category entries...'),
-    }
-
-    -- Create dialog configuration
+    -- Prepare dialog configuration
     local dialog_config = {
         dialogs = {
-            loading = { text = loading_messages[entry_type] },
-            error = { text = _('Failed to fetch entries'), timeout = 5 },
+            loading = { text = _('Loading entries...') },
+            error = { text = _('Failed to load entries') },
         },
     }
 
-    -- Fetch data based on type
     local entries, err
     if entry_type == 'unread' then
-        entries, err = config.entry_service:getUnreadEntries(dialog_config)
+        entries, err = config.entries:getUnreadEntries(dialog_config)
     elseif entry_type == 'feed' then
-        entries, err = config.entry_service:getEntriesByFeed(id, dialog_config)
+        if not config.feeds then
+            return nil -- feeds domain not provided
+        end
+        entries, err = config.feeds:getEntriesByFeed(id, dialog_config)
     elseif entry_type == 'category' then
-        entries, err = config.entry_service:getEntriesByCategory(id, dialog_config)
+        if not config.categories then
+            return nil -- categories domain not provided
+        end
+        entries, err = config.categories:getEntriesByCategory(id, dialog_config)
+    else
+        return nil -- Invalid entry type
     end
 
     if err then
-        return nil -- Error dialog already shown by API system
+        return nil
     end
+
+    local ViewUtils = require('features/browser/views/view_utils')
     ---@cast entries -nil
 
     -- Generate menu items using internal builder
