@@ -362,6 +362,13 @@ function EntryWorkflow.execute(deps)
     local settings = deps.settings
     local browser_context = deps.context
 
+    -- Validate entry data with enhanced validation
+    local _valid, err = EntryEntity.validateForDownload(entry_data)
+    if err then
+        Notification:error(err.message)
+        return -- Fire-and-forget, no return values
+    end
+
     --[[
     TRAPPER WORKFLOW PATTERN EXPLANATION:
 

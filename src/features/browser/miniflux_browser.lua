@@ -10,6 +10,7 @@ local MainView = require('features/browser/views/main_view')
 local FeedsView = require('features/browser/views/feeds_view')
 local CategoriesView = require('features/browser/views/categories_view')
 local EntriesView = require('features/browser/views/entries_view')
+local EntryEntity = require('domains/entries/entry_entity')
 
 -- **Miniflux Browser** - RSS Browser for Miniflux
 --
@@ -282,8 +283,13 @@ function MinifluxBrowser:openItem(entry_data, context)
         'with context:',
         context and context.type or 'global'
     )
-    -- Pass context directly to readEntry to flow through EntryWorkflow
-    self.entry_service:readEntry(entry_data, { context = context })
+    -- Use workflow directly for download-if-needed and open
+    local EntryWorkflow = require('features/browser/download/download_entry')
+    EntryWorkflow.execute({
+        entry_data = entry_data,
+        settings = self.settings,
+        context = context,
+    })
 end
 
 ---Get Miniflux-specific route handlers (implements Browser:getRouteHandlers)
@@ -387,7 +393,6 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         end,
         local_entries = function()
             local LocalEntriesView = require('features/browser/views/local_entries_view')
-            local EntryEntity = require('domains/entries/entry_entity')
 
             -- Get lightweight navigation entries (5x less memory than full metadata)
             local nav_entries =
@@ -442,7 +447,6 @@ end
 ---@return {has_local: boolean, has_remote: boolean} Analysis results
 function MinifluxBrowser:analyzeSelection(selected_items)
     local has_local, has_remote = false, false
-    local EntryEntity = require('domains/entries/entry_entity')
     local lfs = require('libs/libkoreader-lfs')
 
     for _, item in ipairs(selected_items) do
@@ -678,12 +682,17 @@ function MinifluxBrowser:markSelectedAsRead(selected_items)
     local success = false
 
     if item_type == 'entry' then
-        -- Extract entry IDs and use existing EntryService
+        -- Extract entry IDs
         local entry_ids = {}
         for _, item in ipairs(selected_items) do
             table.insert(entry_ids, item.entry_data.id)
         end
-        success = self.entry_service:markEntriesAsRead(entry_ids)
+
+        local EntryBatchOperations = require('features/browser/services/entry_batch_operations')
+        success = EntryBatchOperations.markEntriesAsRead(entry_ids, {
+            entries = self.miniflux.entries,
+            queue_service = self.miniflux.queue_service,
+        })
     elseif item_type == 'feed' then
         -- TODO: Implement batch notifications - show loading, track success/failed feeds, show summary
         success = false
@@ -742,8 +751,11 @@ function MinifluxBrowser:markSelectedAsUnread(selected_items)
         table.insert(entry_ids, item.entry_data.id)
     end
 
-    -- Use EntryService for batch processing
-    local success = self.entry_service:markEntriesAsUnread(entry_ids)
+    local EntryBatchOperations = require('features/browser/services/entry_batch_operations')
+    local success = EntryBatchOperations.markEntriesAsUnread(entry_ids, {
+        entries = self.miniflux.entries,
+        queue_service = self.miniflux.queue_service,
+    })
 
     if success then
         -- Update status in current item_table for immediate visual feedback
@@ -771,17 +783,23 @@ function MinifluxBrowser:downloadSelectedEntries(selected_items)
     end
 
     -- Call batch download service with completion callback
-    self.entry_service:downloadEntries(entry_data_list, function(status)
-        -- Refresh view data to rebuild menu items with updated download status indicators
-        self:refreshCurrentViewData()
+    local BatchDownloadEntriesWorkflow =
+        require('features/browser/download/batch_download_entries_workflow')
+    BatchDownloadEntriesWorkflow.execute({
+        entry_data_list = entry_data_list,
+        settings = self.settings,
+        completion_callback = function(status)
+            -- Refresh view data to rebuild menu items with updated download status indicators
+            self:refreshCurrentViewData()
 
-        -- Only transition to normal mode if download completed successfully
-        -- Keep selection mode for cancelled downloads so user can modify and retry
-        if status == 'completed' then
-            self:transitionTo(BrowserMode.NORMAL)
-        end
-        -- For "cancelled" status, stay in selection mode to preserve user's selection
-    end)
+            -- Only transition to normal mode if download completed successfully
+            -- Keep selection mode for cancelled downloads so user can modify and retry
+            if status == 'completed' then
+                self:transitionTo(BrowserMode.NORMAL)
+            end
+            -- For "cancelled" status, stay in selection mode to preserve user's selection
+        end,
+    })
 
     -- Don't transition immediately - wait for completion callback
 end
@@ -795,7 +813,6 @@ function MinifluxBrowser:deleteSelectedEntries(selected_items)
 
     -- Filter to only local entries (entries that exist locally)
     local local_entries = {}
-    local EntryEntity = require('domains/entries/entry_entity')
 
     for _, item in ipairs(selected_items) do
         local entry_data = item.entry_data
@@ -854,7 +871,7 @@ function MinifluxBrowser:performBatchDelete(local_entries)
 
     -- Delete each entry
     for _, entry_data in ipairs(local_entries) do
-        local success = self.entry_service:deleteLocalEntry(entry_data.id)
+        local success = EntryEntity.deleteLocalEntry(entry_data.id)
         if success then
             success_count = success_count + 1
         end

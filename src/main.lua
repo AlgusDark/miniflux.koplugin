@@ -116,18 +116,19 @@ function Miniflux:init()
     self:registerModule('entries', Entries:new({ miniflux = self, http_cache = self.http_cache }))
 
     -- Create services directly with proper dependency order
+    self.queue_service = QueueService:new({
+        entries = self.entries,
+        feeds = self.feeds,
+        categories = self.categories,
+    })
+
     self.entry_service = EntryService:new({
         settings = self.settings,
         feeds = self.feeds,
         categories = self.categories,
         entries = self.entries,
         miniflux_plugin = self,
-    })
-
-    self.queue_service = QueueService:new({
-        entry_service = self.entry_service,
-        feeds = self.feeds,
-        categories = self.categories,
+        queue_service = self.queue_service,
     })
 
     local MinifluxBrowser = require('features/browser/miniflux_browser')
@@ -293,7 +294,7 @@ function Miniflux:onNetworkConnected()
     -- Only process if QueueService is available (plugin initialized)
     if self.queue_service then
         -- Check if any queue has items before showing dialog
-        local total_count = self.queue_service:getTotalQueueCount()
+        local total_count = QueueService.getTotalQueueCount()
         logger.dbg('[Miniflux:Main] Queue items pending sync:', total_count)
 
         if total_count > 0 then
