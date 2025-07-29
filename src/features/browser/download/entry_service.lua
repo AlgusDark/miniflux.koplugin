@@ -14,9 +14,9 @@ local Files = require('shared/files')
 
 -- **Entry Service** - Handles complex entry workflows and orchestration.
 --
--- Service layer for entry operations using proper repository pattern.
--- Provides business logic for entries, delegates data access to repository.
+-- Service layer for entry operations excluding data access (handled by domains).
 -- Handles UI coordination, navigation, workflows, and queue management.
+-- Views now access data directly through domain modules (entries, feeds, categories).
 ---@class EntryService
 ---@field settings MinifluxSettings Settings instance
 ---@field feeds Feeds Feeds domain module
@@ -49,33 +49,6 @@ function EntryService:new(deps)
     self.__index = self
 
     return instance
-end
-
--- =============================================================================
--- DATA ACCESS OPERATIONS (delegate to repository)
--- =============================================================================
-
----Get unread entries for entries view
----@param config? table Optional configuration
----@return MinifluxEntry[]|nil entries, Error|nil error
-function EntryService:getUnreadEntries(config)
-    return self.entries:getUnreadEntries(config)
-end
-
----Get entries by feed for feed entries view
----@param feed_id number Feed ID
----@param config? table Optional configuration
----@return MinifluxEntry[]|nil entries, Error|nil error
-function EntryService:getEntriesByFeed(feed_id, config)
-    return self.feeds:getEntriesByFeed(feed_id, config)
-end
-
----Get entries by category for category entries view
----@param category_id number Category ID
----@param config? table Optional configuration
----@return MinifluxEntry[]|nil entries, Error|nil error
-function EntryService:getEntriesByCategory(category_id, config)
-    return self.categories:getEntriesByCategory(category_id, config)
 end
 
 -- =============================================================================
