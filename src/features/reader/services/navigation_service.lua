@@ -161,7 +161,13 @@ function Navigation.handleApiNavigation(options)
                 context = context,
             })
         then
-            miniflux.entry_service:readEntry(target_entry, { context = context })
+            -- Use workflow directly for download-if-needed and open
+            local EntryWorkflow = require('features/browser/download/download_entry')
+            EntryWorkflow.execute({
+                entry_data = target_entry,
+                settings = miniflux.settings,
+                context = context,
+            })
         end
     else
         -- Handle different failure scenarios with appropriate messages
@@ -213,8 +219,10 @@ function Navigation.handleLocalNavigation(options)
 
         if target_entry_data then
             -- Open the local entry using the same method as browser
-            miniflux.entry_service:readEntry(target_entry_data, {
-                browser = miniflux.browser,
+            local EntryWorkflow = require('features/browser/download/download_entry')
+            EntryWorkflow.execute({
+                entry_data = target_entry_data,
+                settings = miniflux.settings,
                 context = enhanced_context,
             })
         else

@@ -111,22 +111,43 @@ function EntryEntity.extractEntryIdFromPath(file_path)
     return entry_id_str and tonumber(entry_id_str)
 end
 
----Check if entry is already downloaded locally
+---Check if an entry is downloaded (has HTML file)
 ---@param entry_id number Entry ID
----@return boolean True if downloaded
+---@return boolean downloaded True if entry is downloaded locally
 function EntryEntity.isEntryDownloaded(entry_id)
-    if not entry_id then
+    local html_file = EntryEntity.getEntryHtmlPath(entry_id)
+    return lfs.attributes(html_file, 'mode') == 'file'
+end
+
+---Delete a local entry and its files
+---@param entry_id number Entry ID
+---@return boolean success True if deletion succeeded
+function EntryEntity.deleteLocalEntry(entry_id)
+    local _ = require('gettext')
+    local Notification = require('shared/widgets/notification')
+    local FFIUtil = require('ffi/util')
+
+    local entry_dir = EntryEntity.getEntryDirectory(entry_id)
+    local ok = FFIUtil.purgeDir(entry_dir)
+
+    if ok then
+        -- Invalidate download cache for this entry
+        local MinifluxBrowser = require('features/browser/miniflux_browser')
+        MinifluxBrowser.deleteEntryInfoCache(entry_id)
+        logger.dbg(
+            '[Miniflux:EntryEntity] Invalidated download cache after deleting entry',
+            entry_id
+        )
+        Notification:success(_('Local entry deleted successfully'))
+
+        -- Open Miniflux folder
+        EntryEntity.openMinifluxFolder()
+
+        return true
+    else
+        Notification:error(_('Failed to delete local entry: ') .. tostring(ok))
         return false
     end
-
-    -- Check if entry is in entries info cache
-    local MinifluxBrowser = require('features/browser/miniflux_browser')
-    local entry_info_cache = MinifluxBrowser.getEntryInfoCache(entry_id)
-    if entry_info_cache then
-        return true
-    end
-
-    return false
 end
 
 ---@class EntryMetadata
