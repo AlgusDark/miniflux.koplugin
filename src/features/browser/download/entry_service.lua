@@ -20,7 +20,6 @@ local QueueService = require('features/sync/services/queue_service')
 ---@field categories Categories
 ---@field entries Entries
 ---@field miniflux_plugin Miniflux
----@field queue_service QueueService
 ---@field entry_subprocesses table Track subprocesses per entry (entry_id -> pid)
 local EntryService = {}
 
@@ -30,7 +29,6 @@ local EntryService = {}
 ---@field categories Categories
 ---@field entries Entries
 ---@field miniflux_plugin Miniflux
----@field queue_service QueueService
 
 ---Create a new EntryService instance
 ---@param deps EntryServiceDeps Dependencies containing settings, domain modules, and plugin
@@ -42,7 +40,6 @@ function EntryService:new(deps)
         categories = deps.categories,
         entries = deps.entries,
         miniflux_plugin = deps.miniflux_plugin,
-        queue_service = deps.queue_service,
         entry_subprocesses = {}, -- Track subprocesses per entry
     }
     setmetatable(instance, self)

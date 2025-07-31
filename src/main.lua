@@ -20,6 +20,7 @@ local DataStorage = require('datastorage')
 local UpdateSettings = require('features/menu/settings/update_settings')
 local EntryService = require('features/browser/download/entry_service')
 local QueueService = require('features/sync/services/queue_service')
+local SyncService = require('features/sync/services/sync_service')
 local HTTPCacheAdapter = require('shared/http_cache_adapter')
 
 ---@class Miniflux : WidgetContainer
@@ -33,7 +34,7 @@ local HTTPCacheAdapter = require('shared/http_cache_adapter')
 ---@field categories Categories Categories domain module
 ---@field entries Entries Entries domain module
 ---@field entry_service EntryService Entry service instance
----@field queue_service QueueService Unified queue management service instance
+---@field sync_service SyncService Sync orchestration service instance
 ---@field readerLink MinifluxReaderLink ReaderLink enhancement module instance
 ---@field subprocesses_pids table[] List of subprocess PIDs for cleanup
 ---@field subprocesses_collector boolean|nil Flag indicating if subprocess collector is active
@@ -116,7 +117,7 @@ function Miniflux:init()
     self:registerModule('entries', Entries:new({ miniflux = self, http_cache = self.http_cache }))
 
     -- Create services directly with proper dependency order
-    self.queue_service = QueueService:new({
+    self.sync_service = SyncService:new({
         entries = self.entries,
         feeds = self.feeds,
         categories = self.categories,
@@ -128,7 +129,6 @@ function Miniflux:init()
         categories = self.categories,
         entries = self.entries,
         miniflux_plugin = self,
-        queue_service = self.queue_service,
     })
 
     local MinifluxBrowser = require('features/browser/miniflux_browser')
@@ -291,8 +291,8 @@ end
 ---Handle network connected event - process all offline queues
 function Miniflux:onNetworkConnected()
     logger.info('[Miniflux:Main] Network connected event received')
-    -- Only process if QueueService is available (plugin initialized)
-    if self.queue_service then
+    -- Only process if SyncService is available (plugin initialized)
+    if self.sync_service then
         -- Check if any queue has items before showing dialog
         local total_count = QueueService.getTotalQueueCount()
         logger.dbg('[Miniflux:Main] Queue items pending sync:', total_count)
@@ -300,7 +300,7 @@ function Miniflux:onNetworkConnected()
         if total_count > 0 then
             -- Show sync dialog only if there are items to sync
             logger.info('[Miniflux:Main] Processing offline queues')
-            self.queue_service:processAllQueues()
+            self.sync_service:processAllQueues()
         end
         -- If all queues are empty, do nothing (silent)
     end
