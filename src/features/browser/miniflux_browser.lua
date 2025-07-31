@@ -691,7 +691,6 @@ function MinifluxBrowser:markSelectedAsRead(selected_items)
         local EntryBatchOperations = require('features/browser/services/entry_batch_operations')
         success = EntryBatchOperations.markEntriesAsRead(entry_ids, {
             entries = self.miniflux.entries,
-            queue_service = self.miniflux.queue_service,
         })
     elseif item_type == 'feed' then
         -- TODO: Implement batch notifications - show loading, track success/failed feeds, show summary
@@ -754,7 +753,6 @@ function MinifluxBrowser:markSelectedAsUnread(selected_items)
     local EntryBatchOperations = require('features/browser/services/entry_batch_operations')
     local success = EntryBatchOperations.markEntriesAsUnread(entry_ids, {
         entries = self.miniflux.entries,
-        queue_service = self.miniflux.queue_service,
     })
 
     if success then

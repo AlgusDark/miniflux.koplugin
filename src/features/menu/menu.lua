@@ -34,12 +34,12 @@ function Menu.build(plugin)
                 text = _('Sync status changes'),
                 help_text = _('Sync pending changes (entries, feeds, categories)'),
                 callback = function()
-                    if plugin.queue_service then
+                    if plugin.sync_service then
                         -- Use KOReader's standard network handling (same as translate)
                         local NetworkMgr = require('ui/network/manager')
                         NetworkMgr:runWhenOnline(function()
                             -- Show sync dialog after ensuring online connectivity
-                            plugin.queue_service:processAllQueues()
+                            plugin.sync_service:processAllQueues()
                         end)
                     end
                 end,

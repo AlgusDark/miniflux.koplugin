@@ -11,7 +11,6 @@ local EntryBatchOperations = {}
 
 ---@class BatchOperationDeps
 ---@field entries Entries Entry domain for API calls
----@field queue_service QueueService Queue service for offline sync operations
 
 ---Private function to handle batch status change with API fallback to queue
 ---@param entry_ids table Array of entry IDs
