@@ -90,7 +90,7 @@ function MinifluxEndOfBook:showDialog(entry_info)
         return nil
     end
 
-    if not self.miniflux or not self.miniflux.entry_service then
+    if not self.miniflux or not self.miniflux.reader_entry_service then
         return nil
     end
 
@@ -121,7 +121,7 @@ function MinifluxEndOfBook:showDialog(entry_info)
     local mark_callback
     if EntryEntity.isEntryRead(entry_status) then
         mark_callback = function()
-            self.miniflux.entry_service:changeEntryStatus(
+            self.miniflux.reader_entry_service:changeEntryStatus(
                 entry_info.entry_id,
                 'unread',
                 doc_settings
@@ -129,7 +129,11 @@ function MinifluxEndOfBook:showDialog(entry_info)
         end
     else
         mark_callback = function()
-            self.miniflux.entry_service:changeEntryStatus(entry_info.entry_id, 'read', doc_settings)
+            self.miniflux.reader_entry_service:changeEntryStatus(
+                entry_info.entry_id,
+                'read',
+                doc_settings
+            )
         end
     end
 

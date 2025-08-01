@@ -20,7 +20,6 @@ local EntryEntity = require('domains/entries/entry_entity')
 ---@field miniflux Miniflux Miniflux plugin instance
 ---@field settings MinifluxSettings Plugin settings
 ---@field download_dir string Download directory path
----@field entry_service EntryService Entry service instance
 ---@field miniflux_plugin Miniflux Plugin instance for context management
 ---@field entries_info_cache table<number, table> Entries info cache
 ---@field new fun(self: MinifluxBrowser, o: BrowserOptions): MinifluxBrowser Create new MinifluxBrowser instance
@@ -35,9 +34,6 @@ function MinifluxBrowser:init()
 
     -- Initialize Miniflux-specific dependencies
     self.settings = self.miniflux.settings
-
-    -- Initialize services container
-    self.entry_service = self.miniflux.entry_service
 
     -- Initialize Browser parent (handles generic setup)
     Browser.init(self)
