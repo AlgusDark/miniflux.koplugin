@@ -123,13 +123,16 @@ function Miniflux:init()
         categories = self.categories,
     })
 
-    self.entry_service = EntryService:new({
-        settings = self.settings,
-        feeds = self.feeds,
-        categories = self.categories,
-        entries = self.entries,
-        miniflux_plugin = self,
-    })
+    self:registerModule(
+        'entry_service',
+        EntryService:new({
+            settings = self.settings,
+            feeds = self.feeds,
+            categories = self.categories,
+            entries = self.entries,
+            miniflux_plugin = self,
+        })
+    )
 
     local MinifluxBrowser = require('features/browser/miniflux_browser')
     self.browser = MinifluxBrowser:new({
@@ -138,10 +141,6 @@ function Miniflux:init()
     })
 
     if self.ui and self.ui.document then
-        -- Wrap ReaderUI to preserve metadata on close
-        local MetadataPreserver = require('features/plugin/utils/metadata_preserver')
-        self.wrapped_onClose = MetadataPreserver.wrapReaderClose(self.ui)
-
         local MinifluxReaderLink = require('features/reader/modules/miniflux_readerlink')
         self:registerModule('readerLink', MinifluxReaderLink:new({ miniflux = self }))
 
@@ -180,22 +179,6 @@ end
 ---@return nil
 function Miniflux:onReadMinifluxEntries()
     self.browser:open()
-end
-
----Handle ReaderReady event - called when a document is fully loaded and ready
----This is the proper place to perform auto-mark-as-read for miniflux entries
----@param doc_settings DocSettings Document settings instance
----@return nil
-function Miniflux:onReaderReady(doc_settings)
-    local file_path = self.ui and self.ui.document and self.ui.document.file
-    -- Only process if we have a valid file path
-    if file_path then
-        -- Pass ReaderUI's DocSettings to avoid cache conflicts
-        self.entry_service:onReaderReady({
-            file_path = file_path,
-            doc_settings = doc_settings, -- ReaderUI's cached DocSettings instance
-        })
-    end
 end
 
 -- =============================================================================
@@ -339,12 +322,6 @@ function Miniflux:onCloseWidget()
             self:collectSubprocesses()
         end)
         self.subprocesses_collector = nil
-    end
-
-    -- Revert the wrapped onClose method if it exists
-    if self.wrapped_onClose then
-        self.wrapped_onClose:revert()
-        self.wrapped_onClose = nil
     end
 end
 
