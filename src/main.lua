@@ -18,7 +18,7 @@ local MinifluxSettings = require('features/settings/settings')
 local Menu = require('features/menu/menu')
 local DataStorage = require('datastorage')
 local UpdateSettings = require('features/menu/settings/update_settings')
-local EntryService = require('features/browser/download/entry_service')
+local ReaderEntryService = require('features/reader/services/entry_service')
 local QueueService = require('features/sync/services/queue_service')
 local SyncService = require('features/sync/services/sync_service')
 local HTTPCacheAdapter = require('shared/http_cache_adapter')
@@ -33,7 +33,7 @@ local HTTPCacheAdapter = require('shared/http_cache_adapter')
 ---@field feeds Feeds Feeds domain module
 ---@field categories Categories Categories domain module
 ---@field entries Entries Entries domain module
----@field entry_service EntryService Entry service instance
+---@field reader_entry_service ReaderEntryService Reader entry service instance
 ---@field sync_service SyncService Sync orchestration service instance
 ---@field readerLink MinifluxReaderLink ReaderLink enhancement module instance
 ---@field subprocesses_pids table[] List of subprocess PIDs for cleanup
@@ -123,9 +123,10 @@ function Miniflux:init()
         categories = self.categories,
     })
 
+    -- Register reader service as EventListener module for document events
     self:registerModule(
-        'entry_service',
-        EntryService:new({
+        'reader_entry_service',
+        ReaderEntryService:new({
             settings = self.settings,
             feeds = self.feeds,
             categories = self.categories,
