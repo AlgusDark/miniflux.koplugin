@@ -1,37 +1,25 @@
 local EventListener = require('ui/widget/eventlistener')
 local FFIUtil = require('ffi/util')
+local NetworkMgr = require('ui/network/manager')
 local _ = require('gettext')
 local logger = require('logger')
-local NetworkMgr = require('ui/network/manager')
 
 local EntryEntity = require('domains/entries/entry_entity')
 local QueueService = require('features/sync/services/queue_service')
 
--- **Entry Service** - Handles background processing and reader events.
---
--- Core service for entry operations excluding queue management, workflows, and data access.
--- Data access: handled by domains (entries, feeds, categories)
--- Status changes: handled by vertical slices (reader modules, browser services)
--- Workflows: handled by workflow modules (download_entry, batch_download_entries_workflow)
--- Queue management: handled by QueueService
--- Responsibilities: background processing, reader events, subprocess management
----@class EntryService : EventListener
+-- TODO: Maybe the subprocesses should be tracked in main Miniflux instance?
+
+-- **Reader Entry Service** - Handles reader-specific entry operations and events.
+---@class ReaderEntryService : EventListener
 ---@field settings MinifluxSettings Settings instance
 ---@field feeds Feeds
 ---@field categories Categories
 ---@field entries Entries
 ---@field miniflux_plugin Miniflux
 ---@field entry_subprocesses table Track subprocesses per entry (entry_id -> pid)
-local EntryService = EventListener:extend({
+local ReaderEntryService = EventListener:extend({
     entry_subprocesses = {}, -- Track subprocesses per entry
 })
-
----@class EntryServiceDeps
----@field settings MinifluxSettings
----@field feeds Feeds
----@field categories Categories
----@field entries Entries
----@field miniflux_plugin Miniflux
 
 -- =============================================================================
 -- READER EVENT HANDLING
@@ -42,7 +30,7 @@ local EntryService = EventListener:extend({
 ---@param doc_settings DocSettings Document settings instance
 ---@param document table Document instance
 ---@return nil
-function EntryService:onDocSettingsLoad(doc_settings, document)
+function ReaderEntryService:onDocSettingsLoad(doc_settings, document)
     local file_path = document and document.file
     if not file_path then
         return
@@ -67,34 +55,31 @@ function EntryService:onDocSettingsLoad(doc_settings, document)
     -- Check current status from doc_settings
     local current_metadata = doc_settings:readSetting('miniflux_entry')
     if not current_metadata then
-        logger.warn('[Miniflux:EntryService] No miniflux metadata found for entry:', entry_id)
+        logger.warn('[Miniflux:ReaderEntryService] No miniflux metadata found for entry:', entry_id)
         return
     end
 
-    logger.dbg('[Miniflux:EntryService] Current metadata:', current_metadata)
+    logger.dbg('[Miniflux:ReaderEntryService] Current metadata:', current_metadata)
 
     -- Only auto-mark-as-read if entry is currently unread
     if current_metadata.status ~= 'read' then
         -- Optimistically update doc_settings cache immediately
         current_metadata.status = 'read'
         current_metadata.last_updated = os.date('%Y-%m-%d %H:%M:%S')
-        logger.dbg('[Miniflux:EntryService] Updated metadata:', doc_settings)
         doc_settings:saveSetting('miniflux_entry', current_metadata)
-        logger.dbg('[Miniflux:EntryService] Updated metadata:', doc_settings)
 
         -- Spawn subprocess for server sync
         local pid = self:spawnUpdateStatus(entry_id)
         if pid then
-            logger.info('[Miniflux:EntryService] Auto-mark-as-read spawned with PID:', pid)
+            logger.info('[Miniflux:ReaderEntryService] Auto-mark-as-read spawned with PID:', pid)
             -- Track the subprocess for proper cleanup
+            ReaderEntryService.entry_subprocesses[entry_id] = pid
             self.miniflux_plugin:trackSubprocess(pid)
-            -- Also track per entry so we can kill it on manual status change
-            EntryService.entry_subprocesses[entry_id] = pid
         else
-            logger.dbg('[Miniflux:EntryService] Auto-mark-as-read skipped (spawn failed)')
+            logger.dbg('[Miniflux:ReaderEntryService] Auto-mark-as-read skipped (spawn failed)')
         end
     else
-        logger.dbg('[Miniflux:EntryService] Entry already marked as read, skipping auto-mark')
+        logger.dbg('[Miniflux:ReaderEntryService] Entry already marked as read, skipping auto-mark')
     end
 end
 
@@ -107,7 +92,7 @@ end
 ---@param new_status string New status ("read" or "unread")
 ---@param doc_settings? table Optional ReaderUI DocSettings instance
 ---@return boolean success True if status change succeeded
-function EntryService:changeEntryStatus(entry_id, new_status, doc_settings)
+function ReaderEntryService:changeEntryStatus(entry_id, new_status, doc_settings)
     local T = require('ffi/util').template
     local Notification = require('shared/widgets/notification')
 
@@ -117,11 +102,11 @@ function EntryService:changeEntryStatus(entry_id, new_status, doc_settings)
     end
 
     -- Kill any active subprocess for this entry (prevents conflicting updates)
-    local pid = EntryService.entry_subprocesses[entry_id]
+    local pid = ReaderEntryService.entry_subprocesses[entry_id]
     if pid then
-        logger.info('[Miniflux:EntryService] Killing subprocess', pid, 'for entry', entry_id)
+        logger.info('[Miniflux:ReaderEntryService] Killing subprocess', pid, 'for entry', entry_id)
         FFIUtil.terminateSubProcess(pid)
-        EntryService.entry_subprocesses[entry_id] = nil
+        ReaderEntryService.entry_subprocesses[entry_id] = nil
     end
 
     -- Prepare status messages using templates
@@ -178,17 +163,13 @@ function EntryService:changeEntryStatus(entry_id, new_status, doc_settings)
 end
 
 -- =============================================================================
--- UI COORDINATION & FILE OPERATIONS
--- =============================================================================
-
--- =============================================================================
--- PRIVATE HELPER METHODS
+-- SYNC INFRASTRUCTURE METHODS
 -- =============================================================================
 
 ---Spawn subprocess to sync entry status with server (auto-mark-as-read)
 ---@param entry_id number Entry ID to update
 ---@return number|nil pid Process ID if spawned, nil if operation skipped
-function EntryService:spawnUpdateStatus(entry_id)
+function ReaderEntryService:spawnUpdateStatus(entry_id)
     local new_status = 'read'
     local original_status = 'unread'
 
@@ -197,7 +178,7 @@ function EntryService:spawnUpdateStatus(entry_id)
         new_status = new_status,
         original_status = original_status,
     })
-    logger.dbg('[Miniflux:EntryService] Entry', entry_id, 'added to queue before subprocess')
+    logger.dbg('[Miniflux:ReaderEntryService] Entry', entry_id, 'added to queue before subprocess')
 
     -- Step 2: Background API call in subprocess (non-blocking)
     -- Extract settings data for subprocess (separate memory space)
@@ -260,9 +241,9 @@ function EntryService:spawnUpdateStatus(entry_id)
 
     -- Track subprocess if it started (item already in queue)
     if pid and NetworkMgr:isOnline() then
-        EntryService.entry_subprocesses[entry_id] = pid
+        ReaderEntryService.entry_subprocesses[entry_id] = pid
         logger.dbg(
-            '[Miniflux:EntryService] Subprocess spawned for entry',
+            '[Miniflux:ReaderEntryService] Subprocess spawned for entry',
             entry_id,
             'with PID:',
             pid
@@ -270,13 +251,13 @@ function EntryService:spawnUpdateStatus(entry_id)
     else
         if not NetworkMgr:isOnline() then
             logger.info(
-                '[Miniflux:EntryService] Device offline - entry',
+                '[Miniflux:ReaderEntryService] Device offline - entry',
                 entry_id,
                 'queued for later sync'
             )
         else
             logger.info(
-                '[Miniflux:EntryService] Subprocess failed to start for entry',
+                '[Miniflux:ReaderEntryService] Subprocess failed to start for entry',
                 entry_id,
                 '- item remains in queue'
             )
@@ -288,14 +269,13 @@ end
 
 ---Kill any active subprocess for an entry
 ---@param entry_id number Entry ID
----@private
-function EntryService:killEntrySubprocess(entry_id)
-    local pid = EntryService.entry_subprocesses[entry_id]
+function ReaderEntryService:killEntrySubprocess(entry_id)
+    local pid = ReaderEntryService.entry_subprocesses[entry_id]
     if pid then
-        logger.info('[Miniflux:EntryService] Killing subprocess', pid, 'for entry', entry_id)
+        logger.info('[Miniflux:ReaderEntryService] Killing subprocess', pid, 'for entry', entry_id)
         FFIUtil.terminateSubProcess(pid)
-        EntryService.entry_subprocesses[entry_id] = nil
+        ReaderEntryService.entry_subprocesses[entry_id] = nil
     end
 end
 
-return EntryService
+return ReaderEntryService
