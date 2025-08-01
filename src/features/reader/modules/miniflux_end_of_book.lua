@@ -18,91 +18,6 @@ local util = require('util')
 local _ = require('gettext')
 
 local EntryEntity = require('domains/entries/entry_entity')
-local QueueService = require('features/sync/services/queue_service')
-
----Local function to change entry status (extracted from EntryService for vertical slice architecture)
----@param entry_id number Entry ID
----@param new_status string New status ("read" or "unread")
----@param doc_settings? table Optional ReaderUI DocSettings instance
----@param miniflux Miniflux Miniflux plugin instance for accessing domains
----@return boolean success True if status change succeeded
-local function changeEntryStatus(entry_id, new_status, doc_settings, miniflux)
-    local T = require('ffi/util').template
-
-    if not EntryEntity.isValidId(entry_id) then
-        Notification:error(_('Cannot change status: invalid entry ID'))
-        return false
-    end
-
-    -- Kill any active subprocess for this entry (prevents conflicting updates)
-    -- Access through entry_service since that's where subprocess tracking lives
-    if miniflux.entry_service then
-        local pid = miniflux.entry_service.entry_subprocesses[entry_id]
-        if pid then
-            local FFIUtil = require('ffi/util')
-            local logger = require('logger')
-            logger.info('[Miniflux:EndOfBook] Killing subprocess', pid, 'for entry', entry_id)
-            FFIUtil.terminateSubProcess(pid)
-            miniflux.entry_service.entry_subprocesses[entry_id] = nil
-        end
-    end
-
-    -- Prepare status messages using templates
-    local loading_text = T(_('Marking entry as %1...'), new_status)
-    local success_text = T(_('Entry marked as %1'), new_status)
-    local _error_text = T(_('Failed to mark entry as %1'), new_status)
-
-    -- Call API with automatic dialog management
-    local _result, err = miniflux.entries:updateEntries(entry_id, {
-        body = { status = new_status },
-        dialogs = {
-            loading = { text = loading_text },
-            success = { text = success_text },
-            -- Note: No error dialog - we handle fallback gracefully
-        },
-    })
-
-    if err then
-        -- API failed - use queue fallback for offline mode
-        -- Perform optimistic local update for immediate UX
-        EntryEntity.updateEntryStatus(
-            entry_id,
-            { new_status = new_status, doc_settings = doc_settings }
-        )
-
-        -- Queue for later sync (determine original status from current metadata)
-        local _metadata = EntryEntity.loadMetadata(entry_id)
-        local original_status = (new_status == 'read') and 'unread' or 'read' -- Assume opposite
-
-        -- Use queue service for queue operations
-        QueueService.enqueueStatusChange(entry_id, {
-            new_status = new_status,
-            original_status = original_status,
-        })
-
-        -- Show offline message instead of error
-        local message = new_status == 'read' and _('Marked as read (will sync when online)')
-            or _('Marked as unread (will sync when online)')
-        Notification:info(message)
-
-        return true -- Still successful from user perspective
-    else
-        -- API success - update local metadata using provided DocSettings if available
-        EntryEntity.updateEntryStatus(
-            entry_id,
-            { new_status = new_status, doc_settings = doc_settings }
-        )
-
-        -- Remove from queue since server is now source of truth
-        QueueService.removeFromEntryStatusQueue(entry_id)
-
-        -- Invalidate caches so next navigation shows updated counts
-        local MinifluxEvent = require('shared/event')
-        MinifluxEvent:broadcastMinifluxInvalidateCache()
-
-        return true
-    end
-end
 
 ---@class MinifluxEndOfBook : EventListener
 ---@field miniflux Miniflux The main Miniflux plugin instance
@@ -179,14 +94,21 @@ function MinifluxEndOfBook:showDialog(entry_info)
         return nil
     end
 
-    -- Load entry metadata to check current status
-    local metadata = EntryEntity.loadMetadata(entry_info.entry_id)
-
-    -- Use status for business logic
-    local entry_status = metadata and metadata.status or 'unread'
-
-    -- Get ReaderUI's DocSettings to avoid cache conflicts
+    -- Get ReaderUI's DocSettings to read current status (includes optimistic updates)
     local doc_settings = self.miniflux.ui and self.miniflux.ui.doc_settings
+
+    -- Load current metadata from doc_settings cache (not SDR) to see optimistic updates
+    local metadata = doc_settings and doc_settings:readSetting('miniflux_entry')
+
+    -- Use status for business logic (fallback to SDR if doc_settings unavailable)
+    local entry_status
+    if metadata and metadata.status then
+        entry_status = metadata.status
+    else
+        -- Fallback to SDR if doc_settings not available
+        local sdr_metadata = EntryEntity.loadMetadata(entry_info.entry_id)
+        entry_status = sdr_metadata and sdr_metadata.status or 'unread'
+    end
 
     -- Helper function to navigate to entry with consistent parameters
     local function navigateToEntry(direction)
@@ -199,11 +121,15 @@ function MinifluxEndOfBook:showDialog(entry_info)
     local mark_callback
     if EntryEntity.isEntryRead(entry_status) then
         mark_callback = function()
-            changeEntryStatus(entry_info.entry_id, 'unread', doc_settings, self.miniflux)
+            self.miniflux.entry_service:changeEntryStatus(
+                entry_info.entry_id,
+                'unread',
+                doc_settings
+            )
         end
     else
         mark_callback = function()
-            changeEntryStatus(entry_info.entry_id, 'read', doc_settings, self.miniflux)
+            self.miniflux.entry_service:changeEntryStatus(entry_info.entry_id, 'read', doc_settings)
         end
     end
 
