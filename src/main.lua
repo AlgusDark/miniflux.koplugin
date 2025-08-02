@@ -14,10 +14,11 @@ local _ = require('gettext')
 local logger = require('logger')
 
 local MinifluxAPI = require('api/miniflux_api')
-local MinifluxSettings = require('features/settings/settings')
+local MinifluxSettings = require('shared/settings')
 local Menu = require('features/menu/menu')
 local DataStorage = require('datastorage')
 local UpdateSettings = require('features/menu/settings/update_settings')
+local UpdateService = require('shared/update_service')
 local ReaderEntryService = require('features/reader/services/entry_service')
 local QueueService = require('features/sync/services/queue_service')
 local SyncService = require('features/sync/services/sync_service')
@@ -39,9 +40,11 @@ local HTTPCacheAdapter = require('shared/http_cache_adapter')
 ---@field subprocesses_pids table[] List of subprocess PIDs for cleanup
 ---@field subprocesses_collector boolean|nil Flag indicating if subprocess collector is active
 ---@field subprocesses_collect_interval number Interval for subprocess collection in seconds
+---@field update_service UpdateService Update service instance for plugin updates
 ---@field browser MinifluxBrowser|nil Browser instance for UI navigation
 ---@field wrapped_onClose table|nil Wrapped ReaderUI onClose method for metadata preservation
 ---@field ui ReaderUI|nil ReaderUI instance when running in reader context
+---@field version string Plugin version
 local Miniflux = WidgetContainer:extend({
     name = 'miniflux',
     is_doc_only = false,
@@ -58,7 +61,7 @@ local Miniflux = WidgetContainer:extend({
 ---@param module table Module instance
 function Miniflux:registerModule(name, module)
     if name then
-        self[name] = module -- Direct property access like ReaderUI
+        self[name] = module
         module.name = 'miniflux_' .. name
     end
     table.insert(self, module) -- Add to widget hierarchy
@@ -93,6 +96,14 @@ function Miniflux:init()
     self.http_cache = HTTPCacheAdapter:new({
         api_cache_ttl = self.settings.api_cache_ttl,
         db_name = 'miniflux_cache.sqlite',
+    })
+
+    -- Create update service instance
+    self.update_service = UpdateService:new({
+        repo_owner = 'AlgusDark',
+        repo_name = 'miniflux.koplugin',
+        plugin_path = self.path,
+        logger_prefix = 'Miniflux:',
     })
 
     -- Register MinifluxAPI as a module after settings initialization
@@ -308,7 +319,8 @@ function Miniflux:checkForAutomaticUpdates()
     CheckUpdates.checkForUpdates({
         show_no_update = false,
         settings = self.settings,
-        plugin_instance = self,
+        update_service = self.update_service,
+        current_version = self.version,
     })
 end
 
