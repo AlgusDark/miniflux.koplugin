@@ -27,7 +27,7 @@ end
 ---@return nil
 function CopyCss.copyCssToStyletweaks(plugin)
     -- Source CSS file in plugin's assets folder
-    local source_css = plugin.path .. '/assets/reader.css'
+    local source_css = plugin.path .. '/features/reader/assets/reader.css'
 
     -- Destination in styletweaks directory
     local styletweaks_dir = DataStorage:getDataDir() .. '/styletweaks'
