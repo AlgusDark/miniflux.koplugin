@@ -54,8 +54,8 @@ function Feeds:getFeedCount(config)
     return #feeds, nil
 end
 
----Get entries by feed (NOT cached - preserves current behavior)
----@param feed_id number Feed ID
+---Get entries by feed
+---@param feed_id number|string Feed ID
 ---@param config? table Optional configuration
 ---@return MinifluxEntry[]|nil entries, Error|nil error
 function Feeds:getEntriesByFeed(feed_id, config)
@@ -77,51 +77,18 @@ function Feeds:getEntriesByFeed(feed_id, config)
 end
 
 ---Mark all entries in a feed as read
--- TODO: ARCHITECTURAL DEBT - This method violates domain boundaries by handling queuing
--- The domain should only return Result|nil, Error|nil pattern from API calls.
--- Queue fallback logic belongs in features/offline/ or features/entries/mark_as_read_or_queue.lua
--- Current implementation mixes domain logic with offline/queue concerns.
--- See: https://github.com/your-repo/issues/XXX for proper offline architecture
----@param feed_id number The feed ID
----@return boolean success
-function Feeds:markAsRead(feed_id)
-    local _ = require('gettext')
-    local Notification = require('shared/widgets/notification')
-
-    -- Validate feed ID
-    if not feed_id or type(feed_id) ~= 'number' or feed_id <= 0 then
-        Notification:error(_('Invalid feed ID'))
-        return false
+---@param feed_id number|string The feed ID
+---@param config? table Configuration including optional dialogs
+---@return table|nil result, Error|nil error
+function Feeds:markFeedAsRead(feed_id, config)
+    -- Simple validation - accept string or number
+    if not feed_id then
+        local Error = require('shared/error')
+        local _ = require('gettext')
+        return nil, Error.new(_('Feed ID is required'))
     end
 
-    -- Call API with loading dialog
-    local _result, err = self.miniflux.api:markFeedAsRead(feed_id, {
-        dialogs = {
-            loading = { text = _('Marking feed as read...') },
-        },
-    })
-
-    if err then
-        -- API failed - use queue fallback for offline mode
-        local CollectionsQueue = require('features/sync/utils/collections_queue')
-        local queue = CollectionsQueue:new('feed')
-        queue:enqueue(feed_id, 'mark_all_read')
-
-        Notification:info(_('Feed marked as read (will sync when online)'))
-        return true -- Still successful from user perspective
-    else
-        -- API success - remove from queue since server is source of truth
-        local CollectionsQueue = require('features/sync/utils/collections_queue')
-        local queue = CollectionsQueue:new('feed')
-        queue:remove(feed_id)
-
-        -- Invalidate all caches IMMEDIATELY so counts update
-        local MinifluxEvent = require('shared/event')
-        MinifluxEvent:broadcastMinifluxInvalidateCache()
-
-        Notification:success(_('Feed marked as read'))
-        return true
-    end
+    return self.miniflux.api:markFeedAsRead(feed_id, config)
 end
 
 return Feeds

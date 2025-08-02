@@ -36,7 +36,7 @@ function Categories:getCategoryCount(config)
 end
 
 ---Get entries by category (NOT cached - preserves current behavior)
----@param category_id number Category ID
+---@param category_id number|string Category ID
 ---@param config? table Optional configuration
 ---@return MinifluxEntry[]|nil entries, Error|nil error
 function Categories:getEntriesByCategory(category_id, config)
@@ -58,51 +58,18 @@ function Categories:getEntriesByCategory(category_id, config)
 end
 
 ---Mark all entries in a category as read
--- TODO: ARCHITECTURAL DEBT - This method violates domain boundaries by handling queuing
--- The domain should only return Result|nil, Error|nil pattern from API calls.
--- Queue fallback logic belongs in features/offline/ or features/entries/mark_as_read_or_queue.lua
--- Current implementation mixes domain logic with offline/queue concerns.
--- See: https://github.com/your-repo/issues/XXX for proper offline architecture
----@param category_id number The category ID
----@return boolean success
-function Categories:markAsRead(category_id)
-    local _ = require('gettext')
-    local Notification = require('shared/widgets/notification')
-
-    -- Validate category ID
-    if not category_id or type(category_id) ~= 'number' or category_id <= 0 then
-        Notification:error(_('Invalid category ID'))
-        return false
+---@param category_id number|string The category ID
+---@param config? table Configuration including optional dialogs
+---@return table|nil result, Error|nil error
+function Categories:markCategoryAsRead(category_id, config)
+    -- Simple validation - accept string or number
+    if not category_id then
+        local Error = require('shared/error')
+        local _ = require('gettext')
+        return nil, Error.new(_('Category ID is required'))
     end
 
-    -- Call API with loading dialog
-    local _result, err = self.miniflux.api:markCategoryAsRead(category_id, {
-        dialogs = {
-            loading = { text = _('Marking category as read...') },
-        },
-    })
-
-    if err then
-        -- API failed - use queue fallback for offline mode
-        local CollectionsQueue = require('features/sync/utils/collections_queue')
-        local queue = CollectionsQueue:new('category')
-        queue:enqueue(category_id, 'mark_all_read')
-
-        Notification:info(_('Category marked as read (will sync when online)'))
-        return true -- Still successful from user perspective
-    else
-        -- API success - remove from queue since server is source of truth
-        local CollectionsQueue = require('features/sync/utils/collections_queue')
-        local queue = CollectionsQueue:new('category')
-        queue:remove(category_id)
-
-        -- Invalidate all caches IMMEDIATELY so counts update
-        local MinifluxEvent = require('shared/event')
-        MinifluxEvent:broadcastMinifluxInvalidateCache()
-
-        Notification:success(_('Category marked as read'))
-        return true
-    end
+    return self.miniflux.api:markCategoryAsRead(category_id, config)
 end
 
 return Categories
