@@ -743,21 +743,23 @@ function MinifluxBrowser:markSelectedAsRead(selected_items)
             entries = self.miniflux.entries,
         })
     elseif item_type == 'feed' then
+        local BrowserMarkAsReadService = require('features/browser/services/mark_as_read_service')
         -- TODO: Implement batch notifications - show loading, track success/failed feeds, show summary
         success = false
         for _, item in ipairs(selected_items) do
             local feed_id = item.feed_data.id
-            local result = self.miniflux.feeds:markAsRead(feed_id)
+            local result = BrowserMarkAsReadService.markFeedAsRead(feed_id, self.miniflux)
             if result then
                 success = true -- At least one succeeded, keep as true even if others fail
             end
         end
     elseif item_type == 'category' then
+        local BrowserMarkAsReadService = require('features/browser/services/mark_as_read_service')
         -- TODO: Implement batch notifications - show loading, track success/failed categories, show summary
         success = false
         for _, item in ipairs(selected_items) do
             local category_id = item.category_data.id
-            local result = self.miniflux.categories:markAsRead(category_id)
+            local result = BrowserMarkAsReadService.markCategoryAsRead(category_id, self.miniflux)
             if result then
                 success = true -- At least one succeeded, keep as true even if others fail
             end

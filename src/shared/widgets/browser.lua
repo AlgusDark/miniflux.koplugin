@@ -460,7 +460,7 @@ function Browser:navigate(nav_config)
     )
 end
 
----Close the browser (for compatibility with entry service)
+---Close the browser
 function Browser:close()
     logger.info('[Browser] Closing browser')
     UIManager:close(self)
@@ -687,12 +687,10 @@ function Browser:selectAllInCurrentView(do_select)
     self:updateItems(1, true)
 end
 
--- Legacy method for backward compatibility
 function Browser:selectAll()
     self:selectAllInCurrentView(true)
 end
 
--- Legacy method for backward compatibility
 function Browser:deselectAll()
     self:selectAllInCurrentView(false)
 end

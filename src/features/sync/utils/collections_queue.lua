@@ -119,7 +119,7 @@ function CollectionsQueue:save(queue)
 end
 
 ---Add a collection operation to the queue
----@param collection_id number Collection ID (feed_id or category_id)
+---@param collection_id number|string Collection ID (feed_id or category_id)
 ---@param operation string Operation type (e.g., "mark_all_read")
 ---@return boolean success
 function CollectionsQueue:enqueue(collection_id, operation)
@@ -132,7 +132,7 @@ function CollectionsQueue:enqueue(collection_id, operation)
 end
 
 ---Remove a collection from the queue
----@param collection_id number Collection ID to remove
+---@param collection_id number|string Collection ID to remove
 ---@return boolean success
 function CollectionsQueue:remove(collection_id)
     local queue = self:load()
@@ -166,24 +166,6 @@ function CollectionsQueue:count()
         count = count + 1
     end
     return count
-end
-
--- =============================================================================
--- STATIC INTERFACE COMPATIBILITY (for existing code patterns)
--- =============================================================================
-
--- Some existing code might use static methods. Provide compatibility layer.
-
----Create a feed queue instance
----@return CollectionsQueue
-function CollectionsQueue.createFeedQueue()
-    return CollectionsQueue:new('feed')
-end
-
----Create a category queue instance
----@return CollectionsQueue
-function CollectionsQueue.createCategoryQueue()
-    return CollectionsQueue:new('category')
 end
 
 return CollectionsQueue

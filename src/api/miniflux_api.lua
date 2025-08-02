@@ -221,7 +221,7 @@ function MinifluxAPI:getFeedCounters()
 end
 
 ---Get entries for a specific feed
----@param feed_id number The feed ID
+---@param feed_id number|string The feed ID
 ---@param options? ApiOptions Query options for filtering and sorting
 ---@param config? table Configuration including optional dialogs
 ---@return MinifluxEntriesResponse|nil result, Error|nil error
@@ -236,7 +236,7 @@ function MinifluxAPI:getFeedEntries(feed_id, options, config)
 end
 
 ---Mark all entries in a feed as read
----@param feed_id number The feed ID
+---@param feed_id number|string The feed ID
 ---@param config? table Configuration including optional dialogs
 ---@return table|nil result, Error|nil error
 function MinifluxAPI:markFeedAsRead(feed_id, config)
@@ -270,7 +270,7 @@ function MinifluxAPI:getCategories(include_counts, config)
 end
 
 ---Get entries for a specific category
----@param category_id number The category ID
+---@param category_id number|string The category ID
 ---@param options? ApiOptions Query options for filtering and sorting
 ---@param config? table Configuration including optional dialogs
 ---@return MinifluxEntriesResponse|nil result, Error|nil error
@@ -285,7 +285,7 @@ function MinifluxAPI:getCategoryEntries(category_id, options, config)
 end
 
 ---Mark all entries in a category as read
----@param category_id number The category ID
+---@param category_id number|string The category ID
 ---@param config? table Configuration including optional dialogs
 ---@return table|nil result, Error|nil error
 function MinifluxAPI:markCategoryAsRead(category_id, config)

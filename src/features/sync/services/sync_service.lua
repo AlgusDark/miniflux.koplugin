@@ -412,9 +412,11 @@ function SyncService:processQueue(queue_type)
         if opts and opts.operation == 'mark_all_read' and collection_id then
             local success = false
             if queue_type == 'feed' then
-                success = self.feeds:markAsRead(collection_id)
+                local _result, err = self.feeds:markFeedAsRead(collection_id)
+                success = not err
             elseif queue_type == 'category' then
-                success = self.categories:markAsRead(collection_id)
+                local _result, err = self.categories:markCategoryAsRead(collection_id)
+                success = not err
             end
             local err = not success
 
