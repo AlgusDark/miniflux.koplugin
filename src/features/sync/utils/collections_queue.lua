@@ -1,6 +1,6 @@
 local lfs = require('libs/libkoreader-lfs')
 local Files = require('shared/files')
-local EntryEntity = require('domains/entries/entry_entity')
+local EntryPaths = require('domains/utils/entry_paths')
 
 -- **Collections Queue** - Unified queue utility for feeds and categories
 --
@@ -36,7 +36,7 @@ end
 ---Get the path to the collection queue file
 ---@return string file_path
 function CollectionsQueue:getQueueFilePath()
-    local miniflux_dir = EntryEntity.getDownloadDir()
+    local miniflux_dir = EntryPaths.getDownloadDir()
     return miniflux_dir .. self.collection_type .. '_queue.lua'
 end
 

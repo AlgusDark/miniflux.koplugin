@@ -5,7 +5,8 @@ local _ = require('gettext')
 local T = require('ffi/util').template
 local logger = require('logger')
 
-local EntryEntity = require('domains/entries/entry_entity')
+local EntryPaths = require('domains/utils/entry_paths')
+local EntryMetadata = require('domains/utils/entry_metadata')
 local QueueService = require('features/sync/services/queue_service')
 local ReaderUI = require('apps/reader/readerui')
 
@@ -73,15 +74,15 @@ function SyncService:tryUpdateEntryStatus(entry_id, new_status)
         local doc_settings = nil
         if ReaderUI.instance and ReaderUI.instance.document then
             local current_file = ReaderUI.instance.document.file
-            if EntryEntity.isMinifluxEntry(current_file) then
-                local current_entry_id = EntryEntity.extractEntryIdFromPath(current_file)
+            if EntryPaths.isMinifluxEntry(current_file) then
+                local current_entry_id = EntryPaths.extractEntryIdFromPath(current_file)
                 if current_entry_id == entry_id then
                     doc_settings = ReaderUI.instance.doc_settings
                 end
             end
         end
 
-        EntryEntity.updateEntryStatus(
+        EntryMetadata.updateEntryStatus(
             entry_id,
             { new_status = new_status, doc_settings = doc_settings }
         )
@@ -116,8 +117,8 @@ function SyncService:tryBatchUpdateEntries(entry_ids, new_status)
 
         if ReaderUI.instance and ReaderUI.instance.document then
             local current_file = ReaderUI.instance.document.file
-            if EntryEntity.isMinifluxEntry(current_file) then
-                current_entry_id = EntryEntity.extractEntryIdFromPath(current_file)
+            if EntryPaths.isMinifluxEntry(current_file) then
+                current_entry_id = EntryPaths.extractEntryIdFromPath(current_file)
                 doc_settings = ReaderUI.instance.doc_settings
             end
         end
@@ -126,7 +127,7 @@ function SyncService:tryBatchUpdateEntries(entry_ids, new_status)
         for _, entry_id in ipairs(entry_ids) do
             -- Pass doc_settings only if this entry is currently open
             local entry_doc_settings = (entry_id == current_entry_id) and doc_settings or nil
-            EntryEntity.updateEntryStatus(
+            EntryMetadata.updateEntryStatus(
                 entry_id,
                 { new_status = new_status, doc_settings = entry_doc_settings }
             )

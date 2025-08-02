@@ -7,7 +7,10 @@ local T = require('ffi/util').template
 local logger = require('logger')
 
 -- Import consolidated dependencies
-local EntryEntity = require('domains/entries/entry_entity')
+local EntryPaths = require('domains/utils/entry_paths')
+local EntryValidation = require('domains/utils/entry_validation')
+local EntryMetadata = require('domains/utils/entry_metadata')
+local DownloadDialogs = require('features/browser/download/utils/download_dialogs')
 local Images = require('features/browser/download/utils/images')
 local Trapper = require('ui/trapper')
 local HtmlUtils = require('features/browser/download/utils/html_utils')
@@ -80,7 +83,7 @@ local function handleCancellation(user_wants_to_continue, context)
     This gives users granular control over workflow cancellation.
     --]]
     local dialog_phase = current_phase == PHASES.DOWNLOADING and 'during_images' or 'after_images'
-    local user_choice = EntryEntity.showCancellationDialog(dialog_phase)
+    local user_choice = DownloadDialogs.showCancellationDialog(dialog_phase)
 
     --[[
     USER CHOICE HANDLING:
@@ -363,7 +366,7 @@ function EntryWorkflow.execute(deps)
     local browser_context = deps.context
 
     -- Validate entry data with enhanced validation
-    local _valid, err = EntryEntity.validateForDownload(entry_data)
+    local _valid, err = EntryValidation.validateForDownload(entry_data)
     if err then
         Notification:error(err.message)
         return -- Fire-and-forget, no return values
@@ -398,8 +401,8 @@ function EntryWorkflow.execute(deps)
         Check if entry is already downloaded to avoid unnecessary work.
         This is common when users re-open the same entry.
         --]]
-        if EntryEntity.isEntryDownloaded(entry_data.id) then
-            local html_file = EntryEntity.getEntryHtmlPath(entry_data.id)
+        if EntryPaths.isEntryDownloaded(entry_data.id) then
+            local html_file = EntryPaths.getEntryHtmlPath(entry_data.id)
             -- Use EntryReader for clean entry opening
             local EntryReader = require('features/reader/services/open_entry')
             EntryReader.openEntry(html_file, {
@@ -419,8 +422,8 @@ function EntryWorkflow.execute(deps)
 
         -- Prepare download context inline
         local title = entry_data.title or _('Untitled Entry')
-        local entry_dir = EntryEntity.getEntryDirectory(entry_data.id)
-        local html_file = EntryEntity.getEntryHtmlPath(entry_data.id)
+        local entry_dir = EntryPaths.getEntryDirectory(entry_data.id)
+        local html_file = EntryPaths.getEntryHtmlPath(entry_data.id)
 
         -- Create entry directory (using Files utility for reusability)
         local _dir_created, dir_error = Files.createDirectory(entry_dir)
@@ -552,7 +555,7 @@ function EntryWorkflow.execute(deps)
         end
 
         -- Save metadata directly using EntryEntity (no abstraction needed per YAGNI)
-        local _metadata_result, metadata_error = EntryEntity.saveMetadata({
+        local _metadata_result, metadata_error = EntryMetadata.saveMetadata({
             entry_data = entry_data,
             images_mapping = images_mapping,
         })

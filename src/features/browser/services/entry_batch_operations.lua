@@ -1,6 +1,7 @@
 local _ = require('gettext')
 local Notification = require('shared/widgets/notification')
-local EntryEntity = require('domains/entries/entry_entity')
+local EntryPaths = require('domains/utils/entry_paths')
+local EntryMetadata = require('domains/utils/entry_metadata')
 local QueueService = require('features/sync/services/queue_service')
 
 -- **Entry Batch Operations Service** - Browser-specific batch operations for entries
@@ -51,8 +52,8 @@ local function batchChangeStatus(entry_ids, new_status, deps)
         local ReaderUI = require('apps/reader/readerui')
         if ReaderUI.instance and ReaderUI.instance.document then
             local current_file = ReaderUI.instance.document.file
-            if EntryEntity.isMinifluxEntry(current_file) then
-                current_entry_id = EntryEntity.extractEntryIdFromPath(current_file)
+            if EntryPaths.isMinifluxEntry(current_file) then
+                current_entry_id = EntryPaths.extractEntryIdFromPath(current_file)
                 doc_settings = ReaderUI.instance.doc_settings
             end
         end
@@ -61,7 +62,7 @@ local function batchChangeStatus(entry_ids, new_status, deps)
         for _, entry_id in ipairs(entry_ids) do
             -- Pass doc_settings only if this entry is currently open
             local entry_doc_settings = (entry_id == current_entry_id) and doc_settings or nil
-            EntryEntity.updateEntryStatus(entry_id, {
+            EntryMetadata.updateEntryStatus(entry_id, {
                 new_status = new_status,
                 doc_settings = entry_doc_settings,
             })
@@ -83,7 +84,7 @@ local function batchChangeStatus(entry_ids, new_status, deps)
         local original_status = (new_status == 'read') and 'unread' or 'read' -- Assume opposite
 
         for _, entry_id in ipairs(entry_ids) do
-            EntryEntity.updateEntryStatus(entry_id, { new_status = new_status })
+            EntryMetadata.updateEntryStatus(entry_id, { new_status = new_status })
             -- Queue each entry for later sync
             QueueService.enqueueStatusChange(entry_id, {
                 new_status = new_status,

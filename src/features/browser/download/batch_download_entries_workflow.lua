@@ -5,7 +5,10 @@ local _ = require('gettext')
 local T = require('ffi/util').template
 
 -- Import consolidated dependencies
-local EntryEntity = require('domains/entries/entry_entity')
+local EntryPaths = require('domains/utils/entry_paths')
+local EntryValidation = require('domains/utils/entry_validation')
+local EntryMetadata = require('domains/utils/entry_metadata')
+local DownloadDialogs = require('features/browser/download/utils/download_dialogs')
 local Images = require('features/browser/download/utils/images')
 local Trapper = require('ui/trapper')
 local HtmlUtils = require('features/browser/download/utils/html_utils')
@@ -74,7 +77,7 @@ function BatchDownloadEntriesWorkflow.execute(deps)
                 -- Handle batch cancellation with enhanced dialog
                 if not user_wants_to_continue then
                     local user_choice =
-                        EntryEntity.showBatchCancellationDialog('during_batch', batch_state)
+                        DownloadDialogs.showBatchCancellationDialog('during_batch', batch_state)
 
                     if user_choice == 'cancel_all_entries' then
                         local cancelled_message = T(
@@ -172,20 +175,20 @@ function BatchDownloadEntriesWorkflow.downloadSingleEntry(entry_data, opts)
     local batch_state = opts.batch_state
 
     -- Validate entry data
-    local _valid, err = EntryEntity.validateForDownload(entry_data)
+    local _valid, err = EntryValidation.validateForDownload(entry_data)
     if err then
         return false
     end
 
     -- Check if already downloaded
-    if EntryEntity.isEntryDownloaded(entry_data.id) then
+    if EntryPaths.isEntryDownloaded(entry_data.id) then
         return true -- Consider already downloaded as success
     end
 
     -- Prepare download context
     local title = entry_data.title or _('Untitled Entry')
-    local entry_dir = EntryEntity.getEntryDirectory(entry_data.id)
-    local html_file = EntryEntity.getEntryHtmlPath(entry_data.id)
+    local entry_dir = EntryPaths.getEntryDirectory(entry_data.id)
+    local html_file = EntryPaths.getEntryHtmlPath(entry_data.id)
 
     -- Create entry directory
     local _dir_created, dir_error = Files.createDirectory(entry_dir)
@@ -238,8 +241,10 @@ function BatchDownloadEntriesWorkflow.downloadSingleEntry(entry_data, opts)
                 local user_wants_to_continue = Trapper:info(image_progress)
                 if not user_wants_to_continue then
                     -- User cancelled during image download - show enhanced dialog
-                    local user_choice =
-                        EntryEntity.showBatchCancellationDialog('during_entry_images', batch_state)
+                    local user_choice = DownloadDialogs.showBatchCancellationDialog(
+                        'during_entry_images',
+                        batch_state
+                    )
 
                     if user_choice == 'cancel_current_entry' then
                         return false -- Skip this entire entry
@@ -320,7 +325,7 @@ function BatchDownloadEntriesWorkflow.downloadSingleEntry(entry_data, opts)
     end
 
     -- Save metadata (respect batch state for images)
-    local _metadata_result, metadata_error = EntryEntity.saveMetadata({
+    local _metadata_result, metadata_error = EntryMetadata.saveMetadata({
         entry_data = entry_data,
         images_count = success_count,
         include_images = effective_include_images,
