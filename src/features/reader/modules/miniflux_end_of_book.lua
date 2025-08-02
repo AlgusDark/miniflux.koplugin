@@ -17,7 +17,9 @@ local Device = require('device')
 local util = require('util')
 local _ = require('gettext')
 
-local EntryEntity = require('domains/entries/entry_entity')
+local EntryPaths = require('domains/utils/entry_paths')
+local EntryValidation = require('domains/utils/entry_validation')
+local EntryMetadata = require('domains/utils/entry_metadata')
 
 ---@class MinifluxEndOfBook : EventListener
 ---@field miniflux Miniflux The main Miniflux plugin instance
@@ -106,7 +108,7 @@ function MinifluxEndOfBook:showDialog(entry_info)
         entry_status = metadata.status
     else
         -- Fallback to SDR if doc_settings not available
-        local sdr_metadata = EntryEntity.loadMetadata(entry_info.entry_id)
+        local sdr_metadata = EntryMetadata.loadMetadata(entry_info.entry_id)
         entry_status = sdr_metadata and sdr_metadata.status or 'unread'
     end
 
@@ -117,9 +119,9 @@ function MinifluxEndOfBook:showDialog(entry_info)
     end
 
     -- Use utility functions for button text and callback
-    local mark_button_text = EntryEntity.getStatusButtonText(entry_status)
+    local mark_button_text = EntryValidation.getStatusButtonText(entry_status)
     local mark_callback
-    if EntryEntity.isEntryRead(entry_status) then
+    if EntryValidation.isEntryRead(entry_status) then
         mark_callback = function()
             self.miniflux.reader_entry_service:changeEntryStatus(
                 entry_info.entry_id,
@@ -163,12 +165,12 @@ function MinifluxEndOfBook:showDialog(entry_info)
                 callback = function()
                     UIManager:close(dialog)
                     -- Inline deletion with validation
-                    if not EntryEntity.isValidId(entry_info.entry_id) then
+                    if not EntryValidation.isValidId(entry_info.entry_id) then
                         Notification:warning(_('Cannot delete: invalid entry ID'))
                         return
                     end
 
-                    local success = EntryEntity.deleteLocalEntry(entry_info.entry_id)
+                    local success = EntryPaths.deleteLocalEntry(entry_info.entry_id)
                     if success then
                         local ReaderUI = require('apps/reader/readerui')
                         if ReaderUI.instance then
@@ -190,7 +192,7 @@ function MinifluxEndOfBook:showDialog(entry_info)
                 text = _('⌂ Miniflux folder'),
                 callback = function()
                     UIManager:close(dialog)
-                    EntryEntity.openMinifluxFolder()
+                    EntryPaths.openMinifluxFolder()
                 end,
             },
             {

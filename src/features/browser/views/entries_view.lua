@@ -7,7 +7,7 @@ Handles data fetching, menu building, and UI rendering.
 @module miniflux.browser.views.entries_view
 --]]
 
-local EntryEntity = require('domains/entries/entry_entity')
+local EntryPaths = require('domains/utils/entry_paths')
 local _ = require('gettext')
 
 local EntriesView = {}
@@ -124,7 +124,7 @@ function EntriesView.buildSingleItem(entry, config)
 
     -- Check both read status and local download status
     local is_read = entry.status == 'read'
-    local is_downloaded = EntryEntity.isEntryDownloaded(entry.id)
+    local is_downloaded = EntryPaths.isEntryDownloaded(entry.id)
 
     -- Create 2x2 indicator matrix: read/unread × downloaded/not downloaded
     local status_indicator

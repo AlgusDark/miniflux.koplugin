@@ -5,6 +5,9 @@ local logger = require('logger')
 
 -- Import dependencies
 local Error = require('shared/error')
+local EntryPaths = require('domains/utils/entry_paths')
+local EntryCollections = require('domains/utils/entry_collections')
+local EntryMetadata = require('domains/utils/entry_metadata')
 
 -- Constants
 local DIRECTION_PREVIOUS = 'previous'
@@ -198,8 +201,8 @@ function Navigation.handleLocalNavigation(options)
     local direction = options.direction
 
     -- Get ordered entries for local navigation (minimal metadata for memory efficiency)
-    local EntryEntity = require('domains/entries/entry_entity')
-    local nav_entries = EntryEntity.getLocalEntriesForNavigation({ settings = miniflux.settings })
+    local nav_entries =
+        EntryCollections.getLocalEntriesForNavigation({ settings = miniflux.settings })
 
     -- Create enhanced context with ordered entries (same pattern as browser)
     local enhanced_context = {
@@ -215,7 +218,7 @@ function Navigation.handleLocalNavigation(options)
 
     if target_entry_id then
         -- Get the full entry data for the target entry
-        local target_entry_data = EntryEntity.loadMetadata(target_entry_id)
+        local target_entry_data = EntryMetadata.loadMetadata(target_entry_id)
 
         if target_entry_data then
             -- Open the local entry using the same method as browser
@@ -245,8 +248,7 @@ end
 ---@param entry_info table Entry information
 ---@return {metadata: EntryMetadata, published_unix: number}|nil result, Error|nil error
 function Navigation.loadEntryMetadata(entry_info)
-    local EntryEntity = require('domains/entries/entry_entity')
-    local metadata = EntryEntity.loadMetadata(entry_info.entry_id)
+    local metadata = EntryMetadata.loadMetadata(entry_info.entry_id)
     if not metadata or not metadata.published_at then
         return nil, Error.new(_('Cannot navigate: missing timestamp information'))
     end
@@ -393,8 +395,7 @@ end
 ---@param direction string Navigation direction ("previous" or "next')
 ---@return number|nil target_entry_id Adjacent entry ID, or nil if not found
 function Navigation.findAdjacentEntryId(current_entry_id, direction)
-    local EntryEntity = require('domains/entries/entry_entity')
-    local miniflux_dir = EntryEntity.getDownloadDir()
+    local miniflux_dir = EntryPaths.getDownloadDir()
 
     if lfs.attributes(miniflux_dir, 'mode') ~= 'directory' then
         return nil

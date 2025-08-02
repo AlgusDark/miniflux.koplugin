@@ -10,7 +10,8 @@ local MainView = require('features/browser/views/main_view')
 local FeedsView = require('features/browser/views/feeds_view')
 local CategoriesView = require('features/browser/views/categories_view')
 local EntriesView = require('features/browser/views/entries_view')
-local EntryEntity = require('domains/entries/entry_entity')
+local EntryPaths = require('domains/utils/entry_paths')
+local EntryCollections = require('domains/utils/entry_collections')
 
 -- **Miniflux Browser** - RSS Browser for Miniflux
 --
@@ -392,7 +393,7 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
 
             -- Get lightweight navigation entries (5x less memory than full metadata)
             local nav_entries =
-                EntryEntity.getLocalEntriesForNavigation({ settings = self.settings })
+                EntryCollections.getLocalEntriesForNavigation({ settings = self.settings })
 
             return LocalEntriesView.show({
                 settings = self.settings,
@@ -448,7 +449,7 @@ function MinifluxBrowser:analyzeSelection(selected_items)
     for _, item in ipairs(selected_items) do
         local entry_data = item.entry_data
         if entry_data then
-            local html_file = EntryEntity.getEntryHtmlPath(entry_data.id)
+            local html_file = EntryPaths.getEntryHtmlPath(entry_data.id)
             if lfs.attributes(html_file, 'mode') == 'file' then
                 has_local = true
             else
@@ -812,7 +813,7 @@ function MinifluxBrowser:deleteSelectedEntries(selected_items)
         local entry_data = item.entry_data
         if entry_data then
             -- Check if entry is locally downloaded by verifying HTML file exists
-            local html_file = EntryEntity.getEntryHtmlPath(entry_data.id)
+            local html_file = EntryPaths.getEntryHtmlPath(entry_data.id)
             local lfs = require('libs/libkoreader-lfs')
             if lfs.attributes(html_file, 'mode') == 'file' then
                 table.insert(local_entries, entry_data)
@@ -865,7 +866,7 @@ function MinifluxBrowser:performBatchDelete(local_entries)
 
     -- Delete each entry
     for _, entry_data in ipairs(local_entries) do
-        local success = EntryEntity.deleteLocalEntry(entry_data.id)
+        local success = EntryPaths.deleteLocalEntry(entry_data.id)
         if success then
             success_count = success_count + 1
         end
