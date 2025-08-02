@@ -117,13 +117,13 @@ end
 ---@return table|nil entry_metadata Complete entry metadata or nil if not found
 function MinifluxBrowser.getCachedEntryOrLoad(entry_id)
     local cached = MinifluxBrowser.getEntryInfoCache(entry_id)
-    if cached then
+    if cached and cached.id then -- Validate cache has required id field
         return cached
     end
 
     local EntryMetadata = require('domains/utils/entry_metadata')
     local metadata = EntryMetadata.loadMetadata(entry_id)
-    if metadata then
+    if metadata and metadata.id then -- Validate metadata has required id field
         MinifluxBrowser.setEntryInfoCache(entry_id, {
             id = entry_id,
             status = metadata.status,
@@ -428,17 +428,20 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         local_entries = function()
             local LocalEntriesView = require('features/browser/views/local_entries_view')
 
-            local nav_entries =
-                EntryCollections.getLocalEntriesForNavigation({ settings = self.settings })
-
             return LocalEntriesView.show({
                 settings = self.settings,
                 page_state = nav_config.page_state,
                 onSelectItem = function(entry_data)
-                    -- Create local navigation context with pre-sorted entries
+                    -- Create optimized local navigation context with function-based navigation
                     local local_context = {
                         type = 'local',
-                        ordered_entries = nav_entries,
+                        getAdjacentEntry = function(current_entry_id, direction)
+                            return EntryCollections.getAdjacentLocalEntry(
+                                current_entry_id,
+                                direction,
+                                self.settings
+                            )
+                        end,
                     }
                     self:openItem(entry_data, local_context)
                 end,
@@ -458,6 +461,11 @@ function MinifluxBrowser:getItemId(item_data)
     -- Check for entry data (most common case for selection)
     if item_data.entry_data and item_data.entry_data.id then
         return item_data.entry_data.id
+    end
+
+    -- Debug logging for troubleshooting nil entry_data.id
+    if item_data.entry_data and not item_data.entry_data.id then
+        logger.warn('[Miniflux:Browser] Entry data missing ID field:', item_data.entry_data)
     end
 
     -- Check for feed data
