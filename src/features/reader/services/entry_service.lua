@@ -4,7 +4,9 @@ local NetworkMgr = require('ui/network/manager')
 local _ = require('gettext')
 local logger = require('logger')
 
-local EntryEntity = require('domains/entries/entry_entity')
+local EntryPaths = require('domains/utils/entry_paths')
+local EntryValidation = require('domains/utils/entry_validation')
+local EntryMetadata = require('domains/utils/entry_metadata')
 local QueueService = require('features/sync/services/queue_service')
 
 -- TODO: Maybe the subprocesses should be tracked in main Miniflux instance?
@@ -37,7 +39,7 @@ function ReaderEntryService:onDocSettingsLoad(doc_settings, document)
     end
 
     -- Check if current document is a miniflux HTML file
-    if not EntryEntity.isMinifluxEntry(file_path) then
+    if not EntryPaths.isMinifluxEntry(file_path) then
         return
     end
 
@@ -47,7 +49,7 @@ function ReaderEntryService:onDocSettingsLoad(doc_settings, document)
     end
 
     -- Extract entry ID from path
-    local entry_id = EntryEntity.extractEntryIdFromPath(file_path)
+    local entry_id = EntryPaths.extractEntryIdFromPath(file_path)
     if not entry_id then
         return
     end
@@ -96,7 +98,7 @@ function ReaderEntryService:changeEntryStatus(entry_id, new_status, doc_settings
     local T = require('ffi/util').template
     local Notification = require('shared/widgets/notification')
 
-    if not EntryEntity.isValidId(entry_id) then
+    if not EntryValidation.isValidId(entry_id) then
         Notification:error(_('Cannot change status: invalid entry ID'))
         return false
     end
@@ -126,7 +128,7 @@ function ReaderEntryService:changeEntryStatus(entry_id, new_status, doc_settings
     if err then
         -- API failed - use queue fallback for offline mode
         -- Perform optimistic local update for immediate UX
-        EntryEntity.updateEntryStatus(
+        EntryMetadata.updateEntryStatus(
             entry_id,
             { new_status = new_status, doc_settings = doc_settings }
         )
@@ -146,7 +148,7 @@ function ReaderEntryService:changeEntryStatus(entry_id, new_status, doc_settings
         return true -- Still successful from user perspective
     else
         -- API success - update local metadata using provided DocSettings if available
-        EntryEntity.updateEntryStatus(
+        EntryMetadata.updateEntryStatus(
             entry_id,
             { new_status = new_status, doc_settings = doc_settings }
         )

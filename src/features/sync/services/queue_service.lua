@@ -1,7 +1,8 @@
 local logger = require('logger')
 local lfs = require('libs/libkoreader-lfs')
 
-local EntryEntity = require('domains/entries/entry_entity')
+local EntryPaths = require('domains/utils/entry_paths')
+local EntryValidation = require('domains/utils/entry_validation')
 local Files = require('shared/files')
 
 ---@class QueueService
@@ -16,7 +17,7 @@ local QueueService = {}
 ---@return string Queue file path
 function QueueService.getEntryStatusQueueFilePath()
     -- Use the same directory as entries for consistency
-    local miniflux_dir = EntryEntity.getDownloadDir()
+    local miniflux_dir = EntryPaths.getDownloadDir()
     return miniflux_dir .. 'status_queue.lua'
 end
 
@@ -80,7 +81,7 @@ end
 ---@param opts table Options {new_status: string, original_status: string}
 ---@return boolean success
 function QueueService.enqueueStatusChange(entry_id, opts)
-    if not EntryEntity.isValidId(entry_id) then
+    if not EntryValidation.isValidId(entry_id) then
         return false
     end
 
@@ -115,7 +116,7 @@ end
 ---@param entry_id number Entry ID to remove
 ---@return boolean success
 function QueueService.removeFromEntryStatusQueue(entry_id)
-    if not EntryEntity.isValidId(entry_id) then
+    if not EntryValidation.isValidId(entry_id) then
         return false
     end
 

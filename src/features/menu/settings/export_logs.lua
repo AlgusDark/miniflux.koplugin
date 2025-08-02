@@ -5,6 +5,8 @@ local Device = require('device')
 local _ = require('gettext')
 local logger = require('logger')
 
+local EntryPaths = require('domains/utils/entry_paths')
+
 local ExportLogs = {}
 
 ---Get current runtime logs if available (Android only)
@@ -75,8 +77,7 @@ Note: crash.log is only created after a crash.]])
     end
 
     -- Create export file
-    local EntryEntity = require('domains/entries/entry_entity')
-    local export_path = EntryEntity.getDownloadDir()
+    local export_path = EntryPaths.getDownloadDir()
         .. '/miniflux-logs-'
         .. os.date('%Y%m%d-%H%M%S')
         .. '.log'
@@ -178,8 +179,7 @@ This will:
                             cancel_callback = function()
                                 -- Open the folder containing the log file
                                 local FileManager = require('apps/filemanager/filemanager')
-                                local EntryEntity = require('domains/entries/entry_entity')
-                                FileManager:showFiles(EntryEntity.getDownloadDir())
+                                FileManager:showFiles(EntryPaths.getDownloadDir())
                             end,
                         }))
                     else

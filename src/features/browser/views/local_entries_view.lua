@@ -8,7 +8,7 @@ Shows downloaded entries without network dependency.
 --]]
 
 local ViewUtils = require('features/browser/views/view_utils')
-local EntryEntity = require('domains/entries/entry_entity')
+local EntryCollections = require('domains/utils/entry_collections')
 local EntriesView = require('features/browser/views/entries_view')
 local _ = require('gettext')
 
@@ -21,7 +21,7 @@ local LocalEntriesView = {}
 ---@return table|nil View data for browser rendering, or nil on error
 function LocalEntriesView.show(config)
     -- Get local entries with user settings for proper ordering
-    local entries = EntryEntity.getLocalEntries({ settings = config.settings })
+    local entries = EntryCollections.getLocalEntries({ settings = config.settings })
 
     -- Generate menu items using existing EntriesView logic
     -- Note: Local entries ignore hide_read_entries setting for simplicity

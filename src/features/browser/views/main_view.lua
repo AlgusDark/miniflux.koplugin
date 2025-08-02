@@ -9,7 +9,7 @@ Handles data fetching, menu building, and UI rendering.
 
 local _ = require('gettext')
 local ViewUtils = require('features/browser/views/view_utils')
-local EntryEntity = require('domains/entries/entry_entity')
+local EntryCollections = require('domains/utils/entry_collections')
 
 local MainView = {}
 
@@ -24,7 +24,7 @@ function MainView.show(config)
     local is_online = NetworkMgr:isOnline()
 
     -- Always get local entries count
-    local local_entries = EntryEntity.getLocalEntries()
+    local local_entries = EntryCollections.getLocalEntries()
     local local_count = #local_entries
 
     local counts = nil
