@@ -729,7 +729,7 @@ end
 ---@param entries table[] Array of entry metadata to sort (mutated in-place)
 ---@param opts {order?: string, direction?: string}|nil Sort options with defaults
 ---@return table[] The same array reference, now sorted (for chaining convenience)
-local function sortEntries(entries, opts)
+function EntryEntity.sortEntries(entries, opts)
     if not entries or #entries == 0 then
         return entries
     end
@@ -764,8 +764,5 @@ local function sortEntries(entries, opts)
 
     return entries -- Return same array reference for chaining
 end
-
--- Make sortEntries available as module function
-EntryEntity.sortEntries = sortEntries
 
 return EntryEntity
