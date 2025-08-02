@@ -20,7 +20,7 @@ local EntryMetadata = {}
 
 ---Save metadata for an entry using DocSettings
 ---@param params table Parameters: entry_data, images_mapping
----@return string|nil result, Error|nil error
+---@return nil, Error|nil error
 function EntryMetadata.saveMetadata(params)
     local entry_data = params.entry_data
     if not entry_data or not entry_data.id then
@@ -62,17 +62,20 @@ function EntryMetadata.saveMetadata(params)
     end
 
     doc_settings:saveSetting('miniflux_entry', entry_metadata)
-
-    -- Return original pattern: flush result (string|nil) and error
-    local flush_result = doc_settings:flush()
+    doc_settings:flush()
 
     local MinifluxBrowser = require('features/browser/miniflux_browser')
     MinifluxBrowser.setEntryInfoCache(entry_data.id, {
+        id = entry_data.id,
         status = entry_data.status,
         title = entry_data.title,
+        published_at = entry_data.published_at,
+        url = entry_data.url,
+        feed = entry_metadata.feed,
+        category = entry_metadata.category,
     })
 
-    return flush_result, nil
+    return nil, nil
 end
 
 ---@class EntryStatusOptions
@@ -82,32 +85,24 @@ end
 ---Update local entry status using DocSettings
 ---@param entry_id number Entry ID
 ---@param opts EntryStatusOptions Options for status update
----@return boolean success True if status update succeeded
 function EntryMetadata.updateEntryStatus(entry_id, opts)
     local new_status = opts.new_status
     local doc_settings = opts.doc_settings
-    local success = true
     local timestamp = os.date('%Y-%m-%d %H:%M:%S', os.time())
 
     logger.dbg('[Miniflux:EntryMetadata] Updating entry', entry_id, 'status to', new_status)
 
-    local sdr_result, sdr_err = EntryMetadata.updateMetadata(entry_id, {
+    local _sdr, sdr_err = EntryMetadata.updateMetadata(entry_id, {
         status = new_status,
     })
 
-    local MinifluxBrowser = require('features/browser/miniflux_browser')
-    MinifluxBrowser.setEntryInfoCache(entry_id, {
-        status = new_status,
-    })
-
-    if not sdr_result or sdr_err then
-        logger.err(
-            '[Miniflux:EntryMetadata] Failed to update SDR metadata for entry',
+    if sdr_err then
+        logger.warn(
+            '[Miniflux:EntryMetadata] File metadata update failed for entry',
             entry_id,
-            ':',
-            sdr_err
+            '- continuing with other updates:',
+            sdr_err.message or sdr_err
         )
-        success = false
     end
 
     -- Also update ReaderUI DocSettings if available (for immediate UI consistency)
@@ -118,10 +113,6 @@ function EntryMetadata.updateEntryStatus(entry_id, opts)
             ui_entry_metadata.last_updated = timestamp
             doc_settings:saveSetting('miniflux_entry', ui_entry_metadata)
             logger.dbg('[Miniflux:EntryMetadata] Updated ReaderUI DocSettings for entry', entry_id)
-
-            MinifluxBrowser.setEntryInfoCache(entry_id, {
-                status = new_status,
-            })
         else
             logger.warn(
                 '[Miniflux:EntryMetadata] No miniflux_entry in ReaderUI DocSettings for entry',
@@ -129,8 +120,6 @@ function EntryMetadata.updateEntryStatus(entry_id, opts)
             )
         end
     end
-
-    return success
 end
 
 ---Load metadata for an entry using DocSettings
@@ -166,7 +155,7 @@ end
 ---Update metadata for an entry with flexible field updates
 ---@param entry_id number Entry ID
 ---@param updates table Key-value pairs of nested fields to update
----@return DocSettings|nil doc_settings, Error|nil error
+---@return nil, Error|nil error
 function EntryMetadata.updateMetadata(entry_id, updates)
     if not EntryValidation.isValidId(entry_id) then
         return nil, Error.new('Invalid entry ID')
@@ -197,16 +186,17 @@ function EntryMetadata.updateMetadata(entry_id, updates)
 
     local MinifluxBrowser = require('features/browser/miniflux_browser')
     MinifluxBrowser.setEntryInfoCache(entry_id, {
+        id = entry_id,
         status = entry_metadata.status,
         title = entry_metadata.title,
+        published_at = entry_metadata.published_at,
+        url = entry_metadata.url,
+        feed = entry_metadata.feed,
+        category = entry_metadata.category,
     })
 
-    local flush_result = doc_settings:flush()
-    if flush_result then
-        return doc_settings, nil
-    else
-        return nil, Error.new('Failed to flush DocSettings')
-    end
+    doc_settings:flush()
+    return nil, nil
 end
 
 return EntryMetadata

@@ -68,8 +68,13 @@ function MinifluxBrowser:populateEntriesCache()
                         local entry_metadata = doc_settings:readSetting('miniflux_entry') or {}
 
                         MinifluxBrowser.setEntryInfoCache(entry_id, {
+                            id = entry_id,
                             status = entry_metadata.status,
                             title = entry_metadata.title,
+                            published_at = entry_metadata.published_at,
+                            url = entry_metadata.url,
+                            feed = entry_metadata.feed,
+                            category = entry_metadata.category,
                         })
                     end
                 end
@@ -79,12 +84,17 @@ function MinifluxBrowser:populateEntriesCache()
 end
 
 ---@param entry_id number Entry ID
----@param entry_metadata {status: string, title: string} Entry metadata
+---@param entry_metadata {status: string, title: string, published_at?: string, url?: string, feed?: table, category?: table} Entry metadata
 function MinifluxBrowser.setEntryInfoCache(entry_id, entry_metadata)
     logger.dbg('[Miniflux:BrowserEntriesInfoCache] Setting entry info cache for entry:', entry_id)
     MinifluxBrowser.entries_info_cache[entry_id] = {
+        id = entry_id,
         status = entry_metadata.status,
         title = entry_metadata.title,
+        published_at = entry_metadata.published_at,
+        url = entry_metadata.url,
+        feed = entry_metadata.feed,
+        category = entry_metadata.category,
     }
 end
 
@@ -100,6 +110,33 @@ end
 function MinifluxBrowser.deleteEntryInfoCache(entry_id)
     logger.dbg('[Miniflux:BrowserEntriesInfoCache] Deleting entry info cache for entry:', entry_id)
     MinifluxBrowser.entries_info_cache[entry_id] = nil
+end
+
+---Get cached entry metadata or load from DocSettings as fallback
+---@param entry_id number Entry ID
+---@return table|nil entry_metadata Complete entry metadata or nil if not found
+function MinifluxBrowser.getCachedEntryOrLoad(entry_id)
+    local cached = MinifluxBrowser.getEntryInfoCache(entry_id)
+    if cached then
+        return cached
+    end
+
+    local EntryMetadata = require('domains/utils/entry_metadata')
+    local metadata = EntryMetadata.loadMetadata(entry_id)
+    if metadata then
+        MinifluxBrowser.setEntryInfoCache(entry_id, {
+            id = entry_id,
+            status = metadata.status,
+            title = metadata.title,
+            published_at = metadata.published_at,
+            url = metadata.url,
+            feed = metadata.feed,
+            category = metadata.category,
+        })
+        return metadata
+    end
+
+    return nil
 end
 
 -- =============================================================================
@@ -391,7 +428,6 @@ function MinifluxBrowser:getRouteHandlers(nav_config)
         local_entries = function()
             local LocalEntriesView = require('features/browser/views/local_entries_view')
 
-            -- Get lightweight navigation entries (5x less memory than full metadata)
             local nav_entries =
                 EntryCollections.getLocalEntriesForNavigation({ settings = self.settings })
 
@@ -444,13 +480,22 @@ end
 ---@return {has_local: boolean, has_remote: boolean} Analysis results
 function MinifluxBrowser:analyzeSelection(selected_items)
     local has_local, has_remote = false, false
-    local lfs = require('libs/libkoreader-lfs')
 
     for _, item in ipairs(selected_items) do
         local entry_data = item.entry_data
         if entry_data then
-            local html_file = EntryPaths.getEntryHtmlPath(entry_data.id)
-            if lfs.attributes(html_file, 'mode') == 'file' then
+            -- Try cache first for download status
+            local cached_entry = MinifluxBrowser.getEntryInfoCache(entry_data.id)
+            local is_downloaded = cached_entry ~= nil
+
+            -- Fallback to filesystem check if cache miss
+            if not cached_entry then
+                local lfs = require('libs/libkoreader-lfs')
+                local html_file = EntryPaths.getEntryHtmlPath(entry_data.id)
+                is_downloaded = lfs.attributes(html_file, 'mode') == 'file'
+            end
+
+            if is_downloaded then
                 has_local = true
             else
                 has_remote = true
