@@ -200,7 +200,6 @@ function Navigation.handleLocalNavigation(options)
     local miniflux = options.miniflux
     local direction = options.direction
 
-    -- Get ordered entries for local navigation (minimal metadata for memory efficiency)
     local nav_entries =
         EntryCollections.getLocalEntriesForNavigation({ settings = miniflux.settings })
 
