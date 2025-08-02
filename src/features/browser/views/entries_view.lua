@@ -124,7 +124,14 @@ function EntriesView.buildSingleItem(entry, config)
 
     -- Check both read status and local download status
     local is_read = entry.status == 'read'
-    local is_downloaded = EntryPaths.isEntryDownloaded(entry.id)
+
+    -- Try cache first for download status, fallback to filesystem check
+    local MinifluxBrowser = require('features/browser/miniflux_browser')
+    local cached_entry = MinifluxBrowser.getEntryInfoCache(entry.id)
+    local is_downloaded = cached_entry ~= nil
+    if not cached_entry then
+        is_downloaded = EntryPaths.isEntryDownloaded(entry.id)
+    end
 
     -- Create 2x2 indicator matrix: read/unread × downloaded/not downloaded
     local status_indicator
