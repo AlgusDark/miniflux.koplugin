@@ -110,6 +110,7 @@ function Navigation.navigateToEntry(entry_info, miniflux, navigation_options)
             entry_info = entry_info,
             miniflux = miniflux,
             direction = direction,
+            context = context,
         })
         return
     end
@@ -193,31 +194,36 @@ function Navigation.handleApiNavigation(options)
 end
 
 ---Handle local navigation (skip API entirely)
----@param options {entry_info: table, miniflux: table, direction: string}
+---@param options {entry_info: table, miniflux: table, direction: string, context: table}
 ---@return nil
 function Navigation.handleLocalNavigation(options)
     local entry_info = options.entry_info
     local miniflux = options.miniflux
     local direction = options.direction
+    local context = options.context
 
-    local nav_entries =
-        EntryCollections.getLocalEntriesForNavigation({ settings = miniflux.settings })
+    local target_entry_id = nil
 
-    -- Create enhanced context with ordered entries (same pattern as browser)
-    local enhanced_context = {
-        type = 'local',
-        ordered_entries = nav_entries,
-    }
+    -- Check if we have the new optimized function-based context
+    if context.getAdjacentEntry then
+        -- Use cache-optimized navigation function
+        target_entry_id = context.getAdjacentEntry(entry_info.entry_id, direction)
+    else
+        -- Fallback to legacy ordered_entries approach (for compatibility)
+        local nav_entries = context.ordered_entries
+            or EntryCollections.getLocalEntriesForNavigation({ settings = miniflux.settings })
 
-    local target_entry_id = Navigation.navigateLocalEntries({
-        current_entry_id = entry_info.entry_id,
-        direction = direction,
-        ordered_entries = nav_entries,
-    })
+        target_entry_id = Navigation.navigateLocalEntries({
+            current_entry_id = entry_info.entry_id,
+            direction = direction,
+            ordered_entries = nav_entries,
+        })
+    end
 
     if target_entry_id then
-        -- Get the full entry data for the target entry
-        local target_entry_data = EntryMetadata.loadMetadata(target_entry_id)
+        -- Get the full entry data for the target entry (use cache-optimized helper)
+        local MinifluxBrowser = require('features/browser/miniflux_browser')
+        local target_entry_data = MinifluxBrowser.getCachedEntryOrLoad(target_entry_id)
 
         if target_entry_data then
             -- Open the local entry using the same method as browser
@@ -225,7 +231,7 @@ function Navigation.handleLocalNavigation(options)
             EntryWorkflow.execute({
                 entry_data = target_entry_data,
                 settings = miniflux.settings,
-                context = enhanced_context,
+                context = context,
             })
         else
             logger.err(
@@ -333,7 +339,16 @@ function Navigation.tryLocalFileFirst(opts)
         local entry_dir = miniflux_dir .. '/miniflux/' .. entry_id .. '/'
         local html_file = entry_dir .. 'entry.html'
 
-        if lfs.attributes(html_file, 'mode') == 'file' then
+        -- Try cache first for download status, fallback to filesystem check
+        local MinifluxBrowser = require('features/browser/miniflux_browser')
+        local is_downloaded = MinifluxBrowser.getEntryInfoCache(entry_data.id) ~= nil
+
+        -- Fallback to filesystem check if cache miss
+        if not is_downloaded then
+            is_downloaded = lfs.attributes(html_file, 'mode') == 'file'
+        end
+
+        if is_downloaded then
             local EntryReader = require('features/reader/services/open_entry')
             EntryReader.openEntry(html_file, { context = context })
             return true
