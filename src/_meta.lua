@@ -4,6 +4,6 @@ return {
     name = 'miniflux',
     fullname = _('Miniflux'),
     description = _([[Read RSS entries from your Miniflux server.]]),
-    version = '0.0.6',
+    version = '0.0.7',
     author = 'Algus Dark',
 }
