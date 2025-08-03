@@ -6,7 +6,6 @@ local logger = require('logger')
 -- Import dependencies
 local Error = require('shared/error')
 local EntryPaths = require('domains/utils/entry_paths')
-local EntryCollections = require('domains/utils/entry_collections')
 local EntryMetadata = require('domains/utils/entry_metadata')
 
 -- Constants
@@ -85,16 +84,42 @@ function Navigation.navigateToEntry(entry_info, miniflux, navigation_options)
         return
     end
 
-    -- Load metadata
-    local metadata_result, metadata_err = Navigation.loadEntryMetadata(entry_info)
-    if metadata_err then
-        Notification:warning(metadata_err.message)
+    -- Try cache first for performance (no I/O)
+    local MinifluxBrowser = require('features/browser/miniflux_browser')
+    local cache_entry = MinifluxBrowser.getEntryInfoCache(entry_info.entry_id)
+    local metadata, published_unix
+
+    if cache_entry and cache_entry.published_at then
+        -- Fast path: use cache data
+        local time_err
+        published_unix, time_err = iso8601_to_unix(cache_entry.published_at)
+        if not time_err and published_unix then
+            metadata = cache_entry
+            logger.dbg('[Miniflux:NavigationService] Using cache for navigation metadata')
+        end
+    end
+
+    if not metadata then
+        -- Slow path: fallback to DocSettings (for safety during transition)
+        logger.warn(
+            '[Miniflux:NavigationService] Cache miss, falling back to DocSettings for entry:',
+            entry_info.entry_id
+        )
+        local metadata_result, metadata_err = Navigation.loadEntryMetadata(entry_info)
+        if metadata_err then
+            Notification:warning(metadata_err.message)
+            return
+        end
+        ---@cast metadata_result -nil
+        metadata = metadata_result.metadata
+        published_unix = metadata_result.published_unix
+    end
+
+    -- Validate that we have both metadata and timestamp
+    if not metadata or not published_unix then
+        Notification:warning(_('Cannot navigate: missing entry information'))
         return
     end
-    ---@cast metadata_result -nil
-
-    local metadata = metadata_result.metadata
-    local published_unix = metadata_result.published_unix
 
     -- Get navigation context from browser context
     local context = miniflux:getBrowserContext()
@@ -202,26 +227,10 @@ function Navigation.handleLocalNavigation(options)
     local direction = options.direction
     local context = options.context
 
-    local target_entry_id = nil
-
-    -- Check if we have the new optimized function-based context
-    if context.getAdjacentEntry then
-        -- Use cache-optimized navigation function
-        target_entry_id = context.getAdjacentEntry(entry_info.entry_id, direction)
-    else
-        -- Fallback to legacy ordered_entries approach (for compatibility)
-        local nav_entries = context.ordered_entries
-            or EntryCollections.getLocalEntriesForNavigation({ settings = miniflux.settings })
-
-        target_entry_id = Navigation.navigateLocalEntries({
-            current_entry_id = entry_info.entry_id,
-            direction = direction,
-            ordered_entries = nav_entries,
-        })
-    end
+    local target_entry_id = context.getAdjacentEntry(entry_info.entry_id, direction)
 
     if target_entry_id then
-        -- Get the full entry data for the target entry (use cache-optimized helper)
+        -- Get the full entry data for the target entry
         local MinifluxBrowser = require('features/browser/miniflux_browser')
         local target_entry_data = MinifluxBrowser.getCachedEntryOrLoad(target_entry_id)
 
