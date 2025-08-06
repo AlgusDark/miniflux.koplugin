@@ -91,6 +91,7 @@ function Miniflux:init()
     end
 
     self.settings = MinifluxSettings:new()
+    logger.info('[Miniflux:Main] Settings initialized', MinifluxSettings)
 
     -- Create shared HTTP cache instance after settings
     self.http_cache = HTTPCacheAdapter:new({
