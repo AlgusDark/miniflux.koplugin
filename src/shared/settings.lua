@@ -1,5 +1,6 @@
 local DataStorage = require('datastorage')
 local LuaSettings = require('luasettings')
+local logger = require('logger')
 
 -- Default values
 local DEFAULTS = {
@@ -78,6 +79,7 @@ MinifluxSettings.Key = {
 ---Create a new MinifluxSettings instance
 ---@return MinifluxSettings
 function MinifluxSettings:new()
+    logger.dbg('[Miniflux:Settings] Creating new MinifluxSettings instance')
     local instance = {
         settings = LuaSettings:open(DataStorage:getSettingsDir() .. '/miniflux.lua'),
         updated = false,
