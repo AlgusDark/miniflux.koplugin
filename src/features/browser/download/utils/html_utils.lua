@@ -7,6 +7,7 @@ local htmlparser = require('htmlparser')
 
 -- Import dependencies for entry content processing
 local Images = require('features/browser/download/utils/images')
+local YouTubeUtils = require('features/browser/download/utils/youtube_utils')
 local Error = require('shared/error')
 
 -- **HtmlUtils** - HTML utilities for Miniflux Browser
@@ -166,31 +167,43 @@ function HtmlUtils.cleanHtmlContent(content)
     -- Use HTML parser approach (reliable)
     local root = htmlparser.parse(content, 5000)
 
-    -- Track elements that get removed for efficient string replacement
-    local removed_element_texts = {}
-    local total_removed = 0
+    -- Track elements that get removed or replaced for efficient string replacement
+    local element_replacements = {} -- {original_text = replacement_text}
+    local total_processed = 0
 
     -- Remove each type of unwanted element
     for _, selector in ipairs(unwanted_selectors) do
         local elements = root:select(selector)
         if elements then
             for _, element in ipairs(elements) do
-                -- Get the original element text BEFORE removal
                 local element_text = element:gettext()
                 if element_text and element_text ~= '' then
-                    removed_element_texts[element_text] = true
-                    total_removed = total_removed + 1
+                    if selector == 'iframe' then
+                        -- Special handling for YouTube iframes
+                        local youtube_replacement = YouTubeUtils.replaceIframeElement(element)
+                        if youtube_replacement then
+                            -- Replace YouTube iframe with thumbnail
+                            element_replacements[element_text] = youtube_replacement
+                        else
+                            -- Remove non-YouTube iframe
+                            element_replacements[element_text] = ''
+                        end
+                    else
+                        -- Remove all other unwanted elements
+                        element_replacements[element_text] = ''
+                    end
+                    total_processed = total_processed + 1
                 end
             end
         end
     end
 
     -- Use efficient string replacement instead of DOM reconstruction
-    if total_removed > 0 then
+    if total_processed > 0 then
         local cleaned_content = content
-        for element_text, _ in pairs(removed_element_texts) do
+        for element_text, replacement in pairs(element_replacements) do
             local escaped_pattern = escapePattern(element_text)
-            cleaned_content = cleaned_content:gsub(escaped_pattern, '')
+            cleaned_content = cleaned_content:gsub(escaped_pattern, replacement)
         end
         return cleaned_content
     else
