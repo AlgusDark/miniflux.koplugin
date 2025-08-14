@@ -12,8 +12,8 @@ local EntryValidation = require('domains/utils/entry_validation')
 local EntryMetadata = require('domains/utils/entry_metadata')
 local DownloadDialogs = require('features/browser/download/utils/download_dialogs')
 local Images = require('features/browser/download/utils/images')
-local Trapper = require('ui/trapper')
 local HtmlUtils = require('features/browser/download/utils/html_utils')
+local Trapper = require('ui/trapper')
 local Files = require('shared/files')
 local Notification = require('shared/widgets/notification')
 
@@ -458,6 +458,10 @@ function EntryWorkflow.execute(deps)
 
         -- Always discover images to build mapping (regardless of download setting)
         local content = entry_data.content or entry_data.summary or ''
+
+        -- Process YouTube iframes first so thumbnail images are discovered
+        content = HtmlUtils.processYouTubeIframes(content)
+
         local base_url = entry_data.url and socket_url.parse(entry_data.url) or nil
         local images, seen_images = Images.discoverImages(content, base_url)
 
