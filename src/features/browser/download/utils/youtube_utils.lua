@@ -1,5 +1,4 @@
 local _ = require('gettext')
-local socket_url = require('socket.url')
 local util = require('util')
 
 ---@class YouTubeVideoInfo
@@ -12,11 +11,11 @@ local util = require('util')
 -- **YouTubeUtils** - YouTube video processing utilities
 --
 -- This utility module handles extraction of YouTube video IDs from various URL formats
--- and fetches thumbnail URLs using YouTube's oEmbed API for reliable results.
+-- and generates thumbnail URLs.
 ---@class YouTubeUtils
 ---@field extractVideoId fun(url: string|nil): string|nil Extract YouTube video ID from various URL formats
----@field fetchVideoInfo fun(video_id: string|nil): YouTubeVideoInfo|nil Fetch video information using oEmbed API
----@field replaceIframeElement fun(iframe_element: HtmlElement|nil): string|nil Replace iframe with thumbnail
+---@field getVideoInfo fun(video_id: string|nil): YouTubeVideoInfo|nil Generate video information with direct thumbnail URL
+---@field replaceIframeHtml fun(iframe_html: string): string Replace YouTube iframe HTML with thumbnail
 local YouTubeUtils = {}
 
 ---Extract YouTube video ID from various URL formats
@@ -53,74 +52,54 @@ function YouTubeUtils.extractVideoId(url)
     return nil
 end
 
----Fetch YouTube video information using oEmbed API with fallbacks
+---Generate YouTube video information using direct thumbnail URL
 ---@param video_id string|nil The YouTube video ID
 ---@return YouTubeVideoInfo|nil video_info Video information with title and thumbnail_url, nil if invalid video_id
-function YouTubeUtils.fetchVideoInfo(video_id)
+function YouTubeUtils.getVideoInfo(video_id)
     if not video_id or type(video_id) ~= 'string' then
         return nil
     end
 
-    -- Default fallback values
-    local fallback_title = 'YouTube Video Thumbnail'
-    local fallback_thumbnail = string.format('https://i.ytimg.com/vi/%s/hqdefault.jpg', video_id)
-
-    -- Try oEmbed API for better quality data
-    local video_url = string.format('https://www.youtube.com/watch?v=%s', video_id)
-    local oembed_url = string.format(
-        'https://www.youtube.com/oembed?url=%s&format=json',
-        socket_url.escape(video_url)
-    )
-
-    local http = require('socket.http')
-    local response_body, status_code = http.request(oembed_url)
-
-    if status_code == 200 and response_body then
-        local json = require('json')
-        local success, video_data = pcall(json.decode, response_body)
-
-        if success and video_data then
-            return {
-                title = video_data.title or fallback_title,
-                thumbnail_url = video_data.thumbnail_url or fallback_thumbnail,
-            }
-        end
-    end
-
-    -- Return fallbacks if oEmbed fails
+    -- Use direct thumbnail URL (fast, no network calls)
     return {
-        title = fallback_title,
-        thumbnail_url = fallback_thumbnail,
+        title = 'YouTube Video Thumbnail',
+        thumbnail_url = string.format('https://i.ytimg.com/vi/%s/hqdefault.jpg', video_id),
     }
 end
 
----Replace YouTube iframe element with thumbnail (DOM-based)
----@param iframe_element HtmlElement|nil The iframe DOM element from htmlparser
----@return string|nil replacement_html The figure/img tag replacement, nil if not processed
-function YouTubeUtils.replaceIframeElement(iframe_element)
-    if not iframe_element or not iframe_element.attributes then
-        return nil
-    end
-
-    local src_url = iframe_element.attributes.src
+---Replace YouTube iframe HTML with thumbnail figure/img tag
+---@param iframe_html string The iframe HTML element
+---@return string The replacement figure/img tag or original iframe if not YouTube
+function YouTubeUtils.replaceIframeHtml(iframe_html)
+    -- Extract src URL from iframe
+    local src_url = iframe_html:match('src="([^"]+)"')
     if not src_url then
-        return nil
+        return iframe_html -- Keep original if no src found
     end
 
+    -- Extract video ID from the URL
     local video_id = YouTubeUtils.extractVideoId(src_url)
     if not video_id then
-        return nil
+        return iframe_html -- Keep original if no video ID found
     end
 
-    local video_info = YouTubeUtils.fetchVideoInfo(video_id)
+    -- Get video information
+    local video_info = YouTubeUtils.getVideoInfo(video_id)
     if not video_info then
-        return nil
+        return iframe_html -- Keep original if fetch fails
     end
 
     local alt_text = util.htmlEscape(video_info.title)
+    local youtube_url = string.format('https://www.youtube.com/watch?v=%s', video_id)
 
+    -- Create clickable thumbnail that opens YouTube video
     return string.format(
-        '<figure><img class="youtube-thumbnail" src="%s" alt="%s"></figure>',
+        [[
+          <a href="%s" target="_blank" rel="noopener noreferrer">
+          <figure><img class="youtube-thumbnail" src="%s" alt="%s"></figure>
+          </a>
+        ]],
+        youtube_url,
         video_info.thumbnail_url,
         alt_text
     )
