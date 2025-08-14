@@ -145,6 +145,22 @@ function HtmlUtils.createHtmlDocument(entry, content)
     return table.concat(html_parts)
 end
 
+---Process YouTube iframes and replace them with thumbnails using regex
+---@param content string HTML content containing iframes
+---@return string Content with YouTube iframes replaced by thumbnails
+function HtmlUtils.processYouTubeIframes(content)
+    if not content or content == '' then
+        return content
+    end
+
+    -- Pattern to match complete iframe elements with YouTube URLs
+    local youtube_iframe_pattern = '<iframe[^>]*src="[^"]*youtu[^"]*"[^>]*>.-</iframe>'
+
+    -- Replace all YouTube iframes using YouTubeUtils
+    local processed_content = content:gsub(youtube_iframe_pattern, YouTubeUtils.replaceIframeHtml)
+    return processed_content
+end
+
 ---Clean and normalize HTML content for offline viewing using DOM parser
 ---@param content string Raw HTML content
 ---@return string Cleaned HTML content
@@ -152,6 +168,9 @@ function HtmlUtils.cleanHtmlContent(content)
     if not content or content == '' then
         return ''
     end
+
+    -- First, process YouTube iframes and replace them with thumbnails (fast, no HTTP calls)
+    content = HtmlUtils.processYouTubeIframes(content)
 
     -- Elements that won't work offline - remove using CSS selectors
     local unwanted_selectors = {
@@ -176,22 +195,10 @@ function HtmlUtils.cleanHtmlContent(content)
         local elements = root:select(selector)
         if elements then
             for _, element in ipairs(elements) do
+                -- Get the original element text BEFORE removal
                 local element_text = element:gettext()
                 if element_text and element_text ~= '' then
-                    if selector == 'iframe' then
-                        -- Special handling for YouTube iframes
-                        local youtube_replacement = YouTubeUtils.replaceIframeElement(element)
-                        if youtube_replacement then
-                            -- Replace YouTube iframe with thumbnail
-                            element_replacements[element_text] = youtube_replacement
-                        else
-                            -- Remove non-YouTube iframe
-                            element_replacements[element_text] = ''
-                        end
-                    else
-                        -- Remove all other unwanted elements
-                        element_replacements[element_text] = ''
-                    end
+                    element_replacements[element_text] = ''
                     total_processed = total_processed + 1
                 end
             end
