@@ -204,6 +204,10 @@ function BatchDownloadEntriesWorkflow.downloadSingleEntry(entry_data, opts)
 
     -- Discover images
     local content = entry_data.content or entry_data.summary or ''
+
+    -- Process YouTube iframes first so thumbnail images are discovered
+    content = HtmlUtils.processYouTubeIframes(content)
+
     local base_url = entry_data.url and socket_url.parse(entry_data.url) or nil
     local images, seen_images = Images.discoverImages(content, base_url)
 
