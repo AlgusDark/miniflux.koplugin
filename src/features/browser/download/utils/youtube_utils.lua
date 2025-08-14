@@ -94,11 +94,7 @@ function YouTubeUtils.replaceIframeHtml(iframe_html)
 
     -- Create clickable thumbnail that opens YouTube video
     return string.format(
-        [[
-          <a href="%s" target="_blank" rel="noopener noreferrer">
-          <figure><img class="youtube-thumbnail" src="%s" alt="%s"></figure>
-          </a>
-        ]],
+        [[<figure><a href="%s" target="_blank" rel="noopener noreferrer"><img class="youtube-thumbnail" src="%s" alt="%s"></a></figure>]],
         youtube_url,
         video_info.thumbnail_url,
         alt_text
