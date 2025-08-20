@@ -1,0 +1,50 @@
+name: Manual Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: 'patch'
+      explicit_version:
+        description: 'Explicit version (optional, overrides version_type)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  manual-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+
+      - name: Setup git-cliff
+        uses: kenji-miyake/setup-git-cliff@v2
+
+      - name: Run release task
+        run: |
+          VERSION="${{ github.event.inputs.explicit_version }}"
+          if [ -z "$VERSION" ]; then
+            VERSION="${{ github.event.inputs.version_type }}"
+          fi
+          echo "yes" | task release version=$VERSION
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

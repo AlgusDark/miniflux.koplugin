@@ -1,0 +1,108 @@
+name: Dev Pre-Release
+
+on:
+  push:
+    branches: [dev]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+
+permissions:
+  contents: write
+
+jobs:
+  dev-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+
+      - name: Set up Lua
+        uses: leafo/gh-actions-lua@v11
+        with:
+          luaVersion: "5.1"
+
+      - name: Set up Selene
+        uses: NTBBloodbath/selene-action@v1.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --version
+
+      - name: Install StyLua
+        uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: latest
+          args: --version
+
+      - name: Run linting
+        run: task lint
+
+      - name: Run formatting check
+        run: task fmt
+
+      - name: Type check with lua-language-server
+        uses: mrcjkb/lua-typecheck-action@v0
+        with:
+          configpath: ".luarc.json"
+          checklevel: "Error"
+
+      - name: Build release artifact
+        run: |
+          task build-optimized
+          echo "=== Checking build output ==="
+          ls -la
+          ls -la dist/ || echo "dist directory not found"
+          ls -la dist/miniflux.koplugin/ || echo "miniflux.koplugin directory not found"
+
+      - name: Create ZIP package
+        run: |
+          cd dist
+          zip -r miniflux.koplugin.zip miniflux.koplugin/
+          ls -la miniflux.koplugin.zip
+
+      - name: Get version from _meta.lua and create dev version
+        id: get_version
+        run: |
+          BASE_VERSION=$(grep -E "version = ['\"]([^'\"]*)['\"]" src/_meta.lua | sed -E "s/version = ['\"]([^'\"]*)['\"].*/\1/" | tr -d ' ')
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          DEV_VERSION="${BASE_VERSION}-dev-${SHORT_SHA}"
+          echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
+          echo "dev_version=$DEV_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: miniflux-koplugin-v${{ steps.get_version.outputs.dev_version }}
+          path: dist/
+          retention-days: 30
+
+      - name: Create Dev Pre-Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.get_version.outputs.dev_version }}
+          name: Dev Pre-Release v${{ steps.get_version.outputs.dev_version }}
+          body: |
+            Development pre-release of miniflux.koplugin
+
+            ⚠️ **This is a development build** - Use at your own risk!
+
+            **Base Version:** ${{ steps.get_version.outputs.base_version }}
+            **Commit:** ${{ github.sha }}
+            **Branch:** ${{ github.ref_name }}
+
+            **Installation:**
+            1. Download the artifact zip file
+            2. Extract it to your KOReader plugins directory
+            3. Restart KOReader and enable the plugin
+          files: dist/miniflux.koplugin.zip
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

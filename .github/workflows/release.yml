@@ -2,12 +2,12 @@ name: Create Release Artifact
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
   pull_request:
-    branches: [main, dev]
+    branches: [main]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
@@ -105,6 +105,17 @@ jobs:
           path: dist/
           retention-days: 90
 
+      - name: Setup git-cliff
+        uses: kenji-miyake/setup-git-cliff@v2
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          CHANGELOG=$(git-cliff --tag v${{ steps.get_version.outputs.version }} --strip header)
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Create Release (main branch)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: softprops/action-gh-release@v2
@@ -112,11 +123,7 @@ jobs:
           tag_name: v${{ steps.get_version.outputs.version }}
           name: Release v${{ steps.get_version.outputs.version }}
           body: |
-            Automated release of miniflux.koplugin v${{ steps.get_version.outputs.version }}
-
-            **Changes:**
-            - Built from commit: ${{ github.sha }}
-            - Branch: ${{ github.ref_name }}
+            ${{ steps.changelog.outputs.changelog }}
 
             **Installation:**
             1. Download the artifact zip file
@@ -128,27 +135,3 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create Pre-Release (dev branch)
-        if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.get_version.outputs.version }}-dev
-          name: Pre-Release v${{ steps.get_version.outputs.version }}-dev
-          body: |
-            Automated pre-release of miniflux.koplugin v${{ steps.get_version.outputs.version }}-dev
-
-            ⚠️ **This is a development pre-release** - Use at your own risk!
-
-            **Changes:**
-            - Built from commit: ${{ github.sha }}
-            - Branch: ${{ github.ref_name }}
-
-            **Installation:**
-            1. Download the artifact zip file
-            2. Extract it to your KOReader plugins directory
-            3. Restart KOReader and enable the plugin
-          files: dist/miniflux.koplugin.zip
-          draft: false
-          prerelease: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
