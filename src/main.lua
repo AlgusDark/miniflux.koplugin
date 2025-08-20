@@ -287,19 +287,20 @@ end
 ---Handle network connected event - process all offline queues
 function Miniflux:onNetworkConnected()
     logger.info('[Miniflux:Main] Network connected event received')
-    -- Only process if SyncService is available (plugin initialized)
-    if self.sync_service then
-        -- Check if any queue has items before showing dialog
-        local total_count = QueueService.getTotalQueueCount()
-        logger.dbg('[Miniflux:Main] Queue items pending sync:', total_count)
+    UIManager:scheduleIn(0.5, function()
+        if self.sync_service then
+            -- Check if any queue has items before showing dialog
+            local total_count = QueueService.getTotalQueueCount()
+            logger.dbg('[Miniflux:Main] Queue items pending sync:', total_count)
 
-        if total_count > 0 then
-            -- Show sync dialog only if there are items to sync
-            logger.info('[Miniflux:Main] Processing offline queues')
-            self.sync_service:processAllQueues()
+            if total_count > 0 then
+                -- Show sync dialog only if there are items to sync
+                logger.info('[Miniflux:Main] Processing offline queues')
+                self.sync_service:processAllQueues()
+            end
+            -- If all queues are empty, do nothing (silent)
         end
-        -- If all queues are empty, do nothing (silent)
-    end
+    end)
 end
 
 ---Handle device suspend event - terminate background jobs to save battery
