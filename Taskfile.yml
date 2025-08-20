@@ -252,8 +252,7 @@ tasks:
         echo "  • Create release branch: release/v$NEW_VERSION"
         echo "  • Update src/_meta.lua version to $NEW_VERSION"
         echo "  • Create commit: 'chore: bump version to $NEW_VERSION'"
-        echo "  • Push release branch to origin"
-        echo "  • Provide instructions to create PR to dev"
+        echo "  • Push release branch and create PR to dev"
         echo "  • When PR is merged, GitHub Actions will create release"
         echo ""
         
@@ -331,8 +330,8 @@ tasks:
         # Push release branch
         echo "📤 Pushing release branch: $RELEASE_BRANCH"
         git push -u origin "$RELEASE_BRANCH"
-        
-        # Get repository URL for manual PR creation
+
+        # Get repository URL for PR creation
         REPO_URL=$(git config --get remote.origin.url)
         if [[ "$REPO_URL" == git@* ]]; then
           # Convert SSH to HTTPS format
@@ -341,7 +340,7 @@ tasks:
           # Remove .git suffix if present
           REPO_URL=$(echo "$REPO_URL" | sed 's|\.git$||')
         fi
-        
+
         echo ""
         echo "✅ Release branch created successfully!"
         echo "📝 Version updated to: $NEW_VERSION"
@@ -349,14 +348,12 @@ tasks:
         echo "📤 Release branch pushed to origin"
         echo ""
         echo "📋 Next steps:"
-        echo "  1. Create a Pull Request manually:"
+        echo "  1. Create Pull Request:"
         echo "     🔗 $REPO_URL/compare/dev...$RELEASE_BRANCH?quick_pull=1&title=Release%20v$NEW_VERSION&body=Automated%20version%20bump%20to%20$NEW_VERSION%20from%20release%20task.%20Ready%20for%20release%20to%20dev%20branch."
-        echo "  2. Or use GitHub CLI if available:"
-        echo "     gh pr create --title \"Release v$NEW_VERSION\" --body \"Automated version bump to $NEW_VERSION\" --base dev --head \"$RELEASE_BRANCH\""
-        echo "  3. Merge the PR to dev branch"
-        echo "  4. Merge dev to main to create the release"
-        echo "  5. Dev will auto-sync with main via GitHub Actions"
-        echo "  6. If auto-sync fails, run: task sync-dev"
+        echo "  2. Merge the PR to dev branch"
+        echo "  3. Merge dev to main to create the release"
+        echo "  4. Dev will auto-sync with main via GitHub Actions"
+        echo "  5. If auto-sync fails, run: task sync-dev"
 
   sync-dev:
     desc: "Sync dev branch with main branch"
