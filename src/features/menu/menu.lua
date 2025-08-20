@@ -11,7 +11,6 @@ local CopyCss = require('features/menu/settings/copy_css')
 local TestConnection = require('features/menu/settings/test_connection')
 local ProxyImageDownloader = require('features/menu/settings/proxy_image_downloader')
 local UpdateSettings = require('features/menu/settings/update_settings')
-local ExportLogs = require('features/menu/settings/export_logs')
 
 local Menu = {}
 
@@ -65,9 +64,6 @@ function Menu.build(plugin)
 
                     -- === UPDATE SETTINGS ===
                     UpdateSettings.getMenuItem(plugin),
-
-                    -- === DEBUG ===
-                    ExportLogs.getMenuItem(),
                 },
             },
         },
