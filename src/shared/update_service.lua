@@ -267,11 +267,92 @@ function UpdateService:checkForUpdates(config)
         return nil, _('No suitable releases found')
     end
 
-    -- Get the latest release (first in filtered list, GitHub returns newest first)
-    local latest_release = filtered_releases[1]
-    local latest_version = latest_release.tag_name
+    -- Helper function to match current version (handles 'v' prefix variations)
+    local function matchesCurrentVersion(tag_name)
+        return tag_name:gsub('^v', '') == current_version:gsub('^v', '')
+    end
 
-    local has_update = UpdateService.isNewerVersion(current_version, latest_version)
+    -- Single pass: find latest release by timestamp AND current release
+    local latest_release = nil
+    local current_release = nil
+    local current_position = nil
+
+    for i, release in ipairs(filtered_releases) do
+        -- Track current version position and release info
+        if matchesCurrentVersion(release.tag_name) then
+            current_release = release
+            current_position = i
+        end
+
+        -- Find truly latest release by published_at timestamp
+        if not latest_release then
+            latest_release = release
+        else
+            local should_update = false
+            if release.published_at and latest_release.published_at then
+                -- Both have timestamps - compare them
+                should_update = release.published_at > latest_release.published_at
+            elseif release.published_at and not latest_release.published_at then
+                -- Prefer releases with timestamps over those without
+                should_update = true
+            end
+            -- else: current latest has timestamp but this release doesn't - keep current
+
+            if should_update then
+                latest_release = release
+            end
+        end
+    end
+
+    if not latest_release then
+        logger.warn(log_prefix, 'No valid latest release found after filtering')
+        return nil, _('No valid releases found')
+    end
+
+    local latest_version = latest_release.tag_name
+    local has_update = false
+
+    if current_release then
+        -- Current version found - use timestamp comparison if available
+        local current_published_at = current_release.published_at
+        local latest_published_at = latest_release.published_at
+
+        if current_published_at and latest_published_at then
+            -- Primary method: timestamp comparison (ISO 8601 strings compare lexicographically)
+            has_update = latest_published_at > current_published_at
+            logger.info(
+                log_prefix,
+                'Timestamp comparison: current',
+                current_published_at,
+                'vs latest',
+                latest_published_at,
+                '→',
+                has_update
+            )
+        else
+            -- Fallback: positional comparison (GitHub's API ordering)
+            has_update = current_position > 1
+            logger.info(
+                log_prefix,
+                'Position fallback: current at',
+                current_position,
+                '→',
+                has_update
+            )
+        end
+    else
+        -- Current version not in releases - semantic version comparison
+        has_update = UpdateService.isNewerVersion(current_version, latest_version)
+        logger.info(
+            log_prefix,
+            'Semantic fallback:',
+            current_version,
+            'vs',
+            latest_version,
+            '→',
+            has_update
+        )
+    end
     logger.info(
         log_prefix,
         'Version check:',
