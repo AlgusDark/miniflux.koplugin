@@ -8,6 +8,8 @@ Handles data fetching, menu building, and UI rendering.
 --]]
 
 local EntryPaths = require('domains/utils/entry_paths')
+local UIManager = require('ui/uimanager')
+local InfoMessage = require('ui/widget/infomessage')
 local _ = require('gettext')
 
 local EntriesView = {}
@@ -27,32 +29,41 @@ function EntriesView.show(config)
     end
     ---@cast id number
 
-    -- Prepare dialog configuration
-    local dialog_config = {
-        dialogs = {
-            loading = { text = _('Loading entries...') },
-            error = { text = _('Failed to load entries') },
-        },
-    }
+    -- Show loading message with forceRePaint before API call
+    local loading_widget = InfoMessage:new({
+        text = _('Loading entries...'),
+    })
+    UIManager:show(loading_widget)
+    UIManager:forceRePaint()
 
     local entries, err
     if entry_type == 'unread' then
-        entries, err = config.entries:getUnreadEntries(dialog_config)
+        entries, err = config.entries:getUnreadEntries({})
     elseif entry_type == 'feed' then
         if not config.feeds then
+            UIManager:close(loading_widget)
             return nil -- feeds domain not provided
         end
-        entries, err = config.feeds:getEntriesByFeed(id, dialog_config)
+        entries, err = config.feeds:getEntriesByFeed(id, {})
     elseif entry_type == 'category' then
         if not config.categories then
+            UIManager:close(loading_widget)
             return nil -- categories domain not provided
         end
-        entries, err = config.categories:getEntriesByCategory(id, dialog_config)
+        entries, err = config.categories:getEntriesByCategory(id, {})
     else
+        UIManager:close(loading_widget)
         return nil -- Invalid entry type
     end
 
+    -- Close loading message
+    UIManager:close(loading_widget)
+
     if err then
+        UIManager:show(InfoMessage:new({
+            text = _('Failed to load entries'),
+            timeout = 5,
+        }))
         return nil
     end
 

@@ -1,5 +1,6 @@
 local CollectionsQueue = require('features/sync/utils/collections_queue')
-local Notification = require('shared/widgets/notification')
+local UIManager = require('ui/uimanager')
+local InfoMessage = require('ui/widget/infomessage')
 local MinifluxEvent = require('shared/event')
 local _ = require('gettext')
 
@@ -13,19 +14,27 @@ local BrowserMarkAsReadService = {}
 ---@param miniflux Miniflux Main plugin instance with domains
 ---@return boolean success
 function BrowserMarkAsReadService.markFeedAsRead(feed_id, miniflux)
-    -- Try API call through domain
-    local _result, api_err = miniflux.feeds:markFeedAsRead(feed_id, {
-        dialogs = {
-            loading = { text = _('Marking feed as read...') },
-        },
+    -- Show loading message with forceRePaint before API call
+    local loading_widget = InfoMessage:new({
+        text = _('Marking feed as read...'),
     })
+    UIManager:show(loading_widget)
+    UIManager:forceRePaint()
+
+    -- Try API call through domain
+    local _result, api_err = miniflux.feeds:markFeedAsRead(feed_id, {})
+
+    -- Close loading message
+    UIManager:close(loading_widget)
 
     if api_err then
         -- API failed - use queue fallback for offline mode
         local queue = CollectionsQueue:new('feed')
         queue:enqueue(feed_id, 'mark_all_read')
 
-        Notification:info(_('Feed marked as read (will sync when online)'))
+        UIManager:show(InfoMessage:new({
+            text = _('Feed marked as read (will sync when online)'),
+        }))
         return true -- Still successful from user perspective
     else
         -- API success - remove from queue since server is source of truth
@@ -35,7 +44,10 @@ function BrowserMarkAsReadService.markFeedAsRead(feed_id, miniflux)
         -- Invalidate all caches IMMEDIATELY so counts update
         MinifluxEvent:broadcastMinifluxInvalidateCache()
 
-        Notification:success(_('Feed marked as read'))
+        UIManager:show(InfoMessage:new({
+            text = _('Feed marked as read'),
+            timeout = 2,
+        }))
         return true
     end
 end
@@ -45,19 +57,27 @@ end
 ---@param miniflux Miniflux Main plugin instance with domains
 ---@return boolean success
 function BrowserMarkAsReadService.markCategoryAsRead(category_id, miniflux)
-    -- Try API call through domain
-    local _result, api_err = miniflux.categories:markCategoryAsRead(category_id, {
-        dialogs = {
-            loading = { text = _('Marking category as read...') },
-        },
+    -- Show loading message with forceRePaint before API call
+    local loading_widget = InfoMessage:new({
+        text = _('Marking category as read...'),
     })
+    UIManager:show(loading_widget)
+    UIManager:forceRePaint()
+
+    -- Try API call through domain
+    local _result, api_err = miniflux.categories:markCategoryAsRead(category_id, {})
+
+    -- Close loading message
+    UIManager:close(loading_widget)
 
     if api_err then
         -- API failed - use queue fallback for offline mode
         local queue = CollectionsQueue:new('category')
         queue:enqueue(category_id, 'mark_all_read')
 
-        Notification:info(_('Category marked as read (will sync when online)'))
+        UIManager:show(InfoMessage:new({
+            text = _('Category marked as read (will sync when online)'),
+        }))
         return true -- Still successful from user perspective
     else
         -- API success - remove from queue since server is source of truth
@@ -67,7 +87,10 @@ function BrowserMarkAsReadService.markCategoryAsRead(category_id, miniflux)
         -- Invalidate all caches IMMEDIATELY so counts update
         MinifluxEvent:broadcastMinifluxInvalidateCache()
 
-        Notification:success(_('Category marked as read'))
+        UIManager:show(InfoMessage:new({
+            text = _('Category marked as read'),
+            timeout = 2,
+        }))
         return true
     end
 end

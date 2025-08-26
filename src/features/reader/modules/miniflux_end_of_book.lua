@@ -12,7 +12,7 @@ overriding the ReaderStatus onEndOfBook behavior specifically for Miniflux entri
 local EventListener = require('ui/widget/eventlistener')
 local UIManager = require('ui/uimanager')
 local ButtonDialog = require('ui/widget/buttondialog')
-local Notification = require('shared/widgets/notification')
+local InfoMessage = require('ui/widget/infomessage')
 local Device = require('device')
 local util = require('util')
 local _ = require('gettext')
@@ -166,7 +166,10 @@ function MinifluxEndOfBook:showDialog(entry_info)
                     UIManager:close(dialog)
                     -- Inline deletion with validation
                     if not EntryValidation.isValidId(entry_info.entry_id) then
-                        Notification:warning(_('Cannot delete: invalid entry ID'))
+                        UIManager:show(InfoMessage:new({
+                            text = _('Cannot delete: invalid entry ID'),
+                            timeout = 3,
+                        }))
                         return
                     end
 

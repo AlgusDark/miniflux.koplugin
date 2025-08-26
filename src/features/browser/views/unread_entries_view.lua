@@ -8,6 +8,8 @@ but with specific behavior for unread-only content.
 --]]
 
 local EntriesView = require('features/browser/views/entries_view')
+local UIManager = require('ui/uimanager')
+local InfoMessage = require('ui/widget/infomessage')
 local _ = require('gettext')
 
 local UnreadEntriesView = {}
@@ -20,16 +22,25 @@ local UnreadEntriesView = {}
 function UnreadEntriesView.show(config)
     local ViewUtils = require('features/browser/views/view_utils')
 
-    -- Get entries directly from entries domain
-    local entries, err = config.entries:getUnreadEntries({
-        dialogs = {
-            loading = { text = _('Loading unread entries...') },
-            error = { text = _('Failed to load unread entries') },
-        },
+    -- Show loading message with forceRePaint before API call
+    local loading_widget = InfoMessage:new({
+        text = _('Loading unread entries...'),
     })
+    UIManager:show(loading_widget)
+    UIManager:forceRePaint()
+
+    -- Get entries directly from entries domain
+    local entries, err = config.entries:getUnreadEntries({})
+
+    -- Close loading message
+    UIManager:close(loading_widget)
 
     if err then
-        return nil -- Error dialog already shown by API system
+        UIManager:show(InfoMessage:new({
+            text = _('Failed to load unread entries'),
+            timeout = 5,
+        }))
+        return nil
     end
     ---@cast entries -nil
 

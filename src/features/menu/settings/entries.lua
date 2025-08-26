@@ -1,6 +1,6 @@
 local InputDialog = require('ui/widget/inputdialog')
 local UIManager = require('ui/uimanager')
-local Notification = require('shared/widgets/notification')
+local InfoMessage = require('ui/widget/infomessage')
 local _ = require('gettext')
 local T = require('ffi/util').template
 
@@ -52,13 +52,19 @@ function Entries.showDialog(settings, refresh_callback)
                         if new_limit and new_limit > 0 then
                             settings.limit = new_limit
                             UIManager:close(limit_dialog)
-                            Notification:success(_('Entries limit saved'))
+                            UIManager:show(InfoMessage:new({
+                                text = _('Entries limit saved'),
+                                timeout = 2,
+                            }))
                             -- Refresh the menu to show updated limit
                             if refresh_callback then
                                 refresh_callback()
                             end
                         else
-                            Notification:warning(_('Please enter a valid number greater than 0'))
+                            UIManager:show(InfoMessage:new({
+                                text = _('Please enter a valid number greater than 0'),
+                                timeout = 3,
+                            }))
                         end
                     end,
                 },

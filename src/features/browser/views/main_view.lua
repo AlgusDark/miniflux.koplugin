@@ -71,13 +71,17 @@ end
 ---@param miniflux Miniflux Plugin instance with domain modules
 ---@return table|nil result, string|nil error
 function MainView.loadData(miniflux)
-    local Notification = require('shared/widgets/notification')
-    local loading_notification = Notification:info(_('Loading...'))
+    local UIManager = require('ui/uimanager')
+    local InfoMessage = require('ui/widget/infomessage')
+    local loading_notification = InfoMessage:new({
+        text = _('Loading...'),
+    })
+    UIManager:show(loading_notification)
 
     -- Get unread count from entries domain
     local unread_count, unread_err = miniflux.entries:getUnreadCount()
     if unread_err then
-        loading_notification:close()
+        UIManager:close(loading_notification)
         return nil, unread_err.message
     end
     ---@cast unread_count -nil
@@ -85,7 +89,7 @@ function MainView.loadData(miniflux)
     -- Get feeds count from feeds domain
     local feeds_count, feeds_err = miniflux.feeds:getFeedCount()
     if feeds_err then
-        loading_notification:close()
+        UIManager:close(loading_notification)
         return nil, feeds_err.message
     end
     ---@cast feeds_count -nil
@@ -93,12 +97,12 @@ function MainView.loadData(miniflux)
     -- Get categories count from categories domain
     local categories_count, categories_err = miniflux.categories:getCategoryCount()
     if categories_err then
-        loading_notification:close()
+        UIManager:close(loading_notification)
         return nil, categories_err.message
     end
     ---@cast categories_count -nil
 
-    loading_notification:close()
+    UIManager:close(loading_notification)
 
     return {
         unread_count = unread_count or 0,

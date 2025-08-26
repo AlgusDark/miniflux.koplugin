@@ -146,8 +146,12 @@ end
 ---Override settings dialog with Miniflux-specific implementation
 function MinifluxBrowser:onLeftButtonTap()
     if not self.settings then
-        local Notification = require('shared/widgets/notification')
-        Notification:error(_('Settings not available'))
+        local UIManager = require('ui/uimanager')
+        local InfoMessage = require('ui/widget/infomessage')
+        UIManager:show(InfoMessage:new({
+            text = _('Settings not available'),
+            timeout = 5,
+        }))
         return
     end
 
@@ -238,10 +242,13 @@ function MinifluxBrowser:toggleHideReadEntries()
     self.settings.hide_read_entries = not self.settings.hide_read_entries
 
     -- Show notification about the change
-    local Notification = require('shared/widgets/notification')
+    local UIManager = require('ui/uimanager')
+    local InfoMessage = require('ui/widget/infomessage')
     local status_text = self.settings.hide_read_entries and _('Now showing unread entries only')
         or _('Now showing all entries')
-    Notification:info(status_text)
+    UIManager:show(InfoMessage:new({
+        text = status_text,
+    }))
 
     -- Refresh the current view to apply the new filter
     -- This will trigger a data re-fetch with the new setting
@@ -290,10 +297,14 @@ end
 ---Refresh current view with global cache invalidation
 function MinifluxBrowser:refreshWithCacheInvalidation()
     logger.info('[Miniflux:Browser] Refreshing with cache invalidation')
-    local Notification = require('shared/widgets/notification')
+    local UIManager = require('ui/uimanager')
+    local InfoMessage = require('ui/widget/infomessage')
 
     -- Show loading notification
-    local loading_notification = Notification:info(_('Refreshing...'))
+    local loading_notification = InfoMessage:new({
+        text = _('Refreshing...'),
+    })
+    UIManager:show(loading_notification)
 
     -- Invalidate all caches via event system
     local MinifluxEvent = require('shared/event')
@@ -303,8 +314,11 @@ function MinifluxBrowser:refreshWithCacheInvalidation()
     self:refreshCurrentViewData()
 
     -- Close loading notification and show success
-    loading_notification:close()
-    Notification:success(_('Refreshed with fresh data'))
+    UIManager:close(loading_notification)
+    UIManager:show(InfoMessage:new({
+        text = _('Refreshed with fresh data'),
+        timeout = 2,
+    }))
 end
 
 ---Open an entry with optional navigation context (implements Browser:openItem)
@@ -877,8 +891,11 @@ function MinifluxBrowser:deleteSelectedEntries(selected_items)
     end
 
     if #local_entries == 0 then
-        local Notification = require('shared/widgets/notification')
-        Notification:info(_('No local entries selected for deletion'))
+        local UIManager = require('ui/uimanager')
+        local InfoMessage = require('ui/widget/infomessage')
+        UIManager:show(InfoMessage:new({
+            text = _('No local entries selected for deletion'),
+        }))
         return
     end
 
@@ -914,8 +931,12 @@ end
 ---Perform the actual batch deletion of local entries
 ---@param local_entries table Array of entry data objects
 function MinifluxBrowser:performBatchDelete(local_entries)
-    local Notification = require('shared/widgets/notification')
-    local progress_notification = Notification:info(_('Deleting entries...'))
+    local UIManager = require('ui/uimanager')
+    local InfoMessage = require('ui/widget/infomessage')
+    local progress_notification = InfoMessage:new({
+        text = _('Deleting entries...'),
+    })
+    UIManager:show(progress_notification)
 
     local success_count = 0
 
@@ -927,21 +948,29 @@ function MinifluxBrowser:performBatchDelete(local_entries)
         end
     end
 
-    progress_notification:close()
+    UIManager:close(progress_notification)
 
     -- Show result notification
     if success_count == #local_entries then
         if #local_entries == 1 then
-            Notification:info(_('Entry deleted successfully'))
+            UIManager:show(InfoMessage:new({
+                text = _('Entry deleted successfully'),
+            }))
         else
-            Notification:info(T(_('%1 entries deleted successfully'), success_count))
+            UIManager:show(InfoMessage:new({
+                text = T(_('%1 entries deleted successfully'), success_count),
+            }))
         end
     elseif success_count > 0 then
-        Notification:warning(
-            T(_('%1 of %2 entries deleted successfully'), success_count, #local_entries)
-        )
+        UIManager:show(InfoMessage:new({
+            text = T(_('%1 of %2 entries deleted successfully'), success_count, #local_entries),
+            timeout = 3,
+        }))
     else
-        Notification:error(_('Failed to delete entries'))
+        UIManager:show(InfoMessage:new({
+            text = _('Failed to delete entries'),
+            timeout = 5,
+        }))
     end
 
     -- Refresh view to update the entries list

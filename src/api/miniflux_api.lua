@@ -172,7 +172,6 @@ function MinifluxAPI:getEntries(options, config)
     config = config or {}
     return self.api_client:get('/entries', {
         query = options,
-        dialogs = config.dialogs,
     })
 end
 
@@ -198,7 +197,6 @@ function MinifluxAPI:updateEntries(entry_ids, config)
 
     return self.api_client:put('/entries', {
         body = request_body,
-        dialogs = config.dialogs,
     })
 end
 
@@ -231,7 +229,6 @@ function MinifluxAPI:getFeedEntries(feed_id, options, config)
 
     return self.api_client:get(endpoint, {
         query = options,
-        dialogs = config.dialogs,
     })
 end
 
@@ -243,9 +240,7 @@ function MinifluxAPI:markFeedAsRead(feed_id, config)
     config = config or {}
     local endpoint = '/feeds/' .. tostring(feed_id) .. '/mark-all-as-read'
 
-    return self.api_client:put(endpoint, {
-        dialogs = config.dialogs,
-    })
+    return self.api_client:put(endpoint, {})
 end
 
 -- =============================================================================
@@ -265,7 +260,6 @@ function MinifluxAPI:getCategories(include_counts, config)
 
     return self.api_client:get('/categories', {
         query = query_params,
-        dialogs = config.dialogs,
     })
 end
 
@@ -280,7 +274,6 @@ function MinifluxAPI:getCategoryEntries(category_id, options, config)
 
     return self.api_client:get(endpoint, {
         query = options,
-        dialogs = config.dialogs,
     })
 end
 
@@ -292,9 +285,7 @@ function MinifluxAPI:markCategoryAsRead(category_id, config)
     config = config or {}
     local endpoint = '/categories/' .. tostring(category_id) .. '/mark-all-as-read'
 
-    return self.api_client:put(endpoint, {
-        dialogs = config.dialogs,
-    })
+    return self.api_client:put(endpoint, {})
 end
 
 -- =============================================================================

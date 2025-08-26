@@ -1,5 +1,5 @@
 local UIManager = require('ui/uimanager')
-local Notification = require('shared/widgets/notification')
+local InfoMessage = require('ui/widget/infomessage')
 local ConfirmBox = require('ui/widget/confirmbox')
 local Device = require('device')
 local _ = require('gettext')
@@ -183,7 +183,10 @@ This will:
                             end,
                         }))
                     else
-                        Notification:error(result or _('Failed to export logs'))
+                        UIManager:show(InfoMessage:new({
+                            text = result or _('Failed to export logs'),
+                            timeout = 5,
+                        }))
                     end
                 end,
             }))

@@ -1,6 +1,8 @@
 local EventListener = require('ui/widget/eventlistener')
 local FFIUtil = require('ffi/util')
 local NetworkMgr = require('ui/network/manager')
+local UIManager = require('ui/uimanager')
+local InfoMessage = require('ui/widget/infomessage')
 local _ = require('gettext')
 local logger = require('logger')
 
@@ -96,10 +98,11 @@ end
 ---@return boolean success True if status change succeeded
 function ReaderEntryService:changeEntryStatus(entry_id, new_status, doc_settings)
     local T = require('ffi/util').template
-    local Notification = require('shared/widgets/notification')
-
     if not EntryValidation.isValidId(entry_id) then
-        Notification:error(_('Cannot change status: invalid entry ID'))
+        UIManager:show(InfoMessage:new({
+            text = _('Cannot change status: invalid entry ID'),
+            timeout = 5,
+        }))
         return false
     end
 
@@ -115,15 +118,28 @@ function ReaderEntryService:changeEntryStatus(entry_id, new_status, doc_settings
     local loading_text = T(_('Marking entry as %1...'), new_status)
     local success_text = T(_('Entry marked as %1'), new_status)
 
-    -- Call API with automatic dialog management
+    -- Show loading message with forceRePaint before API call
+    local loading_widget = InfoMessage:new({
+        text = loading_text,
+    })
+    UIManager:show(loading_widget)
+    UIManager:forceRePaint()
+
+    -- Call API
     local _result, err = self.entries:updateEntries(entry_id, {
         body = { status = new_status },
-        dialogs = {
-            loading = { text = loading_text },
-            success = { text = success_text },
-            -- Note: No error dialog - we handle fallback gracefully
-        },
     })
+
+    -- Close loading message
+    UIManager:close(loading_widget)
+
+    if not err then
+        -- Show success message
+        UIManager:show(InfoMessage:new({
+            text = success_text,
+            timeout = 2,
+        }))
+    end
 
     if err then
         -- API failed - use queue fallback for offline mode
@@ -143,7 +159,9 @@ function ReaderEntryService:changeEntryStatus(entry_id, new_status, doc_settings
         -- Show offline message instead of error
         local message = new_status == 'read' and _('Marked as read (will sync when online)')
             or _('Marked as unread (will sync when online)')
-        Notification:info(message)
+        UIManager:show(InfoMessage:new({
+            text = message,
+        }))
 
         return true -- Still successful from user perspective
     else

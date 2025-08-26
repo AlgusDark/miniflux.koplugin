@@ -1,5 +1,6 @@
 local _ = require('gettext')
-local Notification = require('shared/widgets/notification')
+local UIManager = require('ui/uimanager')
+local InfoMessage = require('ui/widget/infomessage')
 local EntryPaths = require('domains/utils/entry_paths')
 local EntryMetadata = require('domains/utils/entry_metadata')
 local QueueService = require('features/sync/services/queue_service')
@@ -35,14 +36,20 @@ local function batchChangeStatus(entry_ids, new_status, deps)
         offline_message = _('Marked as unread (will sync when online)')
     end
 
+    -- Show loading message with forceRePaint before API call
+    local loading_widget = InfoMessage:new({
+        text = progress_message,
+    })
+    UIManager:show(loading_widget)
+    UIManager:forceRePaint()
+
     -- Try batch API call first
     local _result, err = deps.entries:updateEntries(entry_ids, {
         body = { status = new_status },
-        dialogs = {
-            loading = { text = progress_message },
-            -- Note: Don't show success/error dialogs here - we'll handle fallback ourselves
-        },
     })
+
+    -- Close loading message
+    UIManager:close(loading_widget)
 
     if not err then
         -- Check ReaderUI once for efficiency (instead of checking for each entry)
@@ -71,7 +78,10 @@ local function batchChangeStatus(entry_ids, new_status, deps)
         end
 
         -- Show success notification
-        Notification:success(success_message)
+        UIManager:show(InfoMessage:new({
+            text = success_message,
+            timeout = 2,
+        }))
 
         -- Invalidate caches so next navigation shows updated counts
         local MinifluxEvent = require('shared/event')
@@ -93,7 +103,9 @@ local function batchChangeStatus(entry_ids, new_status, deps)
         end
 
         -- Show simple offline message
-        Notification:info(offline_message)
+        UIManager:show(InfoMessage:new({
+            text = offline_message,
+        }))
 
         return true -- Still successful from user perspective
     end

@@ -1,6 +1,6 @@
 local MultiInputDialog = require('ui/widget/multiinputdialog')
 local UIManager = require('ui/uimanager')
-local Notification = require('shared/widgets/notification')
+local InfoMessage = require('ui/widget/infomessage')
 local MinifluxEvent = require('shared/event')
 local _ = require('gettext')
 
@@ -69,7 +69,10 @@ function ServerConfig.showDialog(settings)
                             server_address = settings.server_address,
                         })
 
-                        Notification:success(_('Settings saved'))
+                        UIManager:show(InfoMessage:new({
+                            text = _('Settings saved'),
+                            timeout = 2,
+                        }))
                         UIManager:close(settings_dialog)
                     end,
                 },

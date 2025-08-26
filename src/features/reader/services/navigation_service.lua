@@ -1,5 +1,6 @@
 local lfs = require('libs/libkoreader-lfs')
-local Notification = require('shared/widgets/notification')
+local UIManager = require('ui/uimanager')
+local InfoMessage = require('ui/widget/infomessage')
 local _ = require('gettext')
 local logger = require('logger')
 
@@ -75,12 +76,18 @@ function Navigation.navigateToEntry(entry_info, miniflux, navigation_options)
     -- Validate input
     if not entry_info.entry_id then
         logger.err('[Miniflux:NavigationService] Navigation failed: missing entry ID')
-        Notification:warning(_('Cannot navigate: missing entry ID'))
+        UIManager:show(InfoMessage:new({
+            text = _('Cannot navigate: missing entry ID'),
+            timeout = 3,
+        }))
         return
     end
     if not miniflux.entries then
         logger.err('[Miniflux:NavigationService] Navigation failed: Entries domain not available')
-        Notification:warning(_('Cannot navigate: Entries service not available'))
+        UIManager:show(InfoMessage:new({
+            text = _('Cannot navigate: Entries service not available'),
+            timeout = 3,
+        }))
         return
     end
 
@@ -107,7 +114,10 @@ function Navigation.navigateToEntry(entry_info, miniflux, navigation_options)
         )
         local metadata_result, metadata_err = Navigation.loadEntryMetadata(entry_info)
         if metadata_err then
-            Notification:warning(metadata_err.message)
+            UIManager:show(InfoMessage:new({
+                text = metadata_err.message,
+                timeout = 3,
+            }))
             return
         end
         ---@cast metadata_result -nil
@@ -117,7 +127,10 @@ function Navigation.navigateToEntry(entry_info, miniflux, navigation_options)
 
     -- Validate that we have both metadata and timestamp
     if not metadata or not published_unix then
-        Notification:warning(_('Cannot navigate: missing entry information'))
+        UIManager:show(InfoMessage:new({
+            text = _('Cannot navigate: missing entry information'),
+            timeout = 3,
+        }))
         return
     end
 
@@ -168,7 +181,10 @@ function Navigation.handleApiNavigation(options)
         { direction = direction, settings = miniflux.settings, context = context }
     )
     if options_err then
-        Notification:warning(options_err.message)
+        UIManager:show(InfoMessage:new({
+            text = options_err.message,
+            timeout = 3,
+        }))
         return
     end
     ---@cast nav_options -nil
@@ -214,7 +230,9 @@ function Navigation.handleApiNavigation(options)
                 or _('No next entry available on server')
         end
 
-        Notification:info(no_entry_msg)
+        UIManager:show(InfoMessage:new({
+            text = no_entry_msg,
+        }))
     end
 end
 
@@ -247,10 +265,15 @@ function Navigation.handleLocalNavigation(options)
                 '[Miniflux:NavigationService] Failed to load metadata for entry:',
                 target_entry_id
             )
-            Notification:error(_('Failed to open target entry'))
+            UIManager:show(InfoMessage:new({
+                text = _('Failed to open target entry'),
+                timeout = 5,
+            }))
         end
     else
-        Notification:info(_('No ' .. direction .. ' entry available in local files'))
+        UIManager:show(InfoMessage:new({
+            text = _('No ' .. direction .. ' entry available in local files'),
+        }))
     end
 end
 
@@ -380,12 +403,18 @@ function Navigation.performNavigationSearch(search_params, api_context)
     local loading_message = direction == DIRECTION_PREVIOUS and MSG_FINDING_PREVIOUS
         or MSG_FINDING_NEXT
 
-    -- Try API call first
-    local result, err = entries:getEntries(options, {
-        dialogs = {
-            loading = { text = loading_message },
-        },
+    -- Show loading message with forceRePaint before API call
+    local loading_widget = InfoMessage:new({
+        text = loading_message,
     })
+    UIManager:show(loading_widget)
+    UIManager:forceRePaint()
+
+    -- Try API call first
+    local result, err = entries:getEntries(options, {})
+
+    -- Close loading message
+    UIManager:close(loading_widget)
 
     -- If API call succeeds, return result
     if not err then
@@ -402,7 +431,9 @@ function Navigation.performNavigationSearch(search_params, api_context)
     local target_entry_id = Navigation.findAdjacentEntryId(current_entry_id, direction)
     if target_entry_id then
         logger.info('[Miniflux:NavigationService] Found offline entry:', target_entry_id)
-        Notification:info(_('Found a local entry'))
+        UIManager:show(InfoMessage:new({
+            text = _('Found a local entry'),
+        }))
         -- Create minimal entry data for navigation
         return true, {
             entries = { { id = target_entry_id } },

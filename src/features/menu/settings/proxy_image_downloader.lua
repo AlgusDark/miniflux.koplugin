@@ -1,6 +1,6 @@
 local MultiInputDialog = require('ui/widget/multiinputdialog')
 local UIManager = require('ui/uimanager')
-local Notification = require('shared/widgets/notification')
+local InfoMessage = require('ui/widget/infomessage')
 local _ = require('gettext')
 
 -- **Proxy Image Downloader Settings** - Handles proxy configuration for image downloads
@@ -63,7 +63,10 @@ function ProxyImageDownloader.showDialog(settings)
                             end
                             -- Auto-enable if URL is provided, disable if empty
                             settings.proxy_image_downloader_enabled = fields[1] and fields[1] ~= ''
-                            Notification:success(_('Settings saved'))
+                            UIManager:show(InfoMessage:new({
+                                text = _('Settings saved'),
+                                timeout = 2,
+                            }))
                             UIManager:close(config_dialog)
                         end,
                     },

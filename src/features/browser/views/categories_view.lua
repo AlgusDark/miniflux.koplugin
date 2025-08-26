@@ -8,6 +8,8 @@ Handles data fetching, menu building, and UI rendering.
 --]]
 
 local ViewUtils = require('features/browser/views/view_utils')
+local UIManager = require('ui/uimanager')
+local InfoMessage = require('ui/widget/infomessage')
 local _ = require('gettext')
 
 local CategoriesView = {}
@@ -18,16 +20,25 @@ local CategoriesView = {}
 ---@param config CategoriesViewConfig
 ---@return table|nil View data for browser rendering, or nil on error
 function CategoriesView.show(config)
-    -- Fetch data with API-level dialog management
-    local categories, err = config.miniflux.categories:getCategories({
-        dialogs = {
-            loading = { text = _('Fetching categories...') },
-            error = { text = _('Failed to fetch categories'), timeout = 5 },
-        },
+    -- Show loading message with forceRePaint before API call
+    local loading_widget = InfoMessage:new({
+        text = _('Fetching categories...'),
     })
+    UIManager:show(loading_widget)
+    UIManager:forceRePaint()
+
+    -- Fetch data
+    local categories, err = config.miniflux.categories:getCategories({})
+
+    -- Close loading message
+    UIManager:close(loading_widget)
 
     if err then
-        return nil -- Error dialog already shown by API system
+        UIManager:show(InfoMessage:new({
+            text = _('Failed to fetch categories'),
+            timeout = 5,
+        }))
+        return nil
     end
     ---@cast categories -nil
 

@@ -1,5 +1,5 @@
 local UIManager = require('ui/uimanager')
-local Notification = require('shared/widgets/notification')
+local InfoMessage = require('ui/widget/infomessage')
 local _ = require('gettext')
 local T = require('ffi/util').template
 
@@ -66,11 +66,13 @@ function SortDirection.updateSetting(config)
 
     settings.direction = new_direction
 
-    local notification = Notification:success(_('Sort direction updated'), { timeout = 2 })
+    UIManager:show(InfoMessage:new({
+        text = _('Sort direction updated'),
+        timeout = 2,
+    }))
 
-    -- Close notification and navigate back after a brief delay
+    -- Navigate back after a brief delay
     UIManager:scheduleIn(0.5, function()
-        notification:close()
         touchmenu_instance:backToUpperMenu()
     end)
 end

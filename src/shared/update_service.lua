@@ -7,7 +7,7 @@ local logger = require('logger')
 local NetworkMgr = require('ui/network/manager')
 local UIManager = require('ui/uimanager')
 local ConfirmBox = require('ui/widget/confirmbox')
-local Notification = require('shared/widgets/notification')
+local InfoMessage = require('ui/widget/infomessage')
 local Trapper = require('ui/trapper')
 local util = require('util')
 
@@ -529,7 +529,10 @@ function UpdateService:downloadAndInstall(update_info)
 
     if not download_success then
         Trapper:clear()
-        Notification:error(_('Download failed: ') .. (download_error or _('Unknown error')))
+        UIManager:show(InfoMessage:new({
+            text = _('Download failed: ') .. (download_error or _('Unknown error')),
+            timeout = 5,
+        }))
         os.execute('rm -rf "' .. temp_dir .. '"')
         return
     end
@@ -545,7 +548,10 @@ function UpdateService:downloadAndInstall(update_info)
     local backup_path, backup_error = self:createBackup()
     if not backup_path then
         Trapper:clear()
-        Notification:error(_('Backup failed: ') .. (backup_error or _('Unknown error')))
+        UIManager:show(InfoMessage:new({
+            text = _('Backup failed: ') .. (backup_error or _('Unknown error')),
+            timeout = 5,
+        }))
         os.execute('rm -rf "' .. temp_dir .. '"')
         return
     end
@@ -554,7 +560,10 @@ function UpdateService:downloadAndInstall(update_info)
     local extract_success, extract_error = self:extractZip(zip_path, temp_dir)
     if not extract_success then
         Trapper:clear()
-        Notification:error(_('Extraction failed: ') .. (extract_error or _('Unknown error')))
+        UIManager:show(InfoMessage:new({
+            text = _('Extraction failed: ') .. (extract_error or _('Unknown error')),
+            timeout = 5,
+        }))
         os.execute('rm -rf "' .. temp_dir .. '"')
         return
     end
@@ -573,7 +582,10 @@ function UpdateService:downloadAndInstall(update_info)
 
     if not lfs.attributes(plugin_dir, 'mode') then
         Trapper:clear()
-        Notification:error(_('Invalid update package: plugin directory not found'))
+        UIManager:show(InfoMessage:new({
+            text = _('Invalid update package: plugin directory not found'),
+            timeout = 5,
+        }))
         os.execute('rm -rf "' .. temp_dir .. '"')
         return
     end
@@ -596,12 +608,17 @@ function UpdateService:downloadAndInstall(update_info)
         Trapper:clear()
 
         if restore_success then
-            Notification:error(_('Installation failed. Plugin restored to previous version.'))
+            UIManager:show(InfoMessage:new({
+                text = _('Installation failed. Plugin restored to previous version.'),
+                timeout = 5,
+            }))
         else
-            Notification:error(
-                _('Installation failed and backup restoration failed! Please reinstall manually.'),
-                { timeout = 10 }
-            )
+            UIManager:show(InfoMessage:new({
+                text = _(
+                    'Installation failed and backup restoration failed! Please reinstall manually.'
+                ),
+                timeout = 10,
+            }))
         end
 
         os.execute('rm -rf "' .. temp_dir .. '"')
@@ -625,13 +642,19 @@ function UpdateService:downloadAndInstall(update_info)
         ok_text = _('Restart Now'),
         cancel_text = _('Restart Later'),
         ok_callback = function()
-            Notification:info(_('Restarting KOReader...'), { timeout = 2 })
+            UIManager:show(InfoMessage:new({
+                text = _('Restarting KOReader...'),
+                timeout = 2,
+            }))
             UIManager:nextTick(function()
                 UIManager:restartKOReader()
             end)
         end,
         cancel_callback = function()
-            Notification:info(_('Please restart KOReader to complete the update.'), { timeout = 5 })
+            UIManager:show(InfoMessage:new({
+                text = _('Please restart KOReader to complete the update.'),
+                timeout = 5,
+            }))
         end,
     }))
 end

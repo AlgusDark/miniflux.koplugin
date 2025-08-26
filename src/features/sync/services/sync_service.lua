@@ -1,6 +1,6 @@
 local ButtonDialogTitle = require('ui/widget/buttondialogtitle')
 local UIManager = require('ui/uimanager')
-local Notification = require('shared/widgets/notification')
+local InfoMessage = require('ui/widget/infomessage')
 local _ = require('gettext')
 local T = require('ffi/util').template
 local logger = require('logger')
@@ -47,9 +47,14 @@ function SyncService:confirmClearEntryStatusQueue(queue_size)
         ok_callback = function()
             local success = QueueService.clearEntryStatusQueue()
             if success then
-                Notification:info(_('Sync queue cleared'))
+                UIManager:show(InfoMessage:new({
+                    text = _('Sync queue cleared'),
+                }))
             else
-                Notification:error(_('Failed to clear sync queue'))
+                UIManager:show(InfoMessage:new({
+                    text = _('Failed to clear sync queue'),
+                    timeout = 5,
+                }))
             end
         end,
         cancel_text = _('Cancel'),
@@ -161,7 +166,9 @@ function SyncService:processEntryStatusQueue(auto_confirm, silent)
     if queue_size == 0 then
         -- Show friendly message only when manually triggered (auto_confirm is nil)
         if auto_confirm == nil then
-            Notification:info(_('All changes are already synced'))
+            UIManager:show(InfoMessage:new({
+                text = _('All changes are already synced'),
+            }))
         end
         return true -- Nothing to process
     end
@@ -280,9 +287,15 @@ function SyncService:processEntryStatusQueue(auto_confirm, silent)
             if failed_count > 0 then
                 message = message .. ', ' .. failed_count .. ' failed'
             end
-            Notification:success(message)
+            UIManager:show(InfoMessage:new({
+                text = message,
+                timeout = 2,
+            }))
         elseif failed_count > 0 then
-            Notification:error('Failed to sync ' .. failed_count .. ' entries')
+            UIManager:show(InfoMessage:new({
+                text = 'Failed to sync ' .. failed_count .. ' entries',
+                timeout = 5,
+            }))
         end
     end
 
@@ -295,7 +308,9 @@ function SyncService:processAllQueues()
     local total_count, status_count, feed_count, category_count = QueueService.getTotalQueueCount()
 
     if total_count == 0 then
-        Notification:info(_('All changes are already synced'))
+        UIManager:show(InfoMessage:new({
+            text = _('All changes are already synced'),
+        }))
         return true -- Nothing to process
     end
 
@@ -451,11 +466,17 @@ function SyncService:showCompletionNotification(processed_count, failed_count)
             message = message .. string.format(_(', %d failed'), failed_count)
         end
 
-        Notification:success(message)
+        UIManager:show(InfoMessage:new({
+            text = message,
+            timeout = 2,
+        }))
     elseif failed_count > 0 then
         local message = failed_count == 1 and _('1 change failed to sync')
             or string.format(_('%d changes failed to sync'), failed_count)
-        Notification:error(message)
+        UIManager:show(InfoMessage:new({
+            text = message,
+            timeout = 5,
+        }))
     end
 end
 
@@ -472,7 +493,10 @@ function SyncService:clearAllQueues()
 
     if status_success and feed_success and category_success then
         logger.info('[Miniflux:SyncService] All sync queues cleared')
-        Notification:success(_('All sync queues cleared'))
+        UIManager:show(InfoMessage:new({
+            text = _('All sync queues cleared'),
+            timeout = 2,
+        }))
         return true
     else
         -- Provide specific error details for debugging
@@ -492,7 +516,10 @@ function SyncService:clearAllQueues()
             '[Miniflux:SyncService] Failed to clear queues:',
             table.concat(failed_queues, ', ')
         )
-        Notification:error(error_msg)
+        UIManager:show(InfoMessage:new({
+            text = error_msg,
+            timeout = 5,
+        }))
         return false
     end
 end

@@ -64,7 +64,8 @@ end
 ---@return boolean success True if deletion succeeded
 function EntryPaths.deleteLocalEntry(entry_id)
     local _ = require('gettext')
-    local Notification = require('shared/widgets/notification')
+    local UIManager = require('ui/uimanager')
+    local InfoMessage = require('ui/widget/infomessage')
     local FFIUtil = require('ffi/util')
 
     local entry_dir = EntryPaths.getEntryDirectory(entry_id)
@@ -78,14 +79,20 @@ function EntryPaths.deleteLocalEntry(entry_id)
             '[Miniflux:EntryPaths] Invalidated download cache after deleting entry',
             entry_id
         )
-        Notification:success(_('Local entry deleted successfully'))
+        UIManager:show(InfoMessage:new({
+            text = _('Local entry deleted successfully'),
+            timeout = 2,
+        }))
 
         -- Open Miniflux folder
         EntryPaths.openMinifluxFolder()
 
         return true
     else
-        Notification:error(_('Failed to delete local entry: ') .. tostring(ok))
+        UIManager:show(InfoMessage:new({
+            text = _('Failed to delete local entry: ') .. tostring(ok),
+            timeout = 5,
+        }))
         return false
     end
 end

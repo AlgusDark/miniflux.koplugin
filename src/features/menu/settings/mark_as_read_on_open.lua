@@ -1,5 +1,5 @@
 local UIManager = require('ui/uimanager')
-local Notification = require('shared/widgets/notification')
+local InfoMessage = require('ui/widget/infomessage')
 local _ = require('gettext')
 
 -- **Mark as Read on Open Settings** - Handles "mark as read on open" submenu
@@ -53,11 +53,13 @@ end
 function MarkAsReadOnOpen.updateSetting(options)
     options.settings.mark_as_read_on_open = options.new_value
 
-    local notification = Notification:success(options.message, { timeout = 2 })
+    UIManager:show(InfoMessage:new({
+        text = options.message,
+        timeout = 2,
+    }))
 
-    -- Close notification and navigate back after a brief delay
+    -- Navigate back after a brief delay
     UIManager:scheduleIn(0.5, function()
-        notification:close()
         options.touchmenu_instance:backToUpperMenu()
     end)
 end

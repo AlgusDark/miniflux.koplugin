@@ -15,7 +15,7 @@ local Images = require('features/browser/download/utils/images')
 local HtmlUtils = require('features/browser/download/utils/html_utils')
 local Trapper = require('ui/trapper')
 local Files = require('shared/files')
-local Notification = require('shared/widgets/notification')
+local InfoMessage = require('ui/widget/infomessage')
 
 -- Centralized workflow message templates for consistency and maintainability
 local WORKFLOW_MESSAGES = {
@@ -270,12 +270,18 @@ local function generateHtmlContent(config)
     -- Error handling: Fail gracefully with descriptive error message
     if html_error then
         logger.err('[Miniflux:EntryWorkflow] Failed to process HTML:', html_error.message)
-        Notification:error(_('Failed to process content: ') .. html_error.message)
+        UIManager:show(InfoMessage:new({
+            text = _('Failed to process content: ') .. html_error.message,
+            timeout = 5,
+        }))
         return PHASE_RESULTS.ERROR
     end
 
     if not html_content then
-        Notification:error(_('Failed to process content: No content generated'))
+        UIManager:show(InfoMessage:new({
+            text = _('Failed to process content: No content generated'),
+            timeout = 5,
+        }))
         return PHASE_RESULTS.ERROR
     end
 
@@ -286,7 +292,10 @@ local function generateHtmlContent(config)
     --]]
     local _file_written, file_error = Files.writeFile(context.html_file, html_content)
     if file_error then
-        Notification:error(_('Failed to save HTML file: ') .. file_error.message)
+        UIManager:show(InfoMessage:new({
+            text = _('Failed to save HTML file: ') .. file_error.message,
+            timeout = 5,
+        }))
         return PHASE_RESULTS.ERROR
     end
 
@@ -368,7 +377,10 @@ function EntryWorkflow.execute(deps)
     -- Validate entry data with enhanced validation
     local _valid, err = EntryValidation.validateForDownload(entry_data)
     if err then
-        Notification:error(err.message)
+        UIManager:show(InfoMessage:new({
+            text = err.message,
+            timeout = 5,
+        }))
         return -- Fire-and-forget, no return values
     end
 
@@ -428,7 +440,10 @@ function EntryWorkflow.execute(deps)
         -- Create entry directory (using Files utility for reusability)
         local _dir_created, dir_error = Files.createDirectory(entry_dir)
         if dir_error then
-            Notification:error(_('Failed to prepare download: ') .. dir_error.message)
+            UIManager:show(InfoMessage:new({
+                text = _('Failed to prepare download: ') .. dir_error.message,
+                timeout = 5,
+            }))
             return -- Failed - fire and forget
         end
 
@@ -466,7 +481,10 @@ function EntryWorkflow.execute(deps)
         local images, seen_images = Images.discoverImages(content, base_url)
 
         if not images then
-            Notification:error(_('Failed to discover images'))
+            UIManager:show(InfoMessage:new({
+                text = _('Failed to discover images'),
+                timeout = 5,
+            }))
             return -- Discovery failed - fire and forget
         end
 
@@ -564,7 +582,10 @@ function EntryWorkflow.execute(deps)
             images_mapping = images_mapping,
         })
         if metadata_error then
-            Notification:error(_('Failed to save metadata: ') .. metadata_error.message)
+            UIManager:show(InfoMessage:new({
+                text = _('Failed to save metadata: ') .. metadata_error.message,
+                timeout = 5,
+            }))
             return -- Failed - fire and forget
         end
 

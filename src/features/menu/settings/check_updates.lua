@@ -1,6 +1,6 @@
 local UIManager = require('ui/uimanager')
 local ConfirmBox = require('ui/widget/confirmbox')
-local Notification = require('shared/widgets/notification')
+local InfoMessage = require('ui/widget/infomessage')
 local Trapper = require('ui/trapper')
 local _ = require('gettext')
 
@@ -40,12 +40,14 @@ function CheckUpdates.showUpdateDialog(update_info, update_service)
         ok_callback = has_update and function()
             CheckUpdates.performUpdate(update_info, update_service)
         end or nil,
-        cancel_callback = has_update and function()
-            Notification:info(
-                _('Update skipped. You can check for updates again later.'),
-                { timeout = 3 }
-            )
-        end or nil,
+        cancel_callback = has_update
+                and function()
+                    UIManager:show(InfoMessage:new({
+                        text = _('Update skipped. You can check for updates again later.'),
+                        timeout = 3,
+                    }))
+                end
+            or nil,
         other_buttons = has_update and {
             {
                 text = _('Release Notes'),
@@ -86,7 +88,10 @@ end
 ---@param update_service UpdateService UpdateService instance for performing updates
 function CheckUpdates.performUpdate(update_info, update_service)
     if not update_info.download_url then
-        Notification:warning(_('No download available for this update.'))
+        UIManager:show(InfoMessage:new({
+            text = _('No download available for this update.'),
+            timeout = 3,
+        }))
         return
     end
 
@@ -122,7 +127,10 @@ function CheckUpdates.checkForUpdates(options)
     if error then
         -- Only show error notification for manual checks
         if show_no_update then
-            Notification:error(_('Update check failed: ') .. error)
+            UIManager:show(InfoMessage:new({
+                text = _('Update check failed: ') .. error,
+                timeout = 5,
+            }))
         end
         return
     end
