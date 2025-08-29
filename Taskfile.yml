@@ -249,12 +249,10 @@ tasks:
         CURRENT_BRANCH=$(git branch --show-current)
         echo "This will:"
         echo "  • Run all quality checks (lint, format, LSP)"
-        echo "  • Create release branch: release/v$NEW_VERSION"
         echo "  • Update src/_meta.lua version to $NEW_VERSION"
         echo "  • Create commit: 'chore: bump version to $NEW_VERSION'"
-        echo "  • Push release branch to origin"
-        echo "  • Provide instructions to create PR to dev"
-        echo "  • When PR is merged, GitHub Actions will create release"
+        echo "  • Create and push tag v$NEW_VERSION"
+        echo "  • GitHub Actions will create release automatically"
         echo ""
         
         # Handle dry run
@@ -313,50 +311,43 @@ tasks:
           NEW_VERSION="$major.$minor.$patch"
         fi
         
-        # Create release branch
-        RELEASE_BRANCH="release/v$NEW_VERSION"
-        echo "🌿 Creating release branch: $RELEASE_BRANCH"
-        git checkout -b "$RELEASE_BRANCH"
-        
+        # Ensure we're on main branch
+        echo "🌿 Ensuring we're on main branch..."
+        git checkout main
+        git pull origin main
+
         # Update _meta.lua
         echo "📝 Updating src/_meta.lua to $NEW_VERSION..."
         sed -i.bak "s/version = '[^']*'/version = '$NEW_VERSION'/" src/_meta.lua
         rm -f src/_meta.lua.bak
-        
+
         # Commit changes
         echo "📝 Creating commit..."
         git add src/_meta.lua
         git commit -m "chore: bump version to $NEW_VERSION"
-        
-        # Push release branch
-        echo "📤 Pushing release branch: $RELEASE_BRANCH"
-        git push -u origin "$RELEASE_BRANCH"
-        
-        # Get repository URL for manual PR creation
-        REPO_URL=$(git config --get remote.origin.url)
-        if [[ "$REPO_URL" == git@* ]]; then
-          # Convert SSH to HTTPS format
-          REPO_URL=$(echo "$REPO_URL" | sed 's|git@github.com:|https://github.com/|' | sed 's|\.git$||')
-        elif [[ "$REPO_URL" == https://* ]]; then
-          # Remove .git suffix if present
-          REPO_URL=$(echo "$REPO_URL" | sed 's|\.git$||')
-        fi
-        
+
+        # Push to main
+        echo "📤 Pushing to main branch..."
+        git push origin main
+
+        # Create and push tag
+        TAG_NAME="v$NEW_VERSION"
+        echo "🏷️  Creating tag: $TAG_NAME"
+        git tag "$TAG_NAME"
+        git push origin "$TAG_NAME"
+
         echo ""
-        echo "✅ Release branch created successfully!"
+        echo "✅ Release completed successfully!"
         echo "📝 Version updated to: $NEW_VERSION"
-        echo "🌿 Branch: $RELEASE_BRANCH"
-        echo "📤 Release branch pushed to origin"
+        echo "🏷️  Tag created: $TAG_NAME"
+        echo "📤 Changes pushed to main branch"
         echo ""
-        echo "📋 Next steps:"
-        echo "  1. Create a Pull Request manually:"
-        echo "     🔗 $REPO_URL/compare/dev...$RELEASE_BRANCH?quick_pull=1&title=Release%20v$NEW_VERSION&body=Automated%20version%20bump%20to%20$NEW_VERSION%20from%20release%20task.%20Ready%20for%20release%20to%20dev%20branch."
-        echo "  2. Or use GitHub CLI if available:"
-        echo "     gh pr create --title \"Release v$NEW_VERSION\" --body \"Automated version bump to $NEW_VERSION\" --base dev --head \"$RELEASE_BRANCH\""
-        echo "  3. Merge the PR to dev branch"
-        echo "  4. Merge dev to main to create the release"
-        echo "  5. Dev will auto-sync with main via GitHub Actions"
-        echo "  6. If auto-sync fails, run: task sync-dev"
+        echo "📋 What happens next:"
+        echo "  1. GitHub Actions will detect the new tag"
+        echo "  2. Automatically build and create release"
+        echo "  3. Dev branch will auto-sync with main"
+        echo ""
+        echo "🔗 Monitor release creation: https://github.com/$(git config --get remote.origin.url | sed 's/.*github.com[:/]\([^.]*\).*/\1/')/actions"
 
   sync-dev:
     desc: "Sync dev branch with main branch"

@@ -19,6 +19,7 @@
 
             # Build tools
             go-task
+            git-cliff # Changelog generator
           ];
 
           shellHook = ''
