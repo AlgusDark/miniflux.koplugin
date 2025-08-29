@@ -27,7 +27,12 @@ function Menu.build(plugin)
                 text = _('Read entries'),
                 help_text = _('Browse RSS entries'),
                 callback = function()
-                    plugin.browser:open()
+                    local MinifluxBrowser = require('features/browser/miniflux_browser')
+                    local browser = MinifluxBrowser:new({
+                        title = _('Miniflux'),
+                        miniflux = plugin,
+                    })
+                    browser:open()
                 end,
             },
             {

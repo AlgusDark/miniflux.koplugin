@@ -147,12 +147,6 @@ function Miniflux:init()
         })
     )
 
-    local MinifluxBrowser = require('features/browser/miniflux_browser')
-    self.browser = MinifluxBrowser:new({
-        title = _('Miniflux'),
-        miniflux = self,
-    })
-
     if self.ui and self.ui.document then
         local MinifluxReaderLink = require('features/reader/modules/miniflux_readerlink')
         self:registerModule('readerLink', MinifluxReaderLink:new({ miniflux = self }))
@@ -191,7 +185,12 @@ end
 ---Handle the read entries dispatcher event
 ---@return nil
 function Miniflux:onReadMinifluxEntries()
-    self.browser:open()
+    local MinifluxBrowser = require('features/browser/miniflux_browser')
+    local browser = MinifluxBrowser:new({
+        title = _('Miniflux'),
+        miniflux = self,
+    })
+    browser:open()
 end
 
 -- =============================================================================
