@@ -176,6 +176,8 @@ function MinifluxEndOfBook:showDialog(entry_info)
                         if ReaderUI.instance then
                             ReaderUI.instance:onClose()
                         end
+                        -- Return to the browser view where the user was before opening this entry
+                        self:returnToBrowser()
                     end
                 end,
             },
@@ -245,6 +247,47 @@ function MinifluxEndOfBook:showDialog(entry_info)
     -- Show dialog and return reference for caller management
     UIManager:show(dialog)
     return dialog
+end
+
+---Return to the browser view where the user was before opening this entry
+function MinifluxEndOfBook:returnToBrowser()
+    if not self.miniflux or not self.miniflux.browser then
+        return
+    end
+
+    -- Get the saved browser context
+    local context = self.miniflux:getBrowserContext()
+
+    if not context or not context.type then
+        -- No context saved, default to main view
+        self.miniflux.browser:open()
+        return
+    end
+
+    -- Map context type to view name and navigation config
+    local view_name
+    local nav_context
+
+    if context.type == 'feed' then
+        view_name = 'feed_entries'
+        nav_context = { feed_id = context.id }
+    elseif context.type == 'category' then
+        view_name = 'category_entries'
+        nav_context = { category_id = context.id }
+    elseif context.type == 'unread' then
+        view_name = 'unread_entries'
+    elseif context.type == 'local' then
+        view_name = 'local_entries'
+    else
+        -- Default to main for 'global' or unknown types
+        view_name = 'main'
+    end
+
+    -- Navigate to the saved view with context
+    self.miniflux.browser:navigate({
+        view_name = view_name,
+        context = nav_context,
+    })
 end
 
 ---Cleanup method - revert the wrapped method
