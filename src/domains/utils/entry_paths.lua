@@ -71,6 +71,8 @@ function EntryPaths.deleteLocalEntry(entry_id)
     local ok = FFIUtil.purgeDir(entry_dir)
 
     if ok then
+        -- Remove the now-empty directory
+        lfs.rmdir(entry_dir)
         -- Invalidate download cache for this entry
         local MinifluxBrowser = require('features/browser/miniflux_browser')
         MinifluxBrowser.deleteEntryInfoCache(entry_id)
