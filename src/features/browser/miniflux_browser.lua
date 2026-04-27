@@ -309,7 +309,7 @@ end
 
 ---Open an entry with optional navigation context (implements Browser:openItem)
 ---@param entry_data table Entry data from API
----@param context? {type: "feed"|"category", id: number} Navigation context (nil = global)
+---@param context? MinifluxContext Navigation context (nil = global)
 function MinifluxBrowser:openItem(entry_data, context)
     logger.dbg(
         '[Miniflux:Browser] Opening entry:',
@@ -317,7 +317,11 @@ function MinifluxBrowser:openItem(entry_data, context)
         'with context:',
         context and context.type or 'global'
     )
-    -- Use workflow directly for download-if-needed and open
+    -- Capture the user's current scroll position so "Return to Miniflux"
+    -- can restore the same page in the list instead of jumping to page 1.
+    if context then
+        context.page_state = self:getCurrentItemNumber()
+    end
     local EntryWorkflow = require('features/browser/download/download_entry')
     EntryWorkflow.execute({
         entry_data = entry_data,
@@ -344,6 +348,10 @@ function MinifluxBrowser:openContext(context)
     local view_name
     local nav_context
 
+    -- page_state is per-view: in self.paths it stores where the user was on
+    -- the *previous* (from) view (so Back lands at item 1 of feeds/categories,
+    -- which is fine). For the destination view we pass page_state directly to
+    -- navigate() so the entries list scrolls to the entry the user just read.
     if context.type == 'feed' then
         view_name = 'feed_entries'
         nav_context = { feed_id = context.id }
@@ -377,6 +385,7 @@ function MinifluxBrowser:openContext(context)
     self:navigate({
         view_name = view_name,
         context = nav_context,
+        page_state = context.page_state,
     })
 end
 

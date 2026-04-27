@@ -17,6 +17,7 @@ local BrowserContext = require('shared/browser_context')
 ---@field type string Context type ("feed", "category", "global", "local", "unread")
 ---@field id? number Feed or category ID
 ---@field ordered_entries? table[] Ordered entries for navigation
+---@field page_state? number Item number the user was focused on when they opened the entry, used to restore scroll position when returning to the browser
 
 ---@class EntryReader
 local EntryReader = {}
