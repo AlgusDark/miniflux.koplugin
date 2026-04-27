@@ -18,41 +18,42 @@ local PUBLISHED_BEFORE = 'published_before'
 local MSG_FINDING_PREVIOUS = 'Finding previous entry...'
 local MSG_FINDING_NEXT = 'Finding next entry...'
 
+-- Converts an ISO-8601 UTC timestamp (e.g. "2025-09-21T16:43:45Z") to a Unix
+-- timestamp. Miniflux returns published_at in UTC with a "Z" suffix, but
+-- `os.time` always interprets the table as local time, so we compensate by
+-- adding the local timezone offset reported by `os.date("%z")`.
 function iso8601_to_unix(iso_string)
-    local Y, M, D, h, m, sec, sign, tzh, tzm =
-        iso_string:match('(%d+)%-(%d+)%-(%d+)T' .. '(%d+):(%d+):(%d+)' .. '([%+%-])(%d%d):(%d%d)$')
-
-    if not Y then
+    local year, month, day, hour, min, sec =
+        iso_string:match('(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)Z?')
+    if not year then
         return nil, Error.new(_('Invalid ISO-8601 timestamp format'))
     end
 
-    Y, M, D = tonumber(Y), tonumber(M), tonumber(D)
-    h, m, sec = tonumber(h), tonumber(m), tonumber(sec)
-    tzh, tzm = tonumber(tzh), tonumber(tzm)
+    local utc_time = os.time({
+        year = tonumber(year),
+        month = tonumber(month),
+        day = tonumber(day),
+        hour = tonumber(hour),
+        min = tonumber(min),
+        sec = tonumber(sec),
+    })
 
-    local y = Y
-    local mo = M
-    if mo <= 2 then
-        y = y - 1
-        mo = mo + 12
+    local tz = os.date('%z')
+    if not tz then
+        return utc_time, nil
     end
 
-    local era = math.floor(y / 400)
-    local yoe = y - era * 400
-    local doy = math.floor((153 * (mo - 3) + 2) / 5) + D - 1
-    local doe = yoe * 365 + math.floor(yoe / 4) - math.floor(yoe / 100) + doy
-    local days = era * 146097 + doe - 719468
-
-    local utc_secs = days * 86400 + h * 3600 + m * 60 + sec
-
-    local offs = tzh * 3600 + tzm * 60
-    if sign == '+' then
-        utc_secs = utc_secs - offs
-    else
-        utc_secs = utc_secs + offs
+    local tz_sign, tz_hours, tz_minutes = tz:match('([+-])(%d%d)(%d%d)')
+    if not tz_sign then
+        return utc_time, nil
     end
 
-    return utc_secs, nil
+    local utc_offset = (tonumber(tz_hours) * 3600) + (tonumber(tz_minutes) * 60)
+    if tz_sign == '-' then
+        utc_offset = -utc_offset
+    end
+
+    return utc_time + utc_offset, nil
 end
 
 -- **Navigation Service** - Consolidated navigation utilities including context
