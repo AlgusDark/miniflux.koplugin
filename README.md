@@ -119,23 +119,32 @@ task fmt-fix
 
 ### Development Setup with KOReader
 
-For development testing, create a symlink to the built plugin:
+For development testing, create a symlink to the built plugin.
 
 #### macOS
+
+KOReader on macOS is a self-contained `.app` bundle. It looks for plugins inside
+the bundle at `/Applications/KOReader.app/Contents/koreader/plugins/`, **not** in
+`~/.config/koreader/`. Its writable data directory is `~/Library/Application
+Support/koreader/` (where settings, cache, history, and logs live).
 
 ```bash
 # Build the plugin first
 task build
 
-# Create symlink to KOReader plugins directory
-ln -s /path/to/miniflux.koplugin/dist/miniflux.koplugin ~/.config/koreader/plugins/miniflux.koplugin
+# Symlink the built plugin into KOReader's bundled plugins directory
+ln -snf "$(pwd)/dist/miniflux.koplugin" \
+    /Applications/KOReader.app/Contents/koreader/plugins/miniflux.koplugin
 
-# Run KOReader with debug logging
-/System/Volumes/Data/Applications/KOReader.app/Contents/MacOS/koreader -d
+# Run KOReader with debug logging (logs go to stdout)
+/Applications/KOReader.app/Contents/MacOS/koreader -d
 
-# Filter logs for Miniflux-specific messages
-/System/Volumes/Data/Applications/KOReader.app/Contents/MacOS/koreader -d 2>&1 | grep -E "Miniflux"
+# Or filter logs for Miniflux-specific messages
+/Applications/KOReader.app/Contents/MacOS/koreader -d 2>&1 | grep -E "Miniflux"
 ```
+
+Re-run `task build` after each code change. The symlink picks up the new files
+automatically; just restart KOReader (plugins are scanned at startup).
 
 ## Contributing
 
