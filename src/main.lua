@@ -23,6 +23,7 @@ local ReaderEntryService = require('features/reader/services/entry_service')
 local QueueService = require('features/sync/services/queue_service')
 local SyncService = require('features/sync/services/sync_service')
 local HTTPCacheAdapter = require('shared/http_cache_adapter')
+local BrowserContext = require('shared/browser_context')
 
 ---@class Miniflux : WidgetContainer
 ---@field name string Plugin name identifier
@@ -52,7 +53,6 @@ local Miniflux = WidgetContainer:extend({
     subprocesses_pids = {},
     subprocesses_collector = nil,
     subprocesses_collect_interval = 10,
-    browser_context = nil,
     download_dir = ('%s/%s/'):format(DataStorage:getFullDataDir(), 'miniflux'),
 })
 
@@ -340,13 +340,16 @@ function Miniflux:onCloseWidget()
 end
 
 function Miniflux:onMinifluxBrowserContextChange(payload)
+    -- Canonical state lives in the BrowserContext module (set by EntryReader
+    -- before the broadcast fires) so it survives plugin teardown. This
+    -- handler is kept for any future listeners that want a real event.
     logger.info('[Miniflux:browser_context] Browser context changed:', payload.context)
-    Miniflux.browser_context = payload.context
 end
 
 function Miniflux:getBrowserContext()
-    logger.info('[Miniflux:browser_context] Getting browser context:', Miniflux.browser_context)
-    return Miniflux.browser_context
+    local context = BrowserContext.get()
+    logger.info('[Miniflux:browser_context] Getting browser context:', context)
+    return context
 end
 
 return Miniflux

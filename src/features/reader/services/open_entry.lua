@@ -11,9 +11,10 @@ Future improvements planned:
 --]]
 
 local MinifluxEvent = require('shared/event')
+local BrowserContext = require('shared/browser_context')
 
 ---@class MinifluxContext
----@field type string Context type ("feed", "category", "global", "local")
+---@field type string Context type ("feed", "category", "global", "local", "unread")
 ---@field id? number Feed or category ID
 ---@field ordered_entries? table[] Ordered entries for navigation
 
@@ -34,6 +35,11 @@ function EntryReader.openEntry(file_path, opts)
     MinifluxEvent:broadcastBrowserCloseRequest({ reason = 'entry_opening' })
 
     if context then
+        -- Persist the context in the module-scoped store BEFORE broadcasting.
+        -- Plugin instances may not be registered with UIManager during the
+        -- transition into the reader, so the broadcast handler is unreliable
+        -- as the sole writer (see #65 follow-up).
+        BrowserContext.set(context)
         MinifluxEvent:broadcastMinifluxBrowserContextChange({ context = context })
     end
 
