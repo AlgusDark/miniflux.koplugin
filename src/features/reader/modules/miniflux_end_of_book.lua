@@ -191,10 +191,14 @@ function MinifluxEndOfBook:showDialog(entry_info)
         },
         {
             {
-                text = _('⌂ Miniflux folder'),
+                text = _('⌂ Return to Miniflux'),
                 callback = function()
                     UIManager:close(dialog)
-                    EntryPaths.openMinifluxFolder()
+                    local ReaderUI = require('apps/reader/readerui')
+                    if ReaderUI.instance then
+                        ReaderUI.instance:onClose()
+                    end
+                    self:returnToBrowser()
                 end,
             },
             {
