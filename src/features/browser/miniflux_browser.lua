@@ -326,6 +326,60 @@ function MinifluxBrowser:openItem(entry_data, context)
     })
 end
 
+---Open the browser at a saved navigation context, seeding the back stack so
+---the user can navigate back through the natural hierarchy (e.g. feed_entries
+---→ feeds → main). When called with no context, opens the main view.
+---@param context? MinifluxContext Saved browser context
+function MinifluxBrowser:openContext(context)
+    -- We are entering the browser from outside (the reader). Reset the back
+    -- stack so we synthesize a fresh hierarchy instead of stacking on top of
+    -- whatever paths happened to be there before the entry was opened.
+    self.paths = {}
+
+    if not context or not context.type then
+        self:open()
+        return
+    end
+
+    local view_name
+    local nav_context
+
+    if context.type == 'feed' then
+        view_name = 'feed_entries'
+        nav_context = { feed_id = context.id }
+        table.insert(self.paths, { from = 'main', to = 'feeds', page_state = 1 })
+        table.insert(self.paths, {
+            from = 'feeds',
+            to = 'feed_entries',
+            page_state = 1,
+            context = nav_context,
+        })
+    elseif context.type == 'category' then
+        view_name = 'category_entries'
+        nav_context = { category_id = context.id }
+        table.insert(self.paths, { from = 'main', to = 'categories', page_state = 1 })
+        table.insert(self.paths, {
+            from = 'categories',
+            to = 'category_entries',
+            page_state = 1,
+            context = nav_context,
+        })
+    elseif context.type == 'unread' then
+        view_name = 'unread_entries'
+        table.insert(self.paths, { from = 'main', to = 'unread_entries', page_state = 1 })
+    elseif context.type == 'local' then
+        view_name = 'local_entries'
+        table.insert(self.paths, { from = 'main', to = 'local_entries', page_state = 1 })
+    else
+        view_name = 'main'
+    end
+
+    self:navigate({
+        view_name = view_name,
+        context = nav_context,
+    })
+end
+
 ---Get Miniflux-specific route handlers (implements Browser:getRouteHandlers)
 ---@param nav_config RouteConfig<MinifluxNavigationContext> Navigation configuration
 ---@return table<string, function> Route handlers lookup table
